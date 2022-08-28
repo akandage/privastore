@@ -10,6 +10,8 @@ class DbConnectionPool(object):
         factory - connection factory method.
     '''
     def __init__(self, factory, maxconns=1):
+        super().__init__()
+
         self._factory = factory
         self._maxconns = maxconns
         self._conns = LifoQueue(maxconns)
