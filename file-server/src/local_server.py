@@ -2,6 +2,7 @@ import argparse
 import configparser
 import logging
 import os
+import pool
 
 def read_config(config_path):
     config = configparser.ConfigParser()

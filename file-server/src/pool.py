@@ -1,7 +1,7 @@
 import logging
 from queue import Empty, LifoQueue
 
-class DbConnectionPool(object):
+class Pool(object):
 
     '''
         Database connection pool, thread-safe.
