@@ -90,6 +90,8 @@ def create_file_version_table(conn):
             file_id INTEGER NOT NULL,
             version INTEGER NOT NULL,
             remote_id VARCHAR(36),
+            size_bytes INTEGER NOT NULL,
+            transfer_status INTEGER NOT NULL,
             FOREIGN KEY (file_id) REFERENCES ps_file (id) ON DELETE CASCADE,
             PRIMARY KEY (file_id, version)
         )
