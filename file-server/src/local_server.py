@@ -24,7 +24,7 @@ def config_logging(log_config):
         log_level = logging.DEBUG
     
     # TODO: Configurability of log message format.
-    logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=log_level)
+    logging.basicConfig(format='%(asctime)s - %(levelname)s - %(thread)d:%(funcName)s:%(filename)s:%(lineno)d - %(message)s', level=log_level)
 
 def server_main():
     argparser = argparse.ArgumentParser()
@@ -45,7 +45,7 @@ def server_main():
         db_type = db_config.get('db-type', 'sqlite')
 
         if db_type == 'sqlite':
-            from local.db.sqlite import setup_db
+            from local.db.sqlite.setup import setup_db
 
         logging.info('Setting up database ...')
         setup_db(db_config)
