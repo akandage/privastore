@@ -27,31 +27,31 @@ def config_logging(log_config):
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=log_level)
 
 def server_main():
-    argparser = argparse.ArgumentParser()
-    argparser.add_argument('--setup-db', action='store_true')
-    argparser.add_argument('--config', default='config.ini')
-    args = argparser.parse_args()
-
-    if os.path.exists(args.config):
-        server_config = read_config(args.config)
+    if os.path.exists('config.ini'):
+        server_config = read_config('config.ini')
     else:
         # TODO: Setup defaults here.
         raise Exception('config.ini not found!')
-
+    
     config_logging(server_config['logging'])
+    argparser = argparse.ArgumentParser()
+    argparser.add_argument('--setup-db', action='store_true')
+    args = argparser.parse_args()
 
     if args.setup_db:
         db_config = server_config['db']
         db_type = db_config.get('db-type', 'sqlite')
 
         if db_type == 'sqlite':
-            from local.db.sqlite import setup_db
+            from db.sqlite import setup_db
 
         logging.info('Setting up database ...')
         setup_db(db_config)
         logging.info('Done')
         return
     
+    p = Pool()
+
     logging.info('Starting PrivaStore local server ...')
     logging.info('Server started')
 
