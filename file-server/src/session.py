@@ -14,26 +14,41 @@ class Sessions(object):
     def validate_session(self, session_id):
         if not session_id.startswith('S-'):
             raise Exception('Invalid session id [{}]'.format(session_id))
+        try:
+            uuid.UUID(session_id[2:])
+        except:
+            raise Exception('Invalid session id [{}]'.format(session_id))
 
-    def start_session(self, expiry_time=300):
+    def start_session(self, user_id, expiry_time=300):
         session_id = 'S-{}'.format(str(uuid.uuid4()))
         with self._mutex:
             session_exp = round(time.time() + expiry_time)
-            self._sessions[session_id] = session_exp
+            self._sessions[session_id] = user_id, session_exp
             logging.debug('Session [{}] started (expires {})'.format(session_id, util.time.format_datetime(session_exp)))
         return session_id
 
     def is_valid_session(self, session_id):
         with self._mutex:
-            return session_id in self._sessions
+            if session_id not in self._sessions:
+                return False
+            if round(time.time()) >= self._sessions[session_id][1]:
+                return False
+            return True
+
+    def get_session_user(self, session_id):
+        with self._mutex:
+            if session_id not in self._sessions:
+                raise Exception('Session id [{}] not found!'.format(session_id))
+            return self._sessions[session_id][0]
 
     def renew_session(self, session_id, expiry_time=300):
         self.validate_session(session_id)
         with self._mutex:
             if session_id not in self._sessions:
                 raise Exception('Session id [{}] not found!'.format(session_id))
+            user_id, session_exp = self._sessions[session_id]
             session_exp = round(time.time() + expiry_time)
-            self._sessions[session_id] = session_exp
+            self._sessions[session_id] = user_id, session_exp
             logging.debug('Session [{}] started (expires {})'.format(session_id, util.time.format_datetime(session_exp)))
 
     def end_session(self, session_id):
@@ -49,9 +64,10 @@ class Sessions(object):
         sessions_removed = 0
         with self._mutex:
             now = round(time.time())
-            for session_id, expiry_time in self._sessions.items():
-                if expiry_time >= now:
+            for session_id, (_, session_exp) in self._sessions.items():
+                if session_exp >= now:
                     self._sessions.pop(session_id)
                     sessions_removed += 1
         logging.debug('Removed {} expired sessions'.format(sessions_removed))
+        return sessions_removed
         
