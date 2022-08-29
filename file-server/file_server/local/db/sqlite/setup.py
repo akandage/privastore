@@ -1,6 +1,6 @@
 import logging
 import sqlite3
-import util.crypto
+from ....util.crypto import hash_user_password
 
 def setup_db(db_config):
     db_path = db_config.get('sqlite-db-path', 'local_server.db')
@@ -37,7 +37,7 @@ def create_user_account_table(conn):
         INSERT INTO ps_user_account (username, password_hash) VALUES 
         (?, ?)
         ''',
-        ('psadmin', util.crypto.hash_user_password('psadmin'))
+        ('psadmin', hash_user_password('psadmin'))
     )
     conn.commit()
 

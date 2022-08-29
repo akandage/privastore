@@ -1,5 +1,5 @@
 import logging
-import util.crypto
+from ....util.crypto import hash_user_password
 
 def login_user(conn, username, password):
     cur = conn.cursor()
@@ -18,7 +18,7 @@ def login_user(conn, username, password):
 
         if res:
             password_hash, = res
-            if password_hash == util.crypto.hash_user_password(password):
+            if password_hash == hash_user_password(password):
                 return True
             else:
                 return False

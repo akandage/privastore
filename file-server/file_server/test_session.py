@@ -1,6 +1,6 @@
 import uuid
 import unittest
-from session import Sessions
+from .session import Sessions
 
 class TestSession(unittest.TestCase):
     

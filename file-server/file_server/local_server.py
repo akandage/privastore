@@ -3,8 +3,6 @@ import configparser
 import logging
 import os
 
-from pool import *
-
 def read_config(config_path):
     config = configparser.ConfigParser()
     config.read(config_path)
@@ -45,7 +43,7 @@ def server_main():
         db_type = db_config.get('db-type', 'sqlite')
 
         if db_type == 'sqlite':
-            from local.db.sqlite.setup import setup_db
+            from .local.db.sqlite.setup import setup_db
 
         logging.info('Setting up database ...')
         setup_db(db_config)

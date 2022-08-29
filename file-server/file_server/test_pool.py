@@ -1,5 +1,5 @@
 import unittest
-from pool import Pool
+from .pool import Pool
 
 class TestPool(unittest.TestCase):
     
