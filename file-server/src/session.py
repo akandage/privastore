@@ -64,8 +64,9 @@ class Sessions(object):
         sessions_removed = 0
         with self._mutex:
             now = round(time.time())
-            for session_id, (_, session_exp) in self._sessions.items():
-                if session_exp >= now:
+            sessions = list(self._sessions.items())
+            for session_id, (_, session_exp) in sessions:
+                if now >= session_exp:
                     self._sessions.pop(session_id)
                     sessions_removed += 1
         logging.debug('Removed {} expired sessions'.format(sessions_removed))

@@ -91,3 +91,20 @@ class TestSession(unittest.TestCase):
         except Exception as e:
             self.assertEqual(str(e), 'Session id [{}] not found!'.format(sess), 'Expected session id not found')
         self.sessions.end_session(sess1)
+    
+    def test_remove_expired_sessions(self):
+        sess1 = self.sessions.start_session('testuser1')
+        sess2 = self.sessions.start_session('testuser2')
+
+        sessions_removed = self.sessions.remove_expired_sessions()
+        self.assertEqual(sessions_removed, 0, 'Expected no sessions removed')
+        sess3 = self.sessions.start_session('testuser3', -1)
+        sess4 = self.sessions.start_session('testuser4')
+        sess5 = self.sessions.start_session('testuser3', -1)
+        sessions_removed = self.sessions.remove_expired_sessions()
+        self.assertEqual(sessions_removed, 2, 'Expected 2 sessions removed')
+        self.assertTrue(self.sessions.is_valid_session(sess1), 'Session 1 removed')
+        self.assertTrue(self.sessions.is_valid_session(sess2), 'Session 2 removed')
+        self.assertFalse(self.sessions.is_valid_session(sess3), 'Session 3 not removed')
+        self.assertTrue(self.sessions.is_valid_session(sess4), 'Session 4 removed')
+        self.assertFalse(self.sessions.is_valid_session(sess5), 'Session 5 not removed')
