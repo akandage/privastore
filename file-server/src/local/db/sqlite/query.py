@@ -5,7 +5,7 @@ def login_user(conn, username, password):
     cur = conn.cursor()
     try:
         try:
-            cur.execute('SELECT password_hash FROM ps_user_account WHERE username = ?', username)
+            cur.execute('SELECT password_hash FROM ps_user_account WHERE username = ?', (username,))
             res = cur.fetchone()
         except Exception as e:
             logging.error('Query error {}'.format(str(e)))
