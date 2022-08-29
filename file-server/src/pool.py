@@ -4,33 +4,36 @@ from queue import Empty, LifoQueue
 class Pool(object):
 
     '''
-        Database connection pool, thread-safe.
+        Thread-safe pool for objects.
 
-        maxconns - maximum number of concurrent connections.
+        capacity - maximum number of objects in pool.
         factory - connection factory method.
     '''
-    def __init__(self, factory, maxconns=1):
+    def __init__(self, factory, capacity=1):
         super().__init__()
 
         self._factory = factory
-        self._maxconns = maxconns
-        self._conns = LifoQueue(maxconns)
+        self._capacity = capacity
+        self._pool = LifoQueue(capacity)
 
-        for _ in range(maxconns):
-            self._conns.put(factory())
+        for _ in range(capacity):
+            self._pool.put(factory())
     
-    def acquire_conn(self, timeout=None):
-        return self._conns.get(timeout=timeout)
-
-    '''
-        Try to acquire connection without blocking.
-        If can't grab a connection from the pool immediately, return None.
-    '''
-    def try_acquire_conn(self):
+    def acquire(self, timeout=None):
         try:
-            return self._conns.get(block=False)
+            return self._pool.get(timeout=timeout)
         except Empty:
             return None
 
-    def release_conn(self, conn):
-        self._conns.put(conn, block=False)
+    '''
+        Try to acquire object without blocking.
+        If can't grab a object from the pool immediately, return None.
+    '''
+    def try_acquire(self):
+        try:
+            return self._pool.get(block=False)
+        except Empty:
+            return None
+
+    def release(self, obj):
+        self._pool.put(obj, block=False)
