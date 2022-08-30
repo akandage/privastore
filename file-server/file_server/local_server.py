@@ -2,6 +2,9 @@ import argparse
 import configparser
 import logging
 import os
+import signal
+
+from .session_mgr import SessionManager
 
 def read_config(config_path):
     config = configparser.ConfigParser()
@@ -51,7 +54,16 @@ def server_main():
         return
     
     logging.info('Starting PrivaStore local server ...')
+    session_mgr = SessionManager(daemon=False)
+
+    def handle_ctrl_c(signum, frame):
+        print('Stopping...')
+        session_mgr.stop()
+    signal.signal(signal.SIGINT, handle_ctrl_c)
+
     logging.info('Server started')
+    session_mgr.start()
+    session_mgr.join()
 
 if __name__ == '__main__':
     server_main()
