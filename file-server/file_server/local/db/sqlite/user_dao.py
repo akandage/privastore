@@ -13,6 +13,7 @@ class SqliteUserDAO(UserDAO):
             try:
                 cur.execute('SELECT password_hash FROM ps_user_account WHERE username = ?', (username,))
                 res = cur.fetchone()
+                self._conn.commit()
             except Exception as e:
                 logging.error('Query error {}'.format(str(e)))
                 try:
