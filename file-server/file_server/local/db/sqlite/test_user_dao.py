@@ -1,9 +1,9 @@
 import os
 import unittest
 from .setup import conn_factory, setup_db
-from .query import login_user
+from .user_dao import SqliteUserDAO
 
-class TestSqliteQuery(unittest.TestCase):
+class TestSqliteUserDAO(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
@@ -21,6 +21,7 @@ class TestSqliteQuery(unittest.TestCase):
     
     def setUp(self):
         self.conn = conn_factory('test_local_server.db')()
+        self.dao = SqliteUserDAO(self.conn)
 
     def tearDown(self):
         try:
@@ -29,16 +30,16 @@ class TestSqliteQuery(unittest.TestCase):
             pass
 
     def test_login_user(self):
-        res = login_user(self.conn, 'psadmin', 'psadmin')
+        res = self.dao.login_user('psadmin', 'psadmin')
         self.assertTrue(res, 'Expected login success!')
 
     def test_login_user_incorrect_username(self):
         try:
-            login_user(self.conn, 'psa', 'psadmin')
+            self.dao.login_user('psa', 'psadmin')
             self.fail()
         except Exception as e:
             self.assertEqual(str(e), 'User not found!', 'Expected user not found')
 
     def test_login_user_incorrect_password(self):
-        res = login_user(self.conn, 'psadmin', 'psa')
+        res = self.dao.login_user('psadmin', 'psa')
         self.assertFalse(res, 'Expected login failure!')
