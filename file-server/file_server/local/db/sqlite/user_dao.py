@@ -1,4 +1,5 @@
 import logging
+from ...error import AuthenticationError
 from ..user_dao import UserDAO
 from ....util.crypto import hash_user_password
 
@@ -25,12 +26,10 @@ class SqliteUserDAO(UserDAO):
 
             if res:
                 password_hash, = res
-                if password_hash == hash_user_password(password):
-                    return True
-                else:
-                    return False
+                if password_hash != hash_user_password(password):
+                    raise AuthenticationError('Incorrect username or password!')
             else:
-                raise Exception('User not found!')
+                raise AuthenticationError('User not found!')
 
         finally:
             try:
