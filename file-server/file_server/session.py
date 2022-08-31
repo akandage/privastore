@@ -24,7 +24,7 @@ class Sessions(object):
         with self._mutex:
             session_exp = round(time.time() + expiry_time)
             self._sessions[session_id] = user_id, session_exp
-            logging.debug('Session [{}] started (expires {})'.format(session_id, format_datetime(session_exp)))
+            logging.debug('User [{}] session [{}] started (expires {})'.format(user_id, session_id, format_datetime(session_exp)))
         return session_id
 
     def is_valid_session(self, session_id):
@@ -49,7 +49,7 @@ class Sessions(object):
             user_id, session_exp = self._sessions[session_id]
             session_exp = round(time.time() + expiry_time)
             self._sessions[session_id] = user_id, session_exp
-            logging.debug('Session [{}] started (expires {})'.format(session_id, format_datetime(session_exp)))
+            logging.debug('User [{}] session [{}] renewed (expires {})'.format(user_id, session_id, format_datetime(session_exp)))
 
     def end_session(self, session_id):
         self.validate_session(session_id)
