@@ -16,7 +16,7 @@ class SqliteUserDAO(UserDAO):
             except Exception as e:
                 logging.error('Query error {}'.format(str(e)))
                 try:
-                    conn.rollback()
+                    self._conn.rollback()
                     logging.debug('Rolled back')
                 except Exception as e1:
                     logging.error('Error rolling back {}'.format(str(e1)))
