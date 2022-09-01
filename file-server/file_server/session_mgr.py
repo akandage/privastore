@@ -12,11 +12,13 @@ class SessionManager(Daemon):
 
     def run(self):
         logging.debug('Session manager started')
-        last_cleanup_t = time.time()
+        now = last_cleanup_t = round(time.time())
         while not self._stop:
             time.sleep(1)
-            if time.time() >= last_cleanup_t + self._cleanup_interval:
+            now = round(time.time())
+            if now >= last_cleanup_t + self._cleanup_interval:
                 self.sessions.remove_expired_sessions()
+                last_cleanup_t = now
         self._stopped.set()
         logging.debug('Session manager stopped')
         
