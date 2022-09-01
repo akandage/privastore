@@ -18,7 +18,7 @@ def setup_db(db_config):
         except:
             pass
 
-def conn_factory(db_path):
+def sqlite_conn_factory(db_path):
     return lambda: sqlite3.connect(db_path)
 
 def create_user_account_table(conn):

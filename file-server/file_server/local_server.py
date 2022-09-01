@@ -4,6 +4,8 @@ import logging
 import os
 import signal
 
+from .local.controller import Controller
+from .pool import Pool
 from .session_mgr import SessionManager
 
 def read_config(config_path):
@@ -41,28 +43,54 @@ def server_main():
 
     config_logging(server_config['logging'])
 
-    if args.setup_db:
-        db_config = server_config['db']
-        db_type = db_config.get('db-type', 'sqlite')
+    db_config = server_config['db']
+    db_type = db_config.get('db-type', 'sqlite')
 
-        if db_type == 'sqlite':
-            from .local.db.sqlite.setup import setup_db
+    if db_type == 'sqlite':
+        from .local.db.sqlite.setup import sqlite_conn_factory, setup_db
+        from .local.db.sqlite.dao_factory import SqliteDAOFactory
 
-        logging.info('Setting up database ...')
-        setup_db(db_config)
-        logging.info('Done')
-        return
+        if args.setup_db:
+            logging.info('Setting up database ...')
+            setup_db(db_config)
+            logging.info('Done')
+            return
+        
+        db_path = db_config.get('db-path', 'local_server.db')
+        logging.debug('Using SQLite database: [{}]'.format(db_path))
+        conn_factory = sqlite_conn_factory(db_path)
+        dao_factory = SqliteDAOFactory()
+    else:
+        raise Exception('Unsupported database: {}'.format(db_type))
     
     logging.info('Starting PrivaStore local server ...')
+    conn_pool_size = int(db_config.get('connection-pool-size', '5'))
+    logging.debug('Initializing database connection pool with {} connections'.format(conn_pool_size))
+    conn_pool = Pool(conn_factory, conn_pool_size)
+    logging.debug('Initialized database connection pool')
     session_mgr = SessionManager(daemon=False)
+    controller = Controller(conn_pool, session_mgr.sessions, dao_factory)
+
+    api_config = server_config['api']
+    api_type = api_config.get('api-type', 'http')
+
+    if api_type == 'http':
+        from .local.api.http.http_daemon import HttpDaemon, http_request_handler_factory
+
+        api_daemon = HttpDaemon(api_config, http_request_handler_factory(controller))
+    else:
+        raise Exception('Unsupported API type: {}'.format(api_type))
 
     def handle_ctrl_c(signum, frame):
         print('Stopping...')
+        api_daemon.stop()
         session_mgr.stop()
     signal.signal(signal.SIGINT, handle_ctrl_c)
 
-    logging.info('Server started')
     session_mgr.start()
+    api_daemon.start()
+    logging.info('Server started')
+    api_daemon.join()
     session_mgr.join()
 
 if __name__ == '__main__':

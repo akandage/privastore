@@ -3,10 +3,13 @@ import logging
 from ....daemon import Daemon
 from .http_request_handler import HttpRequestHandler
 
+def http_request_handler_factory(controller):
+    return lambda: HttpRequestHandler(controller)
+
 class HttpDaemon(Daemon):
 
-    def __init__(self, http_config, request_handler=HttpRequestHandler):
-        self().__init__('http-api')
+    def __init__(self, http_config, request_handler):
+        super().__init__('http-api')
 
         self._hostname = hostname = http_config.get('api-hostname', 'localhost')
         self._port = port = int(http_config.get('api-port', 8080))

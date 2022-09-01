@@ -2,7 +2,7 @@ from multiprocessing import AuthenticationError
 import os
 import unittest
 from ...error import AuthenticationError
-from .setup import conn_factory, setup_db
+from .setup import sqlite_conn_factory, setup_db
 from .user_dao import SqliteUserDAO
 
 class TestSqliteUserDAO(unittest.TestCase):
@@ -22,7 +22,7 @@ class TestSqliteUserDAO(unittest.TestCase):
             pass
     
     def setUp(self):
-        self.conn = conn_factory('test_local_server.db')()
+        self.conn = sqlite_conn_factory('test_local_server.db')()
         self.dao = SqliteUserDAO(self.conn)
 
     def tearDown(self):

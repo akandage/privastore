@@ -7,6 +7,7 @@ class SqliteUserDAO(UserDAO):
 
     def __init__(self, conn):
         super().__init__(conn)
+        self._conn = conn
 
     def login_user(self, username, password):
         cur = self._conn.cursor()
