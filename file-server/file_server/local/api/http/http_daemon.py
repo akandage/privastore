@@ -1,10 +1,10 @@
-from http.server import HTTPServer
+from http.server import ThreadingHTTPServer
 import logging
 from ....daemon import Daemon
 from .http_request_handler import HttpRequestHandler
 
 def http_request_handler_factory(controller):
-    return lambda: HttpRequestHandler(controller)
+    return lambda request, client_address, server: HttpRequestHandler(request, client_address, server, controller)
 
 class HttpDaemon(Daemon):
 
@@ -13,7 +13,7 @@ class HttpDaemon(Daemon):
 
         self._hostname = hostname = http_config.get('api-hostname', 'localhost')
         self._port = port = int(http_config.get('api-port', 8080))
-        self._server = HTTPServer((hostname, port), request_handler)
+        self._server = ThreadingHTTPServer((hostname, port), request_handler)
         self._server.timeout = 1
 
         # TODO: SSL.

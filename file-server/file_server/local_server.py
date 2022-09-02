@@ -64,12 +64,16 @@ def server_main():
         raise Exception('Unsupported database: {}'.format(db_type))
     
     logging.info('Starting PrivaStore local server ...')
-    conn_pool_size = int(db_config.get('connection-pool-size', '5'))
-    logging.debug('Initializing database connection pool with {} connections'.format(conn_pool_size))
-    conn_pool = Pool(conn_factory, conn_pool_size)
-    logging.debug('Initialized database connection pool')
     session_mgr = SessionManager(daemon=False)
-    controller = Controller(conn_pool, session_mgr.sessions, dao_factory)
+    conn_pool_size = int(db_config.get('connection-pool-size', '5'))
+
+    if conn_pool_size > 0:
+        logging.debug('Initializing database connection pool with {} connections'.format(conn_pool_size))
+        conn_pool = Pool(conn_factory, conn_pool_size)
+        logging.debug('Initialized database connection pool')
+        controller = Controller(session_mgr.sessions, dao_factory, conn_pool=conn_pool)
+    else:
+        controller = Controller(session_mgr.sessions, dao_factory, conn_factory=conn_factory)
 
     api_config = server_config['api']
     api_type = api_config.get('api-type', 'http')
