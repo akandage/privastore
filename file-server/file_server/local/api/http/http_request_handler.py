@@ -4,6 +4,9 @@ from ...error import AuthenticationError
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 import logging
+from ....session import SessionError
+
+SESSION_ID_HEADER = 'x-privastore-session-id'
 
 class HttpRequestHandler(BaseHTTPRequestHandler):
 
@@ -16,7 +19,6 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
         logging.error('Invalid path: [{}]'.format(path))
         self.send_error(HTTPStatus.NOT_FOUND)
         
-
     def do_POST(self):
         path = self.path
         if path == '/1/login':
@@ -24,7 +26,15 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
         else:
             logging.error('Invalid path: [{}]'.format(path))
             self.send_error(HTTPStatus.NOT_FOUND)
-            
+
+    def do_PUT(self):
+        path = self.path
+        if path == '/1/heartbeat':
+            self.handle_heartbeat_session()
+        else:
+            logging.error('Invalid path: [{}]'.format(path))
+            self.send_error(HTTPStatus.NOT_FOUND)
+
     def handle_login_user(self):
         logging.debug('Login request')
         auth_header = self.headers.get('Authorization')
@@ -43,10 +53,38 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            self._controller.login_user(username, password)
+            session_id = self._controller.login_user(username, password)
         except AuthenticationError as e:
             logging.error('Authentication error: {}'.format(str(e)))
             self.send_error(HTTPStatus.UNAUTHORIZED)
+            return
+        except Exception as e:
+            logging.error('Internal error: {}'.format(str(e)))
+            self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR)
+            return
+
+        self.send_response(HTTPStatus.OK)
+        self.send_header(SESSION_ID_HEADER, session_id)
+        self.end_headers()
+    
+    def handle_heartbeat_session(self):
+        logging.debug('Heartbeat request')
+        session_id = self.headers.get(SESSION_ID_HEADER)
+
+        if session_id is None:
+            logging.error('Missing {} header'.format(SESSION_ID_HEADER))
+            self.send_error(HTTPStatus.BAD_REQUEST)
+            return
+        
+        try:
+            self._controller.heartbeat_session(session_id)
+        except SessionError as e:
+            msg = str(e).lower()
+            logging.error(msg)
+            if 'not found' in msg:
+                self.send_error(HTTPStatus.NOT_FOUND)
+            else:
+                self.send_error(HTTPStatus.BAD_REQUEST)
             return
         except Exception as e:
             logging.error('Internal error: {}'.format(str(e)))

@@ -42,3 +42,6 @@ class Controller(object):
             return session_id
         finally:
             self.db_close(conn)
+    
+    def heartbeat_session(self, session_id):
+        self._sessions.renew_session(session_id)

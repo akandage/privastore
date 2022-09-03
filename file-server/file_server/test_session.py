@@ -48,10 +48,10 @@ class TestSession(unittest.TestCase):
     def test_renew_session(self):
         sess1 = self.sessions.start_session('testuser')
         # Expired session.
-        sess2 = self.sessions.start_session('testuser', -1)
+        sess2 = self.sessions.start_session('testuser')
 
         self.assertTrue(self.sessions.is_valid_session(sess1), 'Session 1 invalid')
-        self.assertFalse(self.sessions.is_valid_session(sess2), 'Session 2 valid')
+        self.assertTrue(self.sessions.is_valid_session(sess2), 'Session 2 invalid')
         self.sessions.renew_session(sess2)
         self.assertTrue(self.sessions.is_valid_session(sess1), 'Session 1 invalid')
         self.assertTrue(self.sessions.is_valid_session(sess2), 'Session 2 invalid')

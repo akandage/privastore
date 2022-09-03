@@ -1,23 +1,27 @@
 import logging
 import time
-from threading import Lock
+from threading import RLock
 from .util.time import format_datetime
 import uuid
+
+class SessionError(Exception):
+    def __init__(self, msg):
+        super().__init__(msg)
 
 class Sessions(object):
 
     def __init__(self):
         super().__init__()
         self._sessions = dict()
-        self._mutex = Lock()
+        self._mutex = RLock()
     
     def validate_session(self, session_id):
         if not session_id.startswith('S-'):
-            raise Exception('Invalid session id [{}]'.format(session_id))
+            raise SessionError('Invalid session id [{}]'.format(session_id))
         try:
             uuid.UUID(session_id[2:])
         except:
-            raise Exception('Invalid session id [{}]'.format(session_id))
+            raise SessionError('Invalid session id [{}]'.format(session_id))
 
     def start_session(self, user_id, expiry_time=300):
         session_id = 'S-{}'.format(str(uuid.uuid4()))
@@ -37,15 +41,15 @@ class Sessions(object):
 
     def get_session_user(self, session_id):
         with self._mutex:
-            if session_id not in self._sessions:
-                raise Exception('Session id [{}] not found!'.format(session_id))
+            if not self.is_valid_session(session_id):
+                raise SessionError('Session id [{}] not found!'.format(session_id))
             return self._sessions[session_id][0]
 
     def renew_session(self, session_id, expiry_time=300):
         self.validate_session(session_id)
         with self._mutex:
-            if session_id not in self._sessions:
-                raise Exception('Session id [{}] not found!'.format(session_id))
+            if not self.is_valid_session(session_id):
+                raise SessionError('Session id [{}] not found!'.format(session_id))
             user_id, session_exp = self._sessions[session_id]
             session_exp = round(time.time() + expiry_time)
             self._sessions[session_id] = user_id, session_exp
@@ -54,8 +58,8 @@ class Sessions(object):
     def end_session(self, session_id):
         self.validate_session(session_id)
         with self._mutex:
-            if session_id not in self._sessions:
-                raise Exception('Session id [{}] not found!'.format(session_id))
+            if not self.is_valid_session(session_id):
+                raise SessionError('Session id [{}] not found!'.format(session_id))
             self._sessions.pop(session_id)
             logging.debug('Session [{}] ended'.format(session_id))
     
