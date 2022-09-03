@@ -53,7 +53,7 @@ def create_directory_table(conn):
         '''
     )
     # Create root directory.
-    conn.execute("INSERT INTO ps_directory (name) VALUES ('/')")
+    conn.execute("INSERT INTO ps_directory (id, name) VALUES (1, '/')")
     conn.execute(
         '''
         CREATE TABLE ps_link (
