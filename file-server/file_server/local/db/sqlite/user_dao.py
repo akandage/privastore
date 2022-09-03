@@ -1,5 +1,5 @@
 import logging
-from ...error import AuthenticationError
+from ....error import AuthenticationError
 from ..user_dao import UserDAO
 from ....util.crypto import hash_user_password
 

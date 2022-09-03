@@ -1,7 +1,7 @@
 from multiprocessing import AuthenticationError
 import os
 import unittest
-from ...error import AuthenticationError
+from ....error import AuthenticationError
 from .setup import sqlite_conn_factory, setup_db
 from .user_dao import SqliteUserDAO
 
