@@ -1,12 +1,9 @@
+from .error import SessionError
 import logging
 import time
 from threading import RLock
 from .util.time import format_datetime
 import uuid
-
-class SessionError(Exception):
-    def __init__(self, msg):
-        super().__init__(msg)
 
 class Sessions(object):
 
