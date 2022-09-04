@@ -5,3 +5,6 @@ class DAOFactory(object):
 
     def user_dao(self, conn):
         raise Exception('Not implemented!')
+    
+    def directory_dao(self, conn):
+        raise Exception('Not implemented!')
