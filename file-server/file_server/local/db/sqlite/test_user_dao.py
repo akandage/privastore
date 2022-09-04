@@ -1,4 +1,3 @@
-from multiprocessing import AuthenticationError
 import os
 import unittest
 from ....error import AuthenticationError
@@ -10,19 +9,23 @@ class TestSqliteUserDAO(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         config = {
-            'sqlite-db-path': 'test_local_server.db'
+            'sqlite-db-path': 'test_user_dao.db'
         }
+        try:
+            os.remove('test_user_dao.db')
+        except:
+            pass
         setup_db(config)
 
     @classmethod
     def tearDownClass(cls):
         try:
-            os.remove('test_local_server.db')
+            os.remove('test_user_dao.db')
         except:
             pass
     
     def setUp(self):
-        self.conn = sqlite_conn_factory('test_local_server.db')()
+        self.conn = sqlite_conn_factory('test_user_dao.db')()
         self.dao = SqliteUserDAO(self.conn)
 
     def tearDown(self):
