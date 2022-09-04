@@ -7,7 +7,6 @@ class SqliteUserDAO(UserDAO):
 
     def __init__(self, conn):
         super().__init__(conn)
-        self._conn = conn
 
     def login_user(self, username, password):
         cur = self._conn.cursor()
@@ -23,7 +22,7 @@ class SqliteUserDAO(UserDAO):
                     logging.debug('Rolled back')
                 except Exception as e1:
                     logging.error('Error rolling back {}'.format(str(e1)))
-                return
+                raise e
 
             if res:
                 password_hash, = res
