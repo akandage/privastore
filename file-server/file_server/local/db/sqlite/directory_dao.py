@@ -59,13 +59,19 @@ class SqliteDirectoryDAO(DirectoryDAO):
             try:
                 directory_id = self.traverse_path(cur, path)
                 entries = []
-                cur.execute('SELECT name FROM ps_directory WHERE id = ? AND (is_hidden <> 1 OR is_hidden = ?)', (directory_id, show_hidden,))
+                cur.execute('''SELECT name 
+                    FROM ps_directory AS D INNER JOIN ps_link AS L ON D.id = L.child_id 
+                    WHERE L.parent_id = ? AND (D.is_hidden <> 1 OR D.is_hidden = ?) 
+                    ORDER BY D.name ASC''', (directory_id, show_hidden,))
                 for directory_name in cur.fetchall():
-                    entries.append(('d', directory_name))
-                cur.execute('SELECT name FROM ps_file WHERE parent_id = ? AND (is_hidden <> 1 OR is_hidden = ?)', (directory_id, show_hidden))
+                    entries.append(('d', directory_name[0]))
+                cur.execute('''SELECT name FROM ps_file 
+                    WHERE parent_id = ? AND (is_hidden <> 1 OR is_hidden = ?)
+                    ORDER BY name ASC''', (directory_id, show_hidden))
                 for file_name in cur.fetchall():
-                    entries.append(('f', file_name))
+                    entries.append(('f', file_name[0]))
                 self._conn.commit()
+                return entries
             except DirectoryError as e:
                 logging.error('Directory error: {}'.format(str(e)))
                 self.rollback_nothrow()
