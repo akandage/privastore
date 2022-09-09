@@ -1,3 +1,4 @@
+from ..error import SessionError
 import logging
 
 class Controller(object):
@@ -45,3 +46,9 @@ class Controller(object):
     
     def heartbeat_session(self, session_id):
         self._sessions.renew_session(session_id)
+
+    def create_directory(self, path, directory_name, is_hidden=False):
+        pass
+
+    def list_directory(self, path, show_hidden=False):
+        pass
