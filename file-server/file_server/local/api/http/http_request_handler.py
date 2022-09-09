@@ -1,4 +1,3 @@
-from curses.ascii import HT
 import base64
 from ....error import AuthenticationError, SessionError
 from http import HTTPStatus
