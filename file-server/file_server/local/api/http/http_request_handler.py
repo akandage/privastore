@@ -152,7 +152,7 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
             return
         except Exception as e:
             self.handle_internal_error(e)
-            pass
+            return
 
         self.send_response(HTTPStatus.OK)
         self.end_headers()
