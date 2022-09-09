@@ -2,13 +2,17 @@ import base64
 from ....error import AuthenticationError, DirectoryError, SessionError
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
+import json
 import logging
 import urllib.parse
 
-DIRECTORY_PATH = '/1/directory'
+DIRECTORY_PATH = '/1/directory/'
 DIRECTORY_PATH_LEN = len(DIRECTORY_PATH)
 HEARTBEAT_PATH = '/1/heartbeat'
 LOGIN_PATH = '/1/login'
+CONTENT_TYPE_HEADER = 'Content-Type'
+CONTENT_TYPE_JSON = 'application/json'
+CONTENT_LENGTH_HEADER = 'Content-Length'
 SESSION_ID_HEADER = 'x-privastore-session-id'
 
 class HttpRequestHandler(BaseHTTPRequestHandler):
@@ -19,8 +23,11 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
         
     def do_GET(self):
         path = self.path
-        logging.error('Invalid path: [{}]'.format(path))
-        self.send_error(HTTPStatus.NOT_FOUND)
+        if path.startswith(DIRECTORY_PATH):
+            self.handle_list_directory()
+        else:
+            logging.error('Invalid path: [{}]'.format(path))
+            self.send_error(HTTPStatus.NOT_FOUND)
         
     def do_POST(self):
         path = self.path
@@ -67,8 +74,11 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
             return False
 
     def parse_directory_path(self, url_path):
-        url_path = url_path[DIRECTORY_PATH_LEN+1:].split('/')
-        return list(map(urllib.parse.unquote, url_path))
+        url_path = url_path[DIRECTORY_PATH_LEN:]
+        if len(url_path) > 0:
+            url_path = url_path.split('/')
+            return list(map(urllib.parse.unquote, url_path))
+        return []
 
     def handle_directory_error(self, e):
         logging.error('Directory error: {}'.format(str(e)))
@@ -156,3 +166,36 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
 
         self.send_response(HTTPStatus.OK)
         self.end_headers()
+    
+    def handle_list_directory(self):
+        logging.debug('List directory request')
+
+        session_id = self.get_session_id()
+        if session_id is None:
+            return
+        
+        if not self.heartbeat_session(session_id):
+            return
+
+        try:
+            path = self.parse_directory_path(self.path)
+        except:
+            self.send_error(HTTPStatus.BAD_REQUEST)
+            return
+        
+        try:
+            dir_entries = self._controller.list_directory(path)
+            dir_entries = json.dumps(dir_entries).encode('utf-8')
+        except DirectoryError as e:
+            self.handle_directory_error(e)
+            return
+        except Exception as e:
+            self.handle_internal_error(e)
+            return
+
+        self.send_response(HTTPStatus.OK)
+        self.send_header(CONTENT_TYPE_HEADER, CONTENT_TYPE_JSON)
+        self.send_header(CONTENT_LENGTH_HEADER, str(len(dir_entries)))
+        self.end_headers()
+        self.wfile.write(dir_entries)
+        self.wfile.flush()

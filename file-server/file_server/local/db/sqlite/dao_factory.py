@@ -1,4 +1,5 @@
 from ..dao_factory import DAOFactory
+from .directory_dao import SqliteDirectoryDAO
 from .user_dao import SqliteUserDAO
 
 class SqliteDAOFactory(DAOFactory):
@@ -8,3 +9,6 @@ class SqliteDAOFactory(DAOFactory):
     
     def user_dao(self, conn):
         return SqliteUserDAO(conn)
+    
+    def directory_dao(self, conn):
+        return SqliteDirectoryDAO(conn)
