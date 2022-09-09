@@ -28,4 +28,4 @@ class DirectoryDAO(DataAccessObject):
         Throws DirectoryError is path doesn't exist.
     '''
     def list_directory(self, path, show_hidden=False):
-        pass
+        raise Exception('Not implemented!')
