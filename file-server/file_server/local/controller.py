@@ -48,7 +48,15 @@ class Controller(object):
         self._sessions.renew_session(session_id)
 
     def create_directory(self, path, directory_name, is_hidden=False):
-        pass
+        logging.debug('Create directory [{}]'.format(path + directory_name))
+        conn = self.db_connect()
+        try:
+            logging.debug('Acquired database connection')
+            dir_dao = self._dao_factory.directory_dao(conn)
+            dir_dao.create_directory(path, directory_name, is_hidden)
+            logging.debug('Created directory [{}]'.format(path + directory_name))
+        finally:
+            self.db_close(conn)
 
     def list_directory(self, path, show_hidden=False):
         pass
