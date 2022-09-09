@@ -68,9 +68,7 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
 
     def parse_directory_path(self, url_path):
         url_path = url_path[DIRECTORY_PATH_LEN+1:].split('/')
-        path = list(map(urllib.parse.unquote, url_path))
-        directory_name = path.pop()
-        return path, directory_name
+        return list(map(urllib.parse.unquote, url_path))
 
     def handle_directory_error(self, e):
         logging.error('Directory error: {}'.format(str(e)))
@@ -141,7 +139,8 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            path, directory_name = self.parse_directory_path(self.path)
+            path = self.parse_directory_path(self.path)
+            directory_name = path.pop()
         except:
             self.send_error(HTTPStatus.BAD_REQUEST)
             return
