@@ -15,12 +15,13 @@ def get_encrypted_chunk_encoder(cipher_factory):
         chunk_length = len(enc_bytes).to_bytes(4, 'big', signed=False)
 
         if chunk_file is not None:
-            chunk_file.write(checksum)
-            chunk_file.write(chunk_length)
-            chunk_file.write(enc_bytes)
-            chunk_file.write(iv)
+            file_size = 0
+            file_size += chunk_file.write(checksum)
+            file_size += chunk_file.write(chunk_length)
+            file_size += chunk_file.write(enc_bytes)
+            file_size += chunk_file.write(iv)
             chunk_file.flush()
-            return
+            return file_size
 
         return checksum + chunk_length + enc_bytes + iv
 
