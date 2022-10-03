@@ -1,8 +1,8 @@
-from curses import meta
 import os
 import uuid
 from .error import FileError
 from .file_chunk import default_chunk_encoder, default_chunk_decoder
+from .util.crypto import sha256
 
 METADATA_FILE = '.metadata'
 
@@ -26,9 +26,23 @@ class File(object):
             if not os.path.exists(metadata_file_path):
                 raise FileError('Metadata file not found')
             with open(metadata_file_path, 'rb') as metadata_file:
-                self._total_chunks = int.from_bytes(metadata_file.read(4), 'big', signed=False)
-                self._file_size = int.from_bytes(metadata_file.read(4), 'big', signed=False)
-                self._size_on_disk = int.from_bytes(metadata_file.read(4), 'big', signed=False)
+                checksum = metadata_file.read(32)
+                if len(checksum) < 32:
+                    raise FileError('Metadata file invalid checksum')
+                total_chunks = metadata_file.read(4)
+                if len(total_chunks) < 4:
+                    raise FileError('Metadata file invalid total chunks')
+                file_size = metadata_file.read(4)
+                if len(file_size) < 4:
+                    raise FileError('Metadata file invalid file size')
+                size_on_disk = metadata_file.read(4)
+                if len(size_on_disk) < 4:
+                    raise FileError('Metadata file invalid file size on disk')
+                if sha256(total_chunks + file_size + size_on_disk) != checksum:
+                    raise FileError('Metadata file checksum mismatch')
+                self._total_chunks = int.from_bytes(total_chunks, 'big', signed=False)
+                self._file_size = int.from_bytes(file_size, 'big', signed=False)
+                self._size_on_disk = int.from_bytes(size_on_disk, 'big', signed=False)
         elif mode == 'w':
             os.mkdir(self._file_path)
         else:
@@ -80,9 +94,14 @@ class File(object):
     def close(self):
         if not self._closed and self._mode == 'w':
             metadata_file_path = self.metadata_file_path()
+            total_chunks = self._total_chunks.to_bytes(4, 'big', signed=False)
+            file_size = self._file_size.to_bytes(4, 'big', signed=False)
+            size_on_disk = self._size_on_disk.to_bytes(4, 'big', signed=False)
+            checksum = sha256(total_chunks + file_size + size_on_disk)
             with open(metadata_file_path, 'wb') as metadata_file:
-                metadata_file.write(self._total_chunks.to_bytes(4, 'big', signed=False))
-                metadata_file.write(self._file_size.to_bytes(4, 'big', signed=False))
-                metadata_file.write(self._size_on_disk.to_bytes(4, 'big', signed=False))
+                metadata_file.write(checksum)
+                metadata_file.write(total_chunks)
+                metadata_file.write(file_size)
+                metadata_file.write(size_on_disk)
                 metadata_file.flush()
         self._closed = True
