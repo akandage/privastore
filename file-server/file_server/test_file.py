@@ -75,6 +75,29 @@ class TestFile(unittest.TestCase):
         self.assertTrue(f2.read_chunk() is None)
         f2.close()
     
+    def test_append_file(self):
+        chunk1 = random.randbytes(1024)
+        chunk2 = random.randbytes(1024)
+
+        f = File('test_file', mode='w')
+        f.append_chunk(chunk1)
+        f.close()
+
+        self.assertEqual(f.total_chunks(), 1)
+        self.assertEqual(f.file_size(), 1024)
+
+        f2 = File('test_file', file_id=f.file_id(), mode='a')
+        f2.append_chunk(chunk2)
+        f2.close()
+
+        f3 = File('test_file', file_id=f.file_id(), mode='r')
+        self.assertEqual(f3.total_chunks(), 2)
+        self.assertEqual(f3.file_size(), 2048)
+        self.assertEqual(f3.read_chunk(), chunk1)
+        self.assertEqual(f3.read_chunk(), chunk2)
+        self.assertTrue(f3.read_chunk() is None)
+        f3.close()
+
     def test_read_write_encrypted_file(self):
         key = os.urandom(16)
         enc_factory = get_encryptor_factory('aes-128-cbc', key)

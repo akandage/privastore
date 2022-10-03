@@ -21,7 +21,7 @@ class File(object):
         self._encode_chunk = encode_chunk
         self._decode_chunk = decode_chunk
 
-        if mode == 'r':
+        if mode == 'r' or mode == 'a':
             metadata_file_path = self.metadata_file_path()
             if not os.path.exists(metadata_file_path):
                 raise FileError('Metadata file not found')
@@ -57,6 +57,9 @@ class File(object):
     def file_id(self):
         return self._file_id
     
+    def total_chunks(self):
+        return self._total_chunks
+
     def file_size(self):
         return self._file_size
     
@@ -66,7 +69,7 @@ class File(object):
     def append_chunk(self, chunk_bytes):
         if self._closed:
             raise FileError('File closed')
-        if self._mode != 'w':
+        if self._mode != 'w' and self._mode != 'a':
             raise FileError('File not opened for writing')
         file_path = os.path.join(self._file_path, str(self._total_chunks+1))
         if os.path.exists(file_path):
@@ -92,7 +95,7 @@ class File(object):
             return chunk_bytes
 
     def close(self):
-        if not self._closed and self._mode == 'w':
+        if not self._closed and (self._mode == 'w' or self._mode == 'a'):
             metadata_file_path = self.metadata_file_path()
             total_chunks = self._total_chunks.to_bytes(4, 'big', signed=False)
             file_size = self._file_size.to_bytes(4, 'big', signed=False)
