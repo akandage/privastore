@@ -13,8 +13,30 @@ def hash_user_password(password):
 
     return sha256(password)
 
-def sha256(bytes):
-    return hashlib.sha256(bytes).digest()
+def sha256(b):
+    return hashlib.sha256(b).digest()
+
+'''
+    Decorator for encryptor to pad data (ex. for AES-CBC).
+'''
+class PaddingEncryptor(object):
+
+    def __init__(self, enc, block_size=16):
+        super().__init__()
+        self._enc = enc
+        self._len = 0
+        self._block_size = block_size
+    
+    def update(self, data):
+        self._len += len(data)
+        return self._enc.update(data)
+
+    def finalize(self):
+        extra_bytes = self._len % self._block_size
+        if extra_bytes > 0:
+            b = self._enc.update(bytes([0 for _ in range(self._block_size-extra_bytes)]))
+            return b + self._enc.finalize()
+        return self._enc.finalize()
 
 '''
     Cipher encryptor factory method.
@@ -31,7 +53,8 @@ def get_encryptor_factory(key_algorithm, key_bytes):
             # and include in the encoded chunk.
             iv = os.urandom(16)
             cipher = Cipher(AES(key_bytes), CBC(iv))
-            return cipher.encryptor(), iv
+            enc = cipher.encryptor()
+            return PaddingEncryptor(enc), iv
 
     return factory
 
