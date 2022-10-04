@@ -18,8 +18,8 @@ def setup_db(db_config):
         except:
             pass
 
-def sqlite_conn_factory(db_path):
-    return lambda: sqlite3.connect(db_path)
+def sqlite_conn_factory(db_path, isolation_level=None):
+    return lambda: sqlite3.connect(db_path, isolation_level=isolation_level)
 
 def create_user_account_table(conn):
     logging.debug('Setting up ps_user_account table')
@@ -76,6 +76,7 @@ def create_file_table(conn):
             name VARCHAR(256) NOT NULL,
             parent_id INTEGER NOT NULL,
             is_hidden BOOLEAN NOT NULL DEFAULT 0,
+            UNIQUE (name, parent_id),
             FOREIGN KEY (parent_id) REFERENCES ps_directory (id) ON DELETE CASCADE
         )
         '''
@@ -89,8 +90,8 @@ def create_file_version_table(conn):
         CREATE TABLE ps_file_version (
             file_id INTEGER NOT NULL,
             version INTEGER NOT NULL,
-            local_id VARCHAR(39) UNIQUE,
-            remote_id VARCHAR(39) UNIQUE,
+            local_id VARCHAR(39) UNIQUE NULL,
+            remote_id VARCHAR(39) UNIQUE NULL,
             size_bytes INTEGER NOT NULL,
             transfer_status INTEGER NOT NULL,
             FOREIGN KEY (file_id) REFERENCES ps_file (id) ON DELETE CASCADE,

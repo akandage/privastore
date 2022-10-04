@@ -18,6 +18,18 @@ class DirectoryDAO(DataAccessObject):
         raise Exception('Not implemented!')
     
     '''
+        Create a file.
+
+        path - Path to the new file - array of directory names.
+        directory_name - Name of the new file.
+        is_hidden - Hidden directory flag.
+
+        Throws DirectoryError is path doesn't exist.
+    '''
+    def create_file(self, path, file_name, is_hidden=False):
+        raise Exception('Not implemented')
+
+    '''
         List directory entries.
 
         path - Path to the directory.
