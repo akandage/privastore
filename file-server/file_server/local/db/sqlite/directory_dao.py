@@ -1,4 +1,5 @@
 from ..directory_dao import DirectoryDAO
+from .directory_util import query_directory_id, query_file_id, traverse_path
 from ....error import DirectoryError, FileError
 from ...file_transfer_status import FileTransferStatus
 import logging
@@ -8,36 +9,6 @@ class SqliteDirectoryDAO(DirectoryDAO):
     def __init__(self, conn):
         super().__init__(conn)
     
-    def query_directory_id(self, cur, parent_directory_id, directory_name):
-        cur.execute('''
-            SELECT L.child_id FROM ps_directory AS D INNER JOIN ps_link AS L ON L.child_id = D.id 
-            WHERE L.parent_id = ? AND D.name = ?
-        ''', (parent_directory_id, directory_name))
-        res = cur.fetchone()
-        if res is None:
-            return None
-        return res[0]
-
-    def query_file_id(self, cur, parent_directory_id, file_name):
-        cur.execute('''
-            SELECT F.id FROM ps_file AS F INNER JOIN ps_file_version AS V ON F.id = V.file_id 
-            WHERE F.parent_id = ? AND F.name = ? AND V.transfer_status <> ?
-        ''', (parent_directory_id, file_name, FileTransferStatus.RECEIVING_FAILED.value))
-        res = cur.fetchone()
-        if res is None:
-            return None
-        return res[0]
-
-    def traverse_path(self, cur, path):
-        # Start from root directory and iterate to the last directory in the path.
-        #
-        directory_id = 1
-        for directory_name in path:
-            directory_id = self.query_directory_id(cur, directory_id, directory_name)
-            if directory_id is None:
-                raise DirectoryError('Invalid path to directory [{}]'.format('/' + '/'.join(path)))
-        return directory_id
-
     def create_directory(self, path, directory_name, is_hidden=False):
         if len(directory_name) == 0:
             raise DirectoryError('Directory name can\'t be empty!')
@@ -45,10 +16,10 @@ class SqliteDirectoryDAO(DirectoryDAO):
         try:
             try:
                 cur.execute('BEGIN')
-                directory_id = self.traverse_path(cur, path)
-                if self.query_directory_id(cur, directory_id, directory_name) is not None:
+                directory_id = traverse_path(cur, path)
+                if query_directory_id(cur, directory_id, directory_name) is not None:
                     raise DirectoryError('Directory [{}] exists in path [{}]'.format(directory_name, '/' + '/'.join(path)))
-                elif self.query_file_id(cur, directory_id, directory_name) is not None:
+                elif query_file_id(cur, directory_id, directory_name) is not None:
                     raise FileError('File [{}] exists in path [{}]'.format(directory_name, '/' + '/'.join(path)))
                 cur.execute('INSERT INTO ps_directory (name, is_hidden) VALUES (?, ?)', (directory_name, is_hidden))
                 cur.execute('SELECT last_insert_rowid() FROM ps_directory')
@@ -77,10 +48,10 @@ class SqliteDirectoryDAO(DirectoryDAO):
         try:
             try:
                 cur.execute('BEGIN')
-                directory_id = self.traverse_path(cur, path)
-                if self.query_directory_id(cur, directory_id, file_name) is not None:
+                directory_id = traverse_path(cur, path)
+                if query_directory_id(cur, directory_id, file_name) is not None:
                     raise DirectoryError('Directory [{}] exists in path [{}]'.format(file_name, '/' + '/'.join(path)))
-                elif self.query_file_id(cur, directory_id, file_name) is not None:
+                elif query_file_id(cur, directory_id, file_name) is not None:
                     raise FileError('File [{}] exists in path [{}]'.format(file_name, '/' + '/'.join(path)))
                 cur.execute('INSERT INTO ps_file (name, parent_id, is_hidden) VALUES (?, ?, ?)', (file_name, directory_id, is_hidden))
                 cur.execute('SELECT last_insert_rowid() FROM ps_file')
@@ -112,7 +83,7 @@ class SqliteDirectoryDAO(DirectoryDAO):
         try:
             try:
                 cur.execute('BEGIN')
-                directory_id = self.traverse_path(cur, path)
+                directory_id = traverse_path(cur, path)
                 entries = []
                 cur.execute('''SELECT name 
                     FROM ps_directory AS D INNER JOIN ps_link AS L ON D.id = L.child_id 
