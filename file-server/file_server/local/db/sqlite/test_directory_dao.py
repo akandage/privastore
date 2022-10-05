@@ -60,6 +60,12 @@ class TestSqliteDirectoryDAO(unittest.TestCase):
             self.fail()
         except DirectoryError as e:
             self.assertEqual('Directory [dir_2] exists in path [/dir_1]', str(e), 'Expected directory exists error')
+        self.dao.create_file(['dir_1'], 'd')
+        try:
+            self.dao.create_directory(['dir_1'], 'd')
+            self.fail()
+        except FileError as e:
+            self.assertEqual('File [d] exists in path [/dir_1]', str(e), 'Expected file exists error')
 
     def test_create_file(self):
         self.dao.create_file([], 'file_1')
@@ -90,6 +96,12 @@ class TestSqliteDirectoryDAO(unittest.TestCase):
             self.fail()
         except FileError as e:
             self.assertEqual('File [file_2] exists in path [/dir_1]', str(e), 'Expected file exists error')
+        self.dao.create_directory(['dir_1'], 'f')
+        try:
+            self.dao.create_file(['dir_1'], 'f')
+            self.fail()
+        except DirectoryError as e:
+            self.assertEqual('Directory [f] exists in path [/dir_1]', str(e), 'Expected directory exists error')
 
     def test_list_directory(self):
         self.dao.create_directory([], 'dir_1')

@@ -2,6 +2,7 @@ from ..directory_dao import DirectoryDAO
 from .directory_util import query_directory_id, query_file_id, traverse_path
 from ....error import DirectoryError, FileError
 from ...file_transfer_status import FileTransferStatus
+from ....util.file import str_path
 import logging
 
 class SqliteDirectoryDAO(DirectoryDAO):
@@ -18,9 +19,9 @@ class SqliteDirectoryDAO(DirectoryDAO):
                 cur.execute('BEGIN')
                 directory_id = traverse_path(cur, path)
                 if query_directory_id(cur, directory_id, directory_name) is not None:
-                    raise DirectoryError('Directory [{}] exists in path [{}]'.format(directory_name, '/' + '/'.join(path)))
+                    raise DirectoryError('Directory [{}] exists in path [{}]'.format(directory_name, str_path(path)))
                 elif query_file_id(cur, directory_id, directory_name) is not None:
-                    raise FileError('File [{}] exists in path [{}]'.format(directory_name, '/' + '/'.join(path)))
+                    raise FileError('File [{}] exists in path [{}]'.format(directory_name, str_path(path)))
                 cur.execute('INSERT INTO ps_directory (name, is_hidden) VALUES (?, ?)', (directory_name, is_hidden))
                 cur.execute('SELECT last_insert_rowid() FROM ps_directory')
                 created_directory_id, = cur.fetchone()
@@ -29,6 +30,10 @@ class SqliteDirectoryDAO(DirectoryDAO):
                 return created_directory_id
             except DirectoryError as e:
                 logging.error('Directory error: {}'.format(str(e)))
+                self.rollback_nothrow()
+                raise e
+            except FileError as e:
+                logging.error('File error: {}'.format(str(e)))
                 self.rollback_nothrow()
                 raise e
             except Exception as e:
@@ -50,9 +55,9 @@ class SqliteDirectoryDAO(DirectoryDAO):
                 cur.execute('BEGIN')
                 directory_id = traverse_path(cur, path)
                 if query_directory_id(cur, directory_id, file_name) is not None:
-                    raise DirectoryError('Directory [{}] exists in path [{}]'.format(file_name, '/' + '/'.join(path)))
+                    raise DirectoryError('Directory [{}] exists in path [{}]'.format(file_name, str_path(path)))
                 elif query_file_id(cur, directory_id, file_name) is not None:
-                    raise FileError('File [{}] exists in path [{}]'.format(file_name, '/' + '/'.join(path)))
+                    raise FileError('File [{}] exists in path [{}]'.format(file_name, str_path(path)))
                 cur.execute('INSERT INTO ps_file (name, parent_id, is_hidden) VALUES (?, ?, ?)', (file_name, directory_id, is_hidden))
                 cur.execute('SELECT last_insert_rowid() FROM ps_file')
                 created_file_id, = cur.fetchone()
