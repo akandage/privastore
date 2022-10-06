@@ -24,28 +24,29 @@ class SqliteFileDAO(FileDAO):
                     raise FileError('File [{}] not found in path [{}]'.format(file_name, str_path(path)))
                 if version is not None:
                     cur.execute('''
-                        SELECT local_id, remote_id, size_bytes, transfer_status 
+                        SELECT version, local_id, remote_id, size_bytes, transfer_status 
+                        FROM ps_file_version 
+                        WHERE file_id = ? AND version = ?
+                    ''', (file_id, version))
+                    res = cur.fetchone()
+                else:
+                    cur.execute('''
+                        SELECT version, local_id, remote_id, size_bytes, transfer_status 
                         FROM ps_file_version 
                         WHERE file_id = ? 
                         ORDER BY version DESC
                     ''', (file_id,))
                     res = cur.fetchone()
-                else:
-                    cur.execute('''
-                        SELECT local_id, remote_id, size_bytes, transfer_status 
-                        FROM ps_file_version 
-                        WHERE file_id = ? AND version = ?
-                    ''', (file_id, version))
-                    res = cur.fetchone()
                 if res is None:
                     raise FileError('File [{}] version [{}] not found!'.format(str_path(path + [file_name]), version))
-                fv_metadata = {
-                    'local_id': res[0],
-                    'remote_id': res[1],
-                    'size_bytes': res[2],
-                    'transfer_status': FileTransferStatus(res[3])
-                }
                 self._conn.commit()
+                return {
+                    'version': res[0],
+                    'local_id': res[1],
+                    'remote_id': res[2],
+                    'size_bytes': res[3],
+                    'transfer_status': FileTransferStatus(res[4])
+                }
             except DirectoryError as e:
                 logging.error('Directory error: {}'.format(str(e)))
                 self.rollback_nothrow()

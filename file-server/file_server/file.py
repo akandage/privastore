@@ -52,7 +52,7 @@ class File(object):
         return 'F-{}'.format(str(uuid.uuid4()))
 
     @staticmethod
-    def is_valid_file_id(self, file_id):
+    def is_valid_file_id(file_id):
         if len(file_id) < 38 or not file_id.startswith('F-'):
             return False
         try:
