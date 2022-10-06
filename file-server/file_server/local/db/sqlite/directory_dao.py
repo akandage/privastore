@@ -23,8 +23,7 @@ class SqliteDirectoryDAO(DirectoryDAO):
                 elif query_file_id(cur, directory_id, directory_name) is not None:
                     raise FileError('File [{}] exists in path [{}]'.format(directory_name, str_path(path)))
                 cur.execute('INSERT INTO ps_directory (name, is_hidden) VALUES (?, ?)', (directory_name, is_hidden))
-                cur.execute('SELECT last_insert_rowid() FROM ps_directory')
-                created_directory_id, = cur.fetchone()
+                created_directory_id = cur.lastrowid
                 cur.execute('INSERT INTO ps_link (parent_id, child_id) VALUES (?, ?)', (directory_id, created_directory_id))
                 self._conn.commit()
                 return created_directory_id
@@ -59,10 +58,9 @@ class SqliteDirectoryDAO(DirectoryDAO):
                 elif query_file_id(cur, directory_id, file_name) is not None:
                     raise FileError('File [{}] exists in path [{}]'.format(file_name, str_path(path)))
                 cur.execute('INSERT INTO ps_file (name, parent_id, is_hidden) VALUES (?, ?, ?)', (file_name, directory_id, is_hidden))
-                cur.execute('SELECT last_insert_rowid() FROM ps_file')
-                created_file_id, = cur.fetchone()
+                created_file_id = cur.lastrowid
                 cur.execute('INSERT INTO ps_file_version (file_id, version, size_bytes, transfer_status) VALUES (?, ?, ?, ?)', 
-                    (created_file_id, 1, 0, FileTransferStatus.RECEIVING.value))
+                    (created_file_id, 1, 0, FileTransferStatus.EMPTY.value))
                 self._conn.commit()
                 return created_file_id
             except DirectoryError as e:

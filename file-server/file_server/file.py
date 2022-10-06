@@ -50,7 +50,17 @@ class File(object):
     
     def generate_file_id(self):
         return 'F-{}'.format(str(uuid.uuid4()))
-    
+
+    @staticmethod
+    def is_valid_file_id(self, file_id):
+        if len(file_id) < 38 or not file_id.startswith('F-'):
+            return False
+        try:
+            uuid.UUID(file_id[2:])
+        except:
+            return False
+        return True
+
     def metadata_file_path(self):
         return os.path.join(self._file_path, METADATA_FILE)
     
