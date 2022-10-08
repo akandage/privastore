@@ -1,4 +1,6 @@
+import logging
 import os
+import shutil
 import uuid
 from .error import FileError
 from .file_chunk import default_chunk_encoder, default_chunk_decoder
@@ -103,6 +105,9 @@ class File(object):
                 chunk_bytes = self._decode_chunk(chunk_file=chunk_file)
             self._chunks_read += 1
             return chunk_bytes
+
+    def remove(self):
+        shutil.rmtree(self._file_path)
 
     def close(self):
         if not self._closed and (self._mode == 'w' or self._mode == 'a'):
