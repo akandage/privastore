@@ -69,6 +69,9 @@ class File(object):
     def file_id(self):
         return self._file_id
     
+    def mode(self):
+        return self._mode
+
     def total_chunks(self):
         return self._total_chunks
 
