@@ -5,6 +5,7 @@ import logging
 import os
 from threading import Event, RLock
 
+READY = 'ready'
 READABLE_FLAG = 'readable'
 WRITABLE_FLAG = 'writable'
 REMOVABLE_FLAG = 'removable'
@@ -62,6 +63,7 @@ class FileCache(object):
             if file_id in self._index:
                 raise FileCacheError('File [{}] already exists in cache'.format(file_id))
             self._index[file_id] = {
+                READY: Event(),
                 READABLE_FLAG: False,
                 WRITABLE_FLAG: True,
                 REMOVABLE_FLAG: False,
@@ -79,12 +81,13 @@ class FileCache(object):
         In read mode. If file is found (cache hit) return the index entry - the readable
         flag will indicate whether the file can be read from.
         Otherwise, the file is not found (cache miss) and None is returned.
+        If a timeout (in seconds) is specified, the read will be blocking.
 
         In write mode, new file is opened for writing in the cache and returned. The file
         must be closed in order for it be accessed by readers.
  
     '''
-    def open_file(self, file_id=None, file_path=None, file_name=None, file_version=None, mode='r'):
+    def open_file(self, file_id=None, file_path=None, file_name=None, file_version=None, mode='r', timeout=None):
         if mode == 'w':
             file = self._file_factory(self._cache_path, file_id=file_id, mode=mode)
             self.create_cache_entry(file.file_id(), file_path, file_name, file_version)
@@ -114,9 +117,25 @@ class FileCache(object):
         elif mode == 'r':
             if file_id is not None:
                 if File.is_valid_file_id(file_id):
-                    with self._index_lock:
+                    self._index_lock.acquire()
+                    try:
                         if file_id in self._index:
                             entry = self._index[file_id]
+                            if timeout is not None:
+                                #
+                                # Release the lock and then wait for the file to
+                                # be ready to read. Once the flag is set or we timeout
+                                # reacquire the lock and check the index entry again.
+                                #
+                                self._index_lock.release()
+                                entry[READY].wait(timeout)
+                                self._index_lock.acquire()
+                                if file_id not in self._index:
+                                    #
+                                    # File was removed while we waited, cache miss.
+                                    #
+                                    return
+                                entry = self._index[file_id]
                             if entry[READABLE_FLAG]:
                                 if entry[WRITABLE_FLAG]:
                                     raise Exception('File [{}] in invalid state'.format(file_id))
@@ -127,6 +146,8 @@ class FileCache(object):
                                 entry = dict(entry)
                                 entry['file'] = None
                             return entry
+                    finally:
+                        self._index_lock.release()
                 else:
                     raise FileCacheError('Invalid file id')
             else:
@@ -153,6 +174,8 @@ class FileCache(object):
                     curr_size = file.size_on_disk()
                     entry[FILE_SIZE] = curr_size
                     self._cache_used += curr_size-prev_size
+                if readable:
+                    entry[READY].set()
             else:
                 raise FileCacheError('File [{}] not found in cache'.format(file_id))
 
@@ -166,6 +189,8 @@ class FileCache(object):
             if file_id in self._index:
                 entry = self._index[file_id]
                 self._index.pop(file_id)
+                # Notify any readers waiting.
+                entry[READY].set()
                 file.remove()
                 self._cache_used -= entry[FILE_SIZE]
             else:
