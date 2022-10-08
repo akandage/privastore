@@ -3,7 +3,7 @@ from .file import File
 from .util.file import parse_mem_size, str_mem_size
 import logging
 import os
-from threading import RLock
+from threading import Event, RLock
 
 READABLE_FLAG = 'readable'
 WRITABLE_FLAG = 'writable'
@@ -86,7 +86,7 @@ class FileCache(object):
     '''
     def open_file(self, file_id=None, file_path=None, file_name=None, file_version=None, mode='r'):
         if mode == 'w':
-            file = self._file_factory(self._cache_path, mode=mode)
+            file = self._file_factory(self._cache_path, file_id=file_id, mode=mode)
             self.create_cache_entry(file.file_id(), file_path, file_name, file_version)
             return file
         elif mode == 'a':
