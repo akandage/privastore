@@ -29,6 +29,10 @@ class FileCache(object):
         self._index = dict()
         self._index_lock = RLock()
 
+        if not os.path.exists(self._cache_path):
+            os.mkdir(self._cache_path)
+            logging.info('File cache created in path [{}]'.format(self._cache_path))
+
         for file_id in os.listdir(self._cache_path):
             f = None
             try:
@@ -47,8 +51,14 @@ class FileCache(object):
         logging.debug('File cache size [{}]'.format(str_mem_size(self._cache_size)))
         logging.debug('File chunk size [{}]'.format(str_mem_size(self._chunk_size)))
 
+    def cache_path(self):
+        return self._cache_path
+
     def cache_size(self):
         return self._cache_size
+    
+    def cache_used(self):
+        return self._cache_used
     
     def cache_free_space(self):
         free_space = 0

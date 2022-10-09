@@ -4,16 +4,14 @@ GIGABYTE = 1024 * MEGABYTE
 
 def parse_mem_size(mem_size):
     try:
-        if mem_size.endswith('B'):
+        if mem_size.endswith('KB'):
+            return round(KILOBYTE * int(mem_size[:-2]))
+        elif mem_size.endswith('MB'):
+            return round(MEGABYTE * int(mem_size[:-2]))
+        elif mem_size.endswith('GB'):
+            return round(GIGABYTE * int(mem_size[:-2]))
+        elif mem_size.endswith('B'):
             return int(mem_size[:-1])
-        else:
-            m = int(mem_size[:-2])
-            if mem_size.endswith('KB'):
-                return round(KILOBYTE * m)
-            elif mem_size.endswith('MB'):
-                return round(MEGABYTE * m)
-            elif mem_size.endswith('GB'):
-                return round(GIGABYTE * m)
     except:
         pass
     raise Exception('Unrecognized memory size [{}]'.format(mem_size))
