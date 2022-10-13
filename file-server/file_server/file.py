@@ -81,6 +81,13 @@ class File(object):
     def size_on_disk(self):
         return self._size_on_disk
 
+    def write(self, data):
+        '''
+            Implement this so it behaves like file-like object.
+        '''
+        self.append_chunk(data)
+        return len(data)
+
     def append_chunk(self, chunk_bytes):
         if self._closed:
             raise FileError('File closed')
@@ -95,6 +102,15 @@ class File(object):
         self._file_size += len(chunk_bytes)
         self._total_chunks += 1
     
+    def read(self, size):
+        '''
+            Implement this so it behaves like file-like object.
+        '''
+        chunk = self.read_chunk()
+        if chunk is None:
+            return b''
+        return chunk
+
     def read_chunk(self):
         if self._closed:
             raise FileError('File closed')
@@ -111,6 +127,12 @@ class File(object):
 
     def remove(self):
         shutil.rmtree(self._file_path)
+    
+    def flush(self):
+        '''
+            Implement this so it behaves like file-like object (no-op).
+        '''
+        return
 
     def close(self):
         if not self._closed and (self._mode == 'w' or self._mode == 'a'):

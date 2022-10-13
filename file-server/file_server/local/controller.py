@@ -1,5 +1,5 @@
 from ..error import FileUploadError, SessionError
-from ..util.file import str_path
+from ..util.file import chunked_transfer, str_mem_size, str_path
 import logging
 
 class Controller(object):
@@ -68,22 +68,49 @@ class Controller(object):
         try:
             logging.debug('Acquired database connection')
             dir_dao = self._dao_factory.directory_dao(conn)
+            file_dao = self._dao_factory.file_dao(conn)
 
             #
             # First, the new file is registered in the database with receiving
             # status.
             #
             dir_dao.create_file(path, file_name)
-
+            upload_file = None
             try:
                 #
                 # Uploaded file data is stored in the cache and cannot be removed
                 # or evicted from the cache until it has been synced to the remote
                 # server.
                 #
-                pass
-            except:
-                pass
+                upload_file = self._cache.open_file(file_path=path, file_name=file_name, file_version=1, file_size=file_size, mode='w')
+                logging.debug('Opened file for writing in cache [{}]'.format(upload_file.file_id()))
+
+                #
+                # Read the file in chunks of the configured chunk size and append to
+                # the file in the cache.
+                #
+                bytes_transferred = chunked_transfer(file, upload_file)
+                if bytes_transferred < file_size:
+                    raise FileUploadError('Could not upload all file data! [{}/{}]'.format(str_mem_size(bytes_transferred), str_mem_size(file_size)))
+
+                self._cache.close_file(upload_file, removable=False)
+                logging.debug('File data uploaded')
+            except Exception as e:
+                logging.error('Could not upload file: {}'.format(str(e)))
+
+                #
+                # Cleanup if any error occurs during the upload process.
+                #
+
+                # TODO: Remove the file metadata from the db.
+
+                if upload_file is not None:
+                    try:
+                        self._cache.remove_file(upload_file)
+                    except Exception as e:
+                        logging.error('Could not cleanup uploaded file [{}]: {}'.format(str(e)))
+
+                raise e
 
             logging.debug('Uploaded file [{}]'.format(str_path(path + [file_name])))
         finally:

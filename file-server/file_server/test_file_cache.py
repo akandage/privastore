@@ -19,8 +19,8 @@ class TestFileCache(unittest.TestCase):
             pass
     
     def test_write_file(self):
-        f1 = self.cache.open_file(mode='w')
-        f2 = self.cache.open_file(mode='w')
+        f1 = self.cache.open_file(file_path=[], file_name='f1', mode='w')
+        f2 = self.cache.open_file(file_path=[], file_name='f2', mode='w')
 
         self.assertNotEqual(f1.file_id(), f2.file_id())
         chunk1 = random.randbytes(100)
@@ -34,7 +34,7 @@ class TestFileCache(unittest.TestCase):
         self.cache.close_file(f2)
         self.assertEqual(self.cache.cache_used(), 200)
 
-        res = self.cache.open_file(file_id=f1.file_id(), mode='r')
+        res = self.cache.read_file(f1.file_id())
         self.assertTrue(res['file'] is not None)
         f3 = res['file']
         self.assertEqual(f3.read_chunk(), chunk1)
@@ -42,7 +42,7 @@ class TestFileCache(unittest.TestCase):
         self.assertTrue(f3.read_chunk() is None)
         self.cache.close_file(f3)
 
-        res = self.cache.open_file(file_id=f2.file_id(), mode='r')
+        res = self.cache.read_file(f2.file_id())
         self.assertTrue(res['file'] is not None)
         f4 = res['file']
         self.assertEqual(f4.read_chunk(), chunk3)
@@ -50,7 +50,7 @@ class TestFileCache(unittest.TestCase):
         self.cache.close_file(f4)
 
     def test_append_file(self):
-        f1 = self.cache.open_file(mode='w')
+        f1 = self.cache.open_file(file_path=[], file_name='f1', mode='w')
         self.cache.close_file(f1, readable=False, writable=True, removable=False)
 
         self.assertEqual(f1.file_size(), 0)
@@ -65,7 +65,7 @@ class TestFileCache(unittest.TestCase):
         f2.append_chunk(chunk2)
         self.cache.close_file(f2)
 
-        res = self.cache.open_file(file_id=f1.file_id(), mode='r')
+        res = self.cache.read_file(f1.file_id())
         self.assertTrue(res['file'] is not None)
         f3 = res['file']
         self.assertEqual(f3.read_chunk(), chunk1)

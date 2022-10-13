@@ -69,9 +69,13 @@ class FileCache(object):
     def file_chunk_size(self):
         return self._chunk_size
 
-    def create_cache_entry(self, file_id, file_path=None, file_name=None, file_version=1, file_size=0):
-        if not File.is_valid_file_id(file_id):
+    def create_cache_entry(self, file_id, file_path, file_name, file_version, file_size):
+        if file_id is None or not File.is_valid_file_id(file_id):
             raise FileCacheError('Invalid file id!')
+        if file_path is None:
+            raise FileCacheError('No path specified')
+        if file_name is None:
+            raise FileCacheError('No file name specified')
         with self._index_lock:
             if file_id in self._index:
                 raise FileCacheError('File [{}] already exists in cache'.format(file_id))
@@ -89,20 +93,62 @@ class FileCache(object):
             }
 
     '''
-        Open file in cache.
+        Open file in cache for reading.
         While file is opened, it will be locked preventing its removal from the cache.
         Allow multipled readers and single writer.
 
-        In read mode. If file is found (cache hit) return the index entry - the readable
+        If file is found (cache hit) return the index entry - the readable
         flag will indicate whether the file can be read from.
         Otherwise, the file is not found (cache miss) and None is returned.
         If a timeout (in seconds) is specified, the read will be blocking.
-
-        In write mode, new file is opened for writing in the cache and returned. The file
-        must be closed in order for it be accessed by readers.
  
     '''
-    def open_file(self, file_id=None, file_path=None, file_name=None, file_version=1, file_size=0, mode='r', timeout=None):
+    def read_file(self, file_id, timeout=None):
+        if file_id is not None and File.is_valid_file_id(file_id):
+            self._index_lock.acquire()
+            try:
+                if file_id in self._index:
+                    entry = self._index[file_id]
+                    if timeout is not None:
+                        #
+                        # Release the lock and then wait for the file to
+                        # be ready to read. Once the flag is set or we timeout
+                        # reacquire the lock and check the index entry again.
+                        #
+                        self._index_lock.release()
+                        entry[READY].wait(timeout)
+                        self._index_lock.acquire()
+                        if file_id not in self._index:
+                            #
+                            # File was removed while we waited, cache miss.
+                            #
+                            return
+                        entry = self._index[file_id]
+                    if entry[READABLE_FLAG]:
+                        if entry[WRITABLE_FLAG]:
+                            raise Exception('File [{}] in invalid state'.format(file_id))
+                        entry[REMOVABLE_FLAG] = False
+                        entry = dict(entry)
+                        entry['file'] = self._file_factory(self._cache_path, file_id, mode='r')
+                    else:
+                        entry = dict(entry)
+                        entry['file'] = None
+                    return entry
+            finally:
+                self._index_lock.release()
+        else:
+            raise FileCacheError('Invalid file id')
+
+
+    '''
+        Open file in cache for writing or appending.
+        While file is opened, it will be locked preventing its removal from the cache.
+        Allow multipled readers and single writer.
+
+        New file is opened for writing in the cache and returned. The file
+        must be closed in order for it be accessed by readers.
+    '''
+    def open_file(self, file_id=None, file_path=None, file_name=None, file_version=1, file_size=0, mode='w'):
         if mode == 'w':
             file = self._file_factory(self._cache_path, file_id=file_id, mode=mode)
             self.create_cache_entry(file.file_id(), file_path, file_name, file_version, file_size)
@@ -125,44 +171,6 @@ class FileCache(object):
                             return entry
                         else:
                             raise FileCacheError('File [{}] not found in cache'.format(file_id))
-                else:
-                    raise FileCacheError('Invalid file id')
-            else:
-                raise FileCacheError('No file id specified')
-        elif mode == 'r':
-            if file_id is not None:
-                if File.is_valid_file_id(file_id):
-                    self._index_lock.acquire()
-                    try:
-                        if file_id in self._index:
-                            entry = self._index[file_id]
-                            if timeout is not None:
-                                #
-                                # Release the lock and then wait for the file to
-                                # be ready to read. Once the flag is set or we timeout
-                                # reacquire the lock and check the index entry again.
-                                #
-                                self._index_lock.release()
-                                entry[READY].wait(timeout)
-                                self._index_lock.acquire()
-                                if file_id not in self._index:
-                                    #
-                                    # File was removed while we waited, cache miss.
-                                    #
-                                    return
-                                entry = self._index[file_id]
-                            if entry[READABLE_FLAG]:
-                                if entry[WRITABLE_FLAG]:
-                                    raise Exception('File [{}] in invalid state'.format(file_id))
-                                entry[REMOVABLE_FLAG] = False
-                                entry = dict(entry)
-                                entry['file'] = self._file_factory(self._cache_path, file_id, mode)
-                            else:
-                                entry = dict(entry)
-                                entry['file'] = None
-                            return entry
-                    finally:
-                        self._index_lock.release()
                 else:
                     raise FileCacheError('Invalid file id')
             else:
