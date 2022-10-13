@@ -1,10 +1,11 @@
 from .error import FileChunkError
 from .util.crypto import sha256
+from .util.file import write_all
 import os
 
 def default_chunk_encoder(chunk_bytes, chunk_file=None):
     if chunk_file is not None:
-        chunk_file.write(chunk_bytes)
+        write_all(chunk_file, chunk_bytes)
         chunk_file.flush()
         return len(chunk_bytes)
     return chunk_bytes
@@ -34,11 +35,11 @@ def get_encrypted_chunk_encoder(cipher_factory):
 
         if chunk_file is not None:
             file_size = 0
-            file_size += chunk_file.write(checksum)
-            file_size += chunk_file.write(chunk_length)
-            file_size += chunk_file.write(enc_length)
-            file_size += chunk_file.write(enc_bytes)
-            file_size += chunk_file.write(iv)
+            file_size += write_all(chunk_file, checksum)
+            file_size += write_all(chunk_file, chunk_length)
+            file_size += write_all(chunk_file, enc_length)
+            file_size += write_all(chunk_file, enc_bytes)
+            file_size += write_all(chunk_file, iv)
             chunk_file.flush()
             return file_size
 

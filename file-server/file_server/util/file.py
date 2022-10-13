@@ -24,14 +24,23 @@ def chunked_transfer(in_file, out_file, file_size, chunk_size):
         buf_len += read
 
         if buf_len == chunk_size:
-            if out_file.write(buf) < chunk_size:
-                raise Exception()
+            write_all(out_file, buf)
             bytes_transferred += buf_len
             buf = bytes()
             buf_len = 0
     
     out_file.flush()
     return bytes_transferred
+
+def write_all(file, data):
+    data_len = len(data)
+    written = 0
+    while written < data_len:
+        w = file.write(data[written:])
+        if w == 0:
+            raise Exception('No data written!')
+        written += w
+    return data_len
 
 def parse_mem_size(mem_size):
     try:
