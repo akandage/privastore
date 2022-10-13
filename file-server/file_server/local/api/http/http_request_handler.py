@@ -1,5 +1,5 @@
 import base64
-from ....error import AuthenticationError, DirectoryError, SessionError
+from ....error import AuthenticationError, DirectoryError, FileError, SessionError
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 import json
@@ -10,6 +10,8 @@ DIRECTORY_PATH = '/1/directory/'
 DIRECTORY_PATH_LEN = len(DIRECTORY_PATH)
 HEARTBEAT_PATH = '/1/heartbeat'
 LOGIN_PATH = '/1/login'
+UPLOAD_PATH = '/1/upload'
+UPLOAD_PATH_LEN = len(UPLOAD_PATH)
 CONTENT_TYPE_HEADER = 'Content-Type'
 CONTENT_TYPE_JSON = 'application/json'
 CONTENT_LENGTH_HEADER = 'Content-Length'
@@ -33,6 +35,8 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
         path = self.path
         if path == LOGIN_PATH:
             self.handle_login_user()
+        elif path == UPLOAD_PATH:
+            self.handle_upload_file()
         else:
             logging.error('Invalid path: [{}]'.format(path))
             self.send_error(HTTPStatus.NOT_FOUND)
@@ -73,8 +77,27 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
             self.handle_internal_error(e)
             return False
 
+    def parse_content_length(self):
+        content_len =  self.headers.get(CONTENT_LENGTH_HEADER)
+
+        if content_len is None:
+            logging.error('Missing {} header'.format(CONTENT_LENGTH_HEADER))
+            self.send_error(HTTPStatus.BAD_REQUEST)
+            return
+
+        try:
+            content_len = int(content_len)
+            if content_len < 0:
+                raise Exception()
+        except:
+            logging.error('Invalid {} header value'.format(CONTENT_LENGTH_HEADER))
+            self.send_error(HTTPStatus.BAD_REQUEST)
+            return
+        
+        return content_len
+
     def parse_directory_path(self, url_path):
-        url_path = url_path[DIRECTORY_PATH_LEN:]
+        # url_path = url_path[DIRECTORY_PATH_LEN:]
         if len(url_path) > 0:
             url_path = url_path.split('/')
             return list(map(urllib.parse.unquote, url_path))
@@ -178,8 +201,12 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            path = self.parse_directory_path(self.path)
+            path = self.path[DIRECTORY_PATH_LEN:]
+            if path.find('?') != -1 or path.find('#') != -1:
+                raise Exception()
+            path = self.parse_directory_path(path)
         except:
+            logging.error('Invalid directory path')
             self.send_error(HTTPStatus.BAD_REQUEST)
             return
         
@@ -199,3 +226,44 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(dir_entries)
         self.wfile.flush()
+    
+    def handle_upload_file(self):
+        logging.debug('Upload file')
+
+        session_id = self.get_session_id()
+        if session_id is None:
+            return
+        
+        if not self.heartbeat_session(session_id):
+            return
+
+        try:
+            path = self.path[UPLOAD_PATH_LEN:]
+            if path.find('?') != -1 or path.find('#') != -1:
+                raise Exception()
+            path = self.parse_directory_path(path)
+            if len(path) < 1:
+                raise Exception()
+            file_name = path.pop()
+        except:
+            logging.error('Invalid directory path or filename')
+            self.send_error(HTTPStatus.BAD_REQUEST)
+            return
+        
+        file_size = self.parse_content_length()
+        if file_size is None:
+            return
+
+        try:
+            self._controller.upload_file(path, file_name, self.rfile, file_size)
+        except DirectoryError as e:
+            self.handle_directory_error(e)
+            return
+        except FileError as e:
+            pass
+        except Exception as e:
+            self.handle_internal_error(e)
+            return
+
+        self.send_response(HTTPStatus.OK)
+        self.end_headers()

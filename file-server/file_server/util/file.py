@@ -19,9 +19,9 @@ def parse_mem_size(mem_size):
 def str_mem_size(mem_size):
     if mem_size >= GIGABYTE:
         return '{:.2f}GB'.format(mem_size/GIGABYTE)
-    elif mem_size > MEGABYTE:
+    elif mem_size >= MEGABYTE:
         return '{:.2f}MB'.format(mem_size/MEGABYTE)
-    elif mem_size > KILOBYTE:
+    elif mem_size >= KILOBYTE:
         return '{:.2f}KB'.format(mem_size/KILOBYTE)
     return '{}B'.format(mem_size)
 

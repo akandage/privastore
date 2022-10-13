@@ -65,13 +65,18 @@ class FileCache(object):
         with self._index_lock:
             free_space = max(0, self._cache_size - self._cache_used)
         return free_space
+    
+    def file_chunk_size(self):
+        return self._chunk_size
 
-    def create_cache_entry(self, file_id, file_path=None, file_name=None, file_version=None):
+    def create_cache_entry(self, file_id, file_path=None, file_name=None, file_version=1, file_size=0):
         if not File.is_valid_file_id(file_id):
             raise FileCacheError('Invalid file id!')
         with self._index_lock:
             if file_id in self._index:
                 raise FileCacheError('File [{}] already exists in cache'.format(file_id))
+            if file_size > self.cache_free_space():
+                raise FileCacheError('Not enough free space in cache')
             self._index[file_id] = {
                 READY: Event(),
                 READABLE_FLAG: False,
@@ -80,7 +85,7 @@ class FileCache(object):
                 FILE_PATH: file_path,
                 FILE_NAME: file_name,
                 FILE_VERSION: file_version,
-                FILE_SIZE: 0
+                FILE_SIZE: file_size
             }
 
     '''
@@ -97,10 +102,10 @@ class FileCache(object):
         must be closed in order for it be accessed by readers.
  
     '''
-    def open_file(self, file_id=None, file_path=None, file_name=None, file_version=None, mode='r', timeout=None):
+    def open_file(self, file_id=None, file_path=None, file_name=None, file_version=1, file_size=0, mode='r', timeout=None):
         if mode == 'w':
             file = self._file_factory(self._cache_path, file_id=file_id, mode=mode)
-            self.create_cache_entry(file.file_id(), file_path, file_name, file_version)
+            self.create_cache_entry(file.file_id(), file_path, file_name, file_version, file_size)
             return file
         elif mode == 'a':
             if file_id is not None:
@@ -184,6 +189,8 @@ class FileCache(object):
                     curr_size = file.size_on_disk()
                     entry[FILE_SIZE] = curr_size
                     self._cache_used += curr_size-prev_size
+                    if self._cache_used > self._cache_size:
+                        raise FileCacheError('File cache is full!')
                 if readable:
                     entry[READY].set()
             else:

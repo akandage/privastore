@@ -1,4 +1,4 @@
-from ..error import SessionError
+from ..error import FileUploadError, SessionError
 from ..util.file import str_path
 import logging
 
@@ -7,11 +7,14 @@ class Controller(object):
     '''
         Local file server controller.
 
+        cache - file cache
         conn_pool - database connection pool
         sessions - session store
     '''
-    def __init__(self, sessions, dao_factory, conn_factory=None, conn_pool=None):
+    def __init__(self, cache, sessions, dao_factory, conn_factory=None, conn_pool=None):
         super().__init__()
+        self._cache = cache
+        self._chunk_size = cache.file_chunk_size()
         self._conn_factory = conn_factory
         self._conn_pool = conn_pool
         self._sessions = sessions
@@ -56,6 +59,33 @@ class Controller(object):
             dir_dao = self._dao_factory.directory_dao(conn)
             dir_dao.create_directory(path, directory_name, is_hidden)
             logging.debug('Created directory [{}]'.format(str_path(path + [directory_name])))
+        finally:
+            self.db_close(conn)
+
+    def upload_file(self, path, file_name, file, file_size):
+        logging.debug('Upload file [{}]'.format(str_path(path + [file_name])))
+        conn = self.db_connect()
+        try:
+            logging.debug('Acquired database connection')
+            dir_dao = self._dao_factory.directory_dao(conn)
+
+            #
+            # First, the new file is registered in the database with receiving
+            # status.
+            #
+            dir_dao.create_file(path, file_name)
+
+            try:
+                #
+                # Uploaded file data is stored in the cache and cannot be removed
+                # or evicted from the cache until it has been synced to the remote
+                # server.
+                #
+                pass
+            except:
+                pass
+
+            logging.debug('Uploaded file [{}]'.format(str_path(path + [file_name])))
         finally:
             self.db_close(conn)
 

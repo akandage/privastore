@@ -5,6 +5,7 @@ import os
 import signal
 
 from .local.controller import Controller
+from .file_cache import FileCache
 from .pool import Pool
 from .session_mgr import SessionManager
 
@@ -66,6 +67,10 @@ def server_main():
     logging.info('Starting PrivaStore local server ...')
     session_mgr = SessionManager(daemon=False)
     conn_pool_size = int(db_config.get('connection-pool-size', '5'))
+
+    logging.debug('Initializing cache')
+    cache_config = server_config['cache']
+    cache = FileCache(cache_config)
 
     if conn_pool_size > 0:
         logging.debug('Initializing database connection pool with {} connections'.format(conn_pool_size))
