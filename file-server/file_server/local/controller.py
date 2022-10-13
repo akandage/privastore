@@ -62,7 +62,7 @@ class Controller(object):
         finally:
             self.db_close(conn)
 
-    def upload_file(self, path, file_name, file, file_size):
+    def upload_file(self, path, file_name, file, file_size, file_version=1):
         logging.debug('Upload file [{}]'.format(str_path(path + [file_name])))
         conn = self.db_connect()
         try:
@@ -74,15 +74,22 @@ class Controller(object):
             # First, the new file is registered in the database with receiving
             # status.
             #
-            dir_dao.create_file(path, file_name)
+
+            if file_version == 1:
+                dir_dao.create_file(path, file_name)
+            else:
+                # TODO
+                raise Exception('Not implemented!')
+
             upload_file = None
+
             try:
                 #
                 # Uploaded file data is stored in the cache and cannot be removed
                 # or evicted from the cache until it has been synced to the remote
                 # server.
                 #
-                upload_file = self._cache.open_file(file_path=path, file_name=file_name, file_version=1, file_size=file_size, mode='w')
+                upload_file = self._cache.open_file(file_path=path, file_name=file_name, file_version=file_version, file_size=file_size, mode='w')
                 logging.debug('Opened file for writing in cache [{}]'.format(upload_file.file_id()))
 
                 #
@@ -95,6 +102,12 @@ class Controller(object):
 
                 self._cache.close_file(upload_file, removable=False)
                 logging.debug('File data uploaded')
+
+                #
+                # Update the status of the file in the database to received and
+                # record the local file id and file size.
+                #
+                file_dao.update_file_local(path, file_name, file_version, upload_file.file_id(), file_size)
             except Exception as e:
                 logging.error('Could not upload file: {}'.format(str(e)))
 
@@ -107,8 +120,9 @@ class Controller(object):
                 if upload_file is not None:
                     try:
                         self._cache.remove_file(upload_file)
+                        logging.debug('Removed file from cache')
                     except Exception as e:
-                        logging.error('Could not cleanup uploaded file [{}]: {}'.format(str(e)))
+                        logging.error('Could not cleanup uploaded file: {}'.format(str(e)))
 
                 raise e
 
