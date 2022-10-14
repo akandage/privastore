@@ -142,3 +142,40 @@ class TestSqliteDirectoryDAO(unittest.TestCase):
         self.assertEqual(dir_entries[0], ('d', 'dir_2a_1'))
         self.assertEqual(dir_entries[1], ('d', 'dir_2a_2'))
         self.assertEqual(dir_entries[2], ('f', 'file_6'))
+    
+    def test_remove_file(self):
+        self.dao.create_directory([], 'dir_1')
+        self.dao.create_file([], 'file_1')
+        self.dao.create_file([], 'file_2')
+        self.dao.create_file(['dir_1'], 'file_3')
+        self.dao.create_file(['dir_1'], 'file_4')
+        self.assertEqual(len(self.dao.list_directory([])), 3)
+        self.dao.remove_file([], 'file_1')
+        self.assertEqual(len(self.dao.list_directory([])), 2)
+        self.dao.remove_file([], 'file_1', delete=True)
+        self.assertEqual(len(self.dao.list_directory([])), 2)
+        try:
+            self.dao.remove_file([], 'file_1')
+        except FileError as e:
+            self.assertEqual('File [/file_1] not found!', str(e))
+        try:
+            self.dao.remove_file([], 'file_1', delete=True)
+        except FileError as e:
+            self.assertEqual('File [/file_1] not found!', str(e))
+        self.dao.remove_file([], 'file_2')
+        self.assertEqual(len(self.dao.list_directory([])), 1)
+        self.dao.remove_file([], 'file_2', delete=True)
+        self.assertEqual(len(self.dao.list_directory([])), 1)
+        try:
+            self.dao.remove_file([], 'dir_1')
+        except DirectoryError as e:
+            self.assertEqual('[dir_1] in path [/] is a directory', str(e))
+        self.assertEqual(len(self.dao.list_directory(['dir_1'])), 2)
+        self.dao.remove_file(['dir_1'], 'file_3')
+        self.assertEqual(len(self.dao.list_directory(['dir_1'])), 1)
+        self.dao.remove_file(['dir_1'], 'file_3', delete=True)
+        self.assertEqual(len(self.dao.list_directory(['dir_1'])), 1)
+        self.dao.remove_file(['dir_1'], 'file_4')
+        self.assertEqual(len(self.dao.list_directory(['dir_1'])), 0)
+        self.dao.remove_file(['dir_1'], 'file_4', delete=True)
+        self.assertEqual(len(self.dao.list_directory(['dir_1'])), 0)

@@ -101,13 +101,14 @@ class Controller(object):
                     raise FileUploadError('Could not upload all file data! [{}/{}]'.format(str_mem_size(bytes_transferred), str_mem_size(file_size)))
 
                 self._cache.close_file(upload_file, removable=False)
-                logging.debug('File data uploaded')
+                logging.debug('File data uploaded [{}]'.format(str_mem_size(bytes_transferred)))
 
                 #
                 # Update the status of the file in the database to received and
                 # record the local file id and file size.
                 #
                 file_dao.update_file_local(path, file_name, file_version, upload_file.file_id(), file_size)
+                logging.debug('File metadata updated')
             except Exception as e:
                 logging.error('Could not upload file: {}'.format(str(e)))
 

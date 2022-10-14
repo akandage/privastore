@@ -48,7 +48,8 @@ def create_directory_table(conn):
         CREATE TABLE ps_directory (
             id INTEGER PRIMARY KEY NOT NULL,
             name VARCHAR(256) NOT NULL,
-            is_hidden BOOLEAN NOT NULL DEFAULT 0
+            is_hidden BOOLEAN NOT NULL DEFAULT 0,
+            is_removed BOOLEAN NOT NULL DEFAULT 0
         )
         '''
     )
@@ -76,6 +77,7 @@ def create_file_table(conn):
             name VARCHAR(256) NOT NULL,
             parent_id INTEGER NOT NULL,
             is_hidden BOOLEAN NOT NULL DEFAULT 0,
+            is_removed BOOLEAN NOT NULL DEFAULT 0,
             UNIQUE (name, parent_id),
             FOREIGN KEY (parent_id) REFERENCES ps_directory (id) ON DELETE CASCADE
         )

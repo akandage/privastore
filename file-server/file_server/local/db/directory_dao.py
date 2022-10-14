@@ -12,7 +12,9 @@ class DirectoryDAO(DataAccessObject):
         directory_name - Name of the new directory.
         is_hidden - Hidden directory flag.
 
-        Throws DirectoryError is path doesn't exist.
+        Throws DirectoryError is path doesn't exist or if directory already
+        exists.
+        Throws FileError if a file with that name exists in the path.
     '''
     def create_directory(self, path, directory_name, is_hidden=False):
         raise Exception('Not implemented!')
@@ -24,9 +26,27 @@ class DirectoryDAO(DataAccessObject):
         directory_name - Name of the new file.
         is_hidden - Hidden directory flag.
 
-        Throws DirectoryError is path doesn't exist.
+        Throws DirectoryError is path doesn't exist of if directory with
+        that name exists in the path. 
+        Throws FileError if file with that name exists in the path.
     '''
     def create_file(self, path, file_name, is_hidden=False):
+        raise Exception('Not implemented')
+    
+    '''
+        Remove a file.
+
+        path - Path to file.
+        directory_name - Name of the file.
+        is_hidden - Hidden directory flag.
+        delete - If true actually delete the file from db, otherwise set the
+                 "removed" flag.
+
+        Throws DirectoryError if path doesn't exist or if file is a directory.
+        Throws FileError if file is not found or file is hidden and is_hidden
+        flag is not set.
+    '''
+    def remove_file(self, path, file_name, delete=False, is_hidden=False):
         raise Exception('Not implemented')
 
     '''

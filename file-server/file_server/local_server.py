@@ -76,9 +76,9 @@ def server_main():
         logging.debug('Initializing database connection pool with {} connections'.format(conn_pool_size))
         conn_pool = Pool(conn_factory, conn_pool_size)
         logging.debug('Initialized database connection pool')
-        controller = Controller(session_mgr.sessions, dao_factory, conn_pool=conn_pool)
+        controller = Controller(cache, session_mgr.sessions, dao_factory, conn_pool=conn_pool)
     else:
-        controller = Controller(session_mgr.sessions, dao_factory, conn_factory=conn_factory)
+        controller = Controller(cache, session_mgr.sessions, dao_factory, conn_factory=conn_factory)
 
     api_config = server_config['api']
     api_type = api_config.get('api-type', 'http')
