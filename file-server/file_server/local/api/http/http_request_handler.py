@@ -52,9 +52,10 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
             self.send_error_response(HTTPStatus.NOT_FOUND)
 
     def send_error_response(self, code):
-        self.send_response(code, self.responses.get(code, ('???',))[0])
+        self.send_response(code)
         self.send_header(CONTENT_LENGTH_HEADER, '0')
         self.end_headers()
+        self.wfile.flush()
 
     def get_session_id(self):
         session_id = self.headers.get(SESSION_ID_HEADER)
@@ -118,6 +119,16 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
         else:
             self.send_error_response(HTTPStatus.BAD_REQUEST)
 
+    def handle_file_error(self, e):
+        logging.error('File error: {}'.format(str(e)))
+        msg = str(e).lower()
+        if 'not found' in msg:
+            self.send_error_response(HTTPStatus.NOT_FOUND)
+        elif 'exists in path' in msg or 'is a directory' in msg:
+            self.send_error_response(HTTPStatus.CONFLICT)
+        else:
+            self.send_error_response(HTTPStatus.BAD_REQUEST)
+
     def handle_internal_error(self, e):
         logging.error('Internal error: {}'.format(str(e)))
         self.send_error_response(HTTPStatus.INTERNAL_SERVER_ERROR)
@@ -150,8 +161,10 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
             return
 
         self.send_response(HTTPStatus.OK)
+        self.send_header(CONTENT_LENGTH_HEADER, '0')
         self.send_header(SESSION_ID_HEADER, session_id)
         self.end_headers()
+        self.wfile.flush()
     
     def handle_heartbeat_session(self):
         logging.debug('Heartbeat request')
@@ -164,7 +177,9 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
             return
 
         self.send_response(HTTPStatus.OK)
+        self.send_header(CONTENT_LENGTH_HEADER, '0')
         self.end_headers()
+        self.wfile.flush()
     
     def handle_create_directory(self):
         logging.debug('Create directory request')
@@ -196,7 +211,9 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
             return
 
         self.send_response(HTTPStatus.OK)
+        self.send_header(CONTENT_LENGTH_HEADER, '0')
         self.end_headers()
+        self.wfile.flush()
     
     def handle_list_directory(self):
         logging.debug('List directory request')
@@ -266,10 +283,13 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
             self.handle_directory_error(e)
             return
         except FileError as e:
-            pass
+            self.handle_file_error(e)
+            return
         except Exception as e:
             self.handle_internal_error(e)
             return
 
         self.send_response(HTTPStatus.OK)
+        self.send_header(CONTENT_LENGTH_HEADER, '0')
         self.end_headers()
+        self.wfile.flush()

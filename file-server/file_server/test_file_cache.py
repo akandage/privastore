@@ -19,8 +19,8 @@ class TestFileCache(unittest.TestCase):
             pass
     
     def test_write_file(self):
-        f1 = self.cache.open_file(file_path=[], file_name='f1', mode='w')
-        f2 = self.cache.open_file(file_path=[], file_name='f2', mode='w')
+        f1 = self.cache.open_file(mode='w')
+        f2 = self.cache.open_file(mode='w')
 
         self.assertNotEqual(f1.file_id(), f2.file_id())
         chunk1 = random.randbytes(100)
@@ -50,7 +50,7 @@ class TestFileCache(unittest.TestCase):
         self.cache.close_file(f4)
 
     def test_append_file(self):
-        f1 = self.cache.open_file(file_path=[], file_name='f1', mode='w')
+        f1 = self.cache.open_file(mode='w')
         self.cache.close_file(f1, readable=False, writable=True, removable=False)
 
         self.assertEqual(f1.file_size(), 0)

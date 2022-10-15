@@ -89,7 +89,7 @@ class Controller(object):
                 # or evicted from the cache until it has been synced to the remote
                 # server.
                 #
-                upload_file = self._cache.open_file(file_path=path, file_name=file_name, file_version=file_version, file_size=file_size, mode='w')
+                upload_file = self._cache.open_file(file_size=file_size, mode='w')
                 logging.debug('Opened file for writing in cache [{}]'.format(upload_file.file_id()))
 
                 #

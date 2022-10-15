@@ -27,19 +27,20 @@ class FileCache(object):
         self._cache_size = parse_mem_size(cache_config.get('cache-size', '1GB'))
         self._chunk_size = parse_mem_size(cache_config.get('chunk-size', '1MB'))
 
-        #
-        # TODO: Refactor such that index is persisted in db.
-        # Till then, we have to cleanup the cache on each startup.
-        #
         self._index = dict()
         self._index_lock = RLock()
-
-        if os.path.exists(self._cache_path):
-            shutil.rmtree(self._cache_path)
 
         if not os.path.exists(self._cache_path):
             os.mkdir(self._cache_path)
             logging.info('File cache created in path [{}]'.format(self._cache_path))
+        else:
+            for file_id in os.listdir(self._cache_path):
+                try:
+                    f = File(self._cache_path, file_id, mode='r')
+                    self.create_cache_entry(file_id, f.size_on_disk(), readable=True, writable=False, removable=True)
+                    f.close()
+                except Exception as e:
+                    logging.error('Error initializing cache file [{}]: {}'.format(file_id, str(e)))
         
         logging.debug('File cache used [{}]'.format(str_mem_size(self._cache_used)))
         logging.debug('File cache size [{}]'.format(str_mem_size(self._cache_size)))
@@ -63,13 +64,13 @@ class FileCache(object):
     def file_chunk_size(self):
         return self._chunk_size
 
-    def create_cache_entry(self, file_id, file_path, file_name, file_version, file_size):
+    def create_cache_entry(self, file_id, file_size, readable=False, writable=True, removable=False):
         if file_id is None or not File.is_valid_file_id(file_id):
             raise FileCacheError('Invalid file id!')
-        if file_path is None:
-            raise FileCacheError('No path specified')
-        if file_name is None:
-            raise FileCacheError('No file name specified')
+        # if file_path is None:
+        #     raise FileCacheError('No path specified')
+        # if file_name is None:
+        #     raise FileCacheError('No file name specified')
         with self._index_lock:
             if file_id in self._index:
                 raise FileCacheError('File [{}] already exists in cache'.format(file_id))
@@ -77,12 +78,12 @@ class FileCache(object):
                 raise FileCacheError('Not enough free space in cache')
             self._index[file_id] = {
                 READY: Event(),
-                READABLE_FLAG: False,
-                WRITABLE_FLAG: True,
-                REMOVABLE_FLAG: False,
-                FILE_PATH: file_path,
-                FILE_NAME: file_name,
-                FILE_VERSION: file_version,
+                READABLE_FLAG: readable,
+                WRITABLE_FLAG: writable,
+                REMOVABLE_FLAG: removable,
+                # FILE_PATH: file_path,
+                # FILE_NAME: file_name,
+                # FILE_VERSION: file_version,
                 FILE_SIZE: file_size
             }
             self._cache_used += file_size
@@ -143,10 +144,10 @@ class FileCache(object):
         New file is opened for writing in the cache and returned. The file
         must be closed in order for it be accessed by readers.
     '''
-    def open_file(self, file_id=None, file_path=None, file_name=None, file_version=1, file_size=0, mode='w'):
+    def open_file(self, file_id=None, file_size=0, mode='w'):
         if mode == 'w':
             file = self._file_factory(self._cache_path, file_id=file_id, mode=mode)
-            self.create_cache_entry(file.file_id(), file_path, file_name, file_version, file_size)
+            self.create_cache_entry(file.file_id(), file_size)
             return file
         elif mode == 'a':
             if file_id is not None:
