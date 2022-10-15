@@ -1,5 +1,5 @@
 from ..error import FileUploadError, SessionError
-from ..util.file import chunked_transfer, str_mem_size, str_path
+from ..util.file import chunked_copy, str_mem_size, str_path
 import logging
 
 class Controller(object):
@@ -96,7 +96,7 @@ class Controller(object):
                 # Read the file in chunks of the configured chunk size and append to
                 # the file in the cache.
                 #
-                bytes_transferred = chunked_transfer(file, upload_file)
+                bytes_transferred = chunked_copy(file, upload_file, file_size, self._chunk_size)
                 if bytes_transferred < file_size:
                     raise FileUploadError('Could not upload all file data! [{}/{}]'.format(str_mem_size(bytes_transferred), str_mem_size(file_size)))
 
@@ -116,7 +116,10 @@ class Controller(object):
                 # Cleanup if any error occurs during the upload process.
                 #
 
-                # TODO: Remove the file metadata from the db.
+                try:
+                    dir_dao.remove_file(path, file_name, delete=True)
+                except Exception as e:
+                    logging.error('Could not cleanup uploaded file: {}'.format(str(e)))
 
                 if upload_file is not None:
                     try:

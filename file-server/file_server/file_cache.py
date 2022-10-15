@@ -3,6 +3,7 @@ from .file import File
 from .util.file import parse_mem_size, str_mem_size
 import logging
 import os
+import shutil
 from threading import Event, RLock
 
 READY = 'ready'
@@ -26,26 +27,19 @@ class FileCache(object):
         self._cache_size = parse_mem_size(cache_config.get('cache-size', '1GB'))
         self._chunk_size = parse_mem_size(cache_config.get('chunk-size', '1MB'))
 
+        #
+        # TODO: Refactor such that index is persisted in db.
+        # Till then, we have to cleanup the cache on each startup.
+        #
         self._index = dict()
         self._index_lock = RLock()
+
+        if os.path.exists(self._cache_path):
+            shutil.rmtree(self._cache_path)
 
         if not os.path.exists(self._cache_path):
             os.mkdir(self._cache_path)
             logging.info('File cache created in path [{}]'.format(self._cache_path))
-
-        for file_id in os.listdir(self._cache_path):
-            f = None
-            try:
-                f = File(self._cache_path, file_id, mode='r')
-                self._cache_used += f.size_on_disk()
-                f.close()
-            except Exception as e:
-                logging.error('Could not open cache file [{}]: {}'.format(file_id, str(e)))
-                try:
-                    f.remove()
-                    logging.debug('Removed file [{}] from cache'.format(file_id))
-                except:
-                    pass
         
         logging.debug('File cache used [{}]'.format(str_mem_size(self._cache_used)))
         logging.debug('File cache size [{}]'.format(str_mem_size(self._cache_size)))
@@ -91,6 +85,7 @@ class FileCache(object):
                 FILE_VERSION: file_version,
                 FILE_SIZE: file_size
             }
+            self._cache_used += file_size
 
     '''
         Open file in cache for reading.

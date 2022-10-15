@@ -2,35 +2,40 @@ KILOBYTE = 1024
 MEGABYTE = 1024 * KILOBYTE
 GIGABYTE = 1024 * MEGABYTE
 
-def chunked_transfer(in_file, out_file, file_size, chunk_size):
-    bytes_transferred = 0
+def chunked_copy(in_file, out_file, file_size, chunk_size):
+    bytes_read = 0
+    bytes_copied = 0
     buf = bytes()
     buf_len = 0
 
-    while bytes_transferred < file_size:
-        read_size = chunk_size - buf_len
-        data = in_file.read(read_size)
-        read = len(data)
+    while bytes_copied < file_size:
+        read_size = min(file_size - bytes_read, chunk_size - buf_len)
+        if read_size > 0:
+            data = in_file.read(read_size)
+            read = len(data)
+        else:
+            read = 0
 
         if read == 0:
             if buf_len > 0:
                 out_file.write(buf)
-                bytes_transferred += buf_len
+                bytes_copied += buf_len
             break
         elif read > read_size:
             raise Exception()
 
         buf += data
         buf_len += read
+        bytes_read += read
 
         if buf_len == chunk_size:
             write_all(out_file, buf)
-            bytes_transferred += buf_len
+            bytes_copied += buf_len
             buf = bytes()
             buf_len = 0
     
     out_file.flush()
-    return bytes_transferred
+    return bytes_copied
 
 def write_all(file, data):
     data_len = len(data)

@@ -19,7 +19,12 @@ def setup_db(db_config):
             pass
 
 def sqlite_conn_factory(db_path, isolation_level=None):
-    return lambda: sqlite3.connect(db_path, isolation_level=isolation_level)
+    def connect():
+        conn = sqlite3.connect(db_path, isolation_level=isolation_level)
+        # By default, SQLite disables foreign keys.
+        conn.execute('PRAGMA foreign_keys = ON')
+        return conn
+    return connect
 
 def create_user_account_table(conn):
     logging.debug('Setting up ps_user_account table')

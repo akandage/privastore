@@ -179,3 +179,4 @@ class TestSqliteDirectoryDAO(unittest.TestCase):
         self.assertEqual(len(self.dao.list_directory(['dir_1'])), 0)
         self.dao.remove_file(['dir_1'], 'file_4', delete=True)
         self.assertEqual(len(self.dao.list_directory(['dir_1'])), 0)
+        self.dao.create_file(['dir_1'], 'file_4')
