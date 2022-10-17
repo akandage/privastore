@@ -5,6 +5,7 @@ from http.server import BaseHTTPRequestHandler
 import json
 import logging
 import urllib.parse
+from ....util.sock import SocketWrapper
 
 DIRECTORY_PATH = '/1/directory/'
 DIRECTORY_PATH_LEN = len(DIRECTORY_PATH)
@@ -12,6 +13,8 @@ HEARTBEAT_PATH = '/1/heartbeat'
 LOGIN_PATH = '/1/login'
 UPLOAD_PATH = '/1/upload/'
 UPLOAD_PATH_LEN = len(UPLOAD_PATH)
+CONNECTION_HEADER = 'Connection'
+CONNECTION_CLOSE = 'close'
 CONTENT_TYPE_HEADER = 'Content-Type'
 CONTENT_TYPE_JSON = 'application/json'
 CONTENT_LENGTH_HEADER = 'Content-Length'
@@ -51,11 +54,36 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
             logging.error('Invalid path: [{}]'.format(path))
             self.send_error_response(HTTPStatus.NOT_FOUND)
 
+    def read_body(self):
+        content_len = 0
+
+        try:
+            content_len = int(self.headers.get(CONTENT_LENGTH_HEADER))
+        except:
+            pass
+
+        # Try not to read past the end of the request body.
+        try:
+            bytes_read = self.rfile.bytes_read()
+            content_len = content_len - bytes_read
+        except:
+            pass
+
+        if content_len > 0:
+            try:
+                self.rfile.read(content_len)
+            except Exception as e:
+                logging.warn('Could not read HTTP request body: {}'.format(str(e)))
+
     def send_error_response(self, code):
+        # May not have read the complete body if provided.
+        self.read_body()
+
         self.send_response(code)
         self.send_header(CONTENT_LENGTH_HEADER, '0')
+        self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
         self.end_headers()
-        self.wfile.flush()
+        # self.wfile.flush()
 
     def get_session_id(self):
         session_id = self.headers.get(SESSION_ID_HEADER)
@@ -106,6 +134,8 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
         # url_path = url_path[DIRECTORY_PATH_LEN:]
         if len(url_path) > 0:
             url_path = url_path.split('/')
+            if '' in url_path:
+                raise Exception()
             return list(map(urllib.parse.unquote, url_path))
         return []
 
@@ -135,6 +165,7 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
 
     def handle_login_user(self):
         logging.debug('Login request')
+        self.read_body()
         auth_header = self.headers.get('Authorization')
 
         if auth_header is None or not auth_header.startswith('Basic '):
@@ -162,13 +193,13 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
 
         self.send_response(HTTPStatus.OK)
         self.send_header(CONTENT_LENGTH_HEADER, '0')
+        self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
         self.send_header(SESSION_ID_HEADER, session_id)
         self.end_headers()
-        self.wfile.flush()
     
     def handle_heartbeat_session(self):
         logging.debug('Heartbeat request')
-
+        self.read_body()
         session_id = self.get_session_id()
         if session_id is None:
             return
@@ -178,12 +209,12 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
 
         self.send_response(HTTPStatus.OK)
         self.send_header(CONTENT_LENGTH_HEADER, '0')
+        self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
         self.end_headers()
-        self.wfile.flush()
     
     def handle_create_directory(self):
         logging.debug('Create directory request')
-
+        self.read_body()
         session_id = self.get_session_id()
         if session_id is None:
             return
@@ -212,12 +243,13 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
 
         self.send_response(HTTPStatus.OK)
         self.send_header(CONTENT_LENGTH_HEADER, '0')
+        self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
         self.end_headers()
-        self.wfile.flush()
     
     def handle_list_directory(self):
         logging.debug('List directory request')
 
+        self.read_body()
         session_id = self.get_session_id()
         if session_id is None:
             return
@@ -248,13 +280,14 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
         self.send_response(HTTPStatus.OK)
         self.send_header(CONTENT_TYPE_HEADER, CONTENT_TYPE_JSON)
         self.send_header(CONTENT_LENGTH_HEADER, str(len(dir_entries)))
+        self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
         self.end_headers()
         self.wfile.write(dir_entries)
-        self.wfile.flush()
     
     def handle_upload_file(self):
         logging.debug('Upload file')
 
+        self.rfile = SocketWrapper(self.rfile)
         session_id = self.get_session_id()
         if session_id is None:
             return
@@ -291,5 +324,5 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
 
         self.send_response(HTTPStatus.OK)
         self.send_header(CONTENT_LENGTH_HEADER, '0')
+        self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
         self.end_headers()
-        self.wfile.flush()
