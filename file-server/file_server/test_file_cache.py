@@ -34,17 +34,15 @@ class TestFileCache(unittest.TestCase):
         self.cache.close_file(f2)
         self.assertEqual(self.cache.cache_used(), 200)
 
-        res = self.cache.read_file(f1.file_id())
-        self.assertTrue(res['file'] is not None)
-        f3 = res['file']
+        f3 = self.cache.read_file(f1.file_id())
+        self.assertTrue(f3 is not None)
         self.assertEqual(f3.read_chunk(), chunk1)
         self.assertEqual(f3.read_chunk(), chunk2)
         self.assertTrue(f3.read_chunk() is None)
         self.cache.close_file(f3)
 
-        res = self.cache.read_file(f2.file_id())
-        self.assertTrue(res['file'] is not None)
-        f4 = res['file']
+        f4 = self.cache.read_file(f2.file_id())
+        self.assertTrue(f4 is not None)
         self.assertEqual(f4.read_chunk(), chunk3)
         self.assertTrue(f4.read_chunk() is None)
         self.cache.close_file(f4)
@@ -56,18 +54,16 @@ class TestFileCache(unittest.TestCase):
         self.assertEqual(f1.file_size(), 0)
         self.assertEqual(f1.size_on_disk(), 0)
 
-        res = self.cache.open_file(file_id=f1.file_id(), mode='a')
-        self.assertTrue(res['file'] is not None)
-        f2 = res['file']
+        f2 = self.cache.open_file(file_id=f1.file_id(), mode='a')
+        self.assertTrue(f2 is not None)
         chunk1 = random.randbytes(100)
         chunk2 = random.randbytes(50)
         f2.append_chunk(chunk1)
         f2.append_chunk(chunk2)
         self.cache.close_file(f2)
 
-        res = self.cache.read_file(f1.file_id())
-        self.assertTrue(res['file'] is not None)
-        f3 = res['file']
+        f3 = self.cache.read_file(f1.file_id())
+        self.assertTrue(f3 is not None)
         self.assertEqual(f3.read_chunk(), chunk1)
         self.assertEqual(f3.read_chunk(), chunk2)
         self.assertTrue(f3.read_chunk() is None)

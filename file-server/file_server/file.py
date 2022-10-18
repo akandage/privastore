@@ -50,7 +50,8 @@ class File(object):
         else:
             raise FileError('Invalid mode')
     
-    def generate_file_id(self):
+    @staticmethod
+    def generate_file_id():
         return 'F-{}'.format(str(uuid.uuid4()))
 
     @staticmethod
