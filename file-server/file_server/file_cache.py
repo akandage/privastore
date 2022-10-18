@@ -1,4 +1,3 @@
-from select import select
 from .error import FileCacheError, FileError
 from .file import File
 from .util.file import parse_mem_size, str_mem_size
@@ -266,7 +265,10 @@ class FileCache(object):
                     prev_size = node.file_size
                     curr_size = file.size_on_disk()
                     node.file_size = curr_size
-                    self._cache_used += curr_size-prev_size
+                    if curr_size >= prev_size:
+                        self._cache_used += curr_size-prev_size
+                    else:
+                        self._cache_used -= prev_size-curr_size
                     if self._cache_used > self._cache_size:
                         raise FileCacheError('File cache is full!')
                 if readable:
@@ -282,11 +284,14 @@ class FileCache(object):
         with self._index_lock:
             file_id = file.file_id()
             if self._index.has_node(file_id):
-                node = self._index.pop_node(file_id)
+                node = self._index.get_node(file_id)
+                if not node.removable:
+                    raise FileCacheError('File [{}] is not removable'.format(file_id))
+                self._index.pop_node(file_id)
                 # Notify any readers waiting.
                 node.set_ready()
                 file.remove()
-                self._cache_used -= node.file_size()
+                self._cache_used -= node.file_size
             else:
                 raise FileCacheError('File [{}] not found in cache'.format(file_id))
 
