@@ -7,12 +7,14 @@ import logging
 import urllib.parse
 from ....util.sock import SocketWrapper
 
-DIRECTORY_PATH = '/1/directory/'
+DIRECTORY_PATH = '/1/directory'
 DIRECTORY_PATH_LEN = len(DIRECTORY_PATH)
 HEARTBEAT_PATH = '/1/heartbeat'
 LOGIN_PATH = '/1/login'
-UPLOAD_PATH = '/1/upload/'
+UPLOAD_PATH = '/1/upload'
 UPLOAD_PATH_LEN = len(UPLOAD_PATH)
+DOWNLOAD_PATH = '/1/download'
+DOWNLOAD_PATH_LEN = len(DOWNLOAD_PATH)
 AUTHORIZATION_HEADER = 'Authorization'
 CONNECTION_HEADER = 'Connection'
 CONNECTION_CLOSE = 'close'
@@ -28,38 +30,55 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
         super().__init__(request, client_address, server)
         
     def do_GET(self):
-        path = self.path
-        if path.startswith(DIRECTORY_PATH):
+        if not self.parse_path():
+            return
+
+        if self.url_path.startswith(DIRECTORY_PATH):
             self.handle_list_directory()
         else:
-            logging.error('Invalid path: [{}]'.format(path))
+            logging.error('Invalid path: [{}]'.format(self.url_path))
             self.send_error_response(HTTPStatus.NOT_FOUND)
         
     def do_POST(self):
-        path = self.path
-        if path == LOGIN_PATH:
+        if not self.parse_path():
+            return
+
+        if self.url_path == LOGIN_PATH:
             self.handle_login_user()
-        elif path.startswith(UPLOAD_PATH):
+        elif self.url_path.startswith(UPLOAD_PATH):
             self.handle_upload_file()
+        elif self.url_path.startswith(DOWNLOAD_PATH):
+            self.handle_download_file()
         else:
-            logging.error('Invalid path: [{}]'.format(path))
+            logging.error('Invalid path: [{}]'.format(self.url_path))
             self.send_error_response(HTTPStatus.NOT_FOUND)
 
     def do_PUT(self):
-        path = self.path
-        if path.startswith(DIRECTORY_PATH):
+        if not self.parse_path():
+            return
+
+        if self.url_path.startswith(DIRECTORY_PATH):
             self.handle_create_directory()
-        elif path == HEARTBEAT_PATH:
+        elif self.url_path == HEARTBEAT_PATH:
             self.handle_heartbeat_session()
         else:
-            logging.error('Invalid path: [{}]'.format(path))
+            logging.error('Invalid path: [{}]'.format(self.url_path))
             self.send_error_response(HTTPStatus.NOT_FOUND)
+
+    def wrap_socket(self):
+        '''
+            Wrap the read end of the connection so we can track how much of the
+            body has been read so far.
+
+        '''
+        self.rfile = SocketWrapper(self.rfile)
 
     def read_body(self):
         content_len = 0
 
         try:
             content_len = int(self.headers.get(CONTENT_LENGTH_HEADER))
+            logging.debug('Body length={}'.format(content_len))
         except:
             pass
 
@@ -67,12 +86,20 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
         try:
             bytes_read = self.rfile.bytes_read()
             content_len = content_len - bytes_read
+            logging.debug('Already read={}'.format(bytes_read))
         except:
             pass
 
         if content_len > 0:
             try:
-                self.rfile.read(content_len)
+                body_read = 0
+                while body_read < content_len:
+                    data = self.rfile.read(min(content_len - body_read, 4096))
+                    data_len = len(data)
+                    if data_len == 0:
+                        raise Exception('Unexpected EOF')
+                    body_read += data_len
+                    logging.debug('Read {} bytes'.format(body_read))
             except Exception as e:
                 logging.warn('Could not read HTTP request body: {}'.format(str(e)))
 
@@ -136,14 +163,41 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
         
         return content_len
 
-    def parse_directory_path(self, url_path):
-        # url_path = url_path[DIRECTORY_PATH_LEN:]
-        if len(url_path) > 0:
-            url_path = url_path.split('/')
-            if '' in url_path:
-                raise Exception()
-            return list(map(urllib.parse.unquote, url_path))
+    def parse_directory_path(self, path):
+        if len(path) == 0:
+            raise Exception('Path is empty')
+        if path[0] != '/':
+            raise Exception('Invalid path')
+
+        if len(path) > 1:
+            path = path[1:].split('/')
+            if '' in path:
+                raise Exception('Invalid path. One or more path components is empty')
+            return list(map(urllib.parse.unquote, path))
         return []
+
+    def parse_path(self):
+        try:
+            url_parsed = urllib.parse.urlparse(self.path)
+
+            # Only use the path and query-string for APIs.
+            if url_parsed.fragment != '' or url_parsed.params != '':
+                raise Exception()
+            url_path = url_parsed.path
+            if url_path == '':
+                raise Exception()
+            url_query = url_parsed.query
+            if url_query != '':
+                url_query = urllib.parse.parse_qs(url_query)
+            else:
+                url_query = dict()
+
+            self.url_path = url_path
+            self.url_query = url_query
+            return True
+        except:
+            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid URL path')
+            return False
 
     def handle_directory_error(self, e):
         logging.error('Directory error: {}'.format(str(e)))
@@ -171,6 +225,7 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
 
     def handle_login_user(self):
         logging.debug('Login request')
+        self.wrap_socket()
         self.read_body()
         auth_header = self.headers.get(AUTHORIZATION_HEADER)
 
@@ -202,7 +257,9 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
     
     def handle_heartbeat_session(self):
         logging.debug('Heartbeat request')
+        self.wrap_socket()
         self.read_body()
+
         session_id = self.get_session_id()
         if session_id is None:
             return
@@ -217,7 +274,9 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
     
     def handle_create_directory(self):
         logging.debug('Create directory request')
+        self.wrap_socket()
         self.read_body()
+
         session_id = self.get_session_id()
         if session_id is None:
             return
@@ -226,10 +285,7 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            path = self.path[DIRECTORY_PATH_LEN:]
-            if path.find('?') != -1 or path.find('#') != -1:
-                raise Exception()
-            path = self.parse_directory_path(path)
+            path = self.parse_directory_path(self.url_path[DIRECTORY_PATH_LEN:])
             directory_name = path.pop()
         except:
             self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid directory path')
@@ -251,7 +307,7 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
     
     def handle_list_directory(self):
         logging.debug('List directory request')
-
+        self.wrap_socket()
         self.read_body()
         session_id = self.get_session_id()
         if session_id is None:
@@ -261,10 +317,7 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            path = self.path[DIRECTORY_PATH_LEN:]
-            if path.find('?') != -1 or path.find('#') != -1:
-                raise Exception()
-            path = self.parse_directory_path(path)
+            path = self.parse_directory_path(self.url_path[DIRECTORY_PATH_LEN:])
         except:
             self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid directory path')
             return
@@ -288,8 +341,7 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
     
     def handle_upload_file(self):
         logging.debug('Upload file')
-
-        self.rfile = SocketWrapper(self.rfile)
+        self.wrap_socket()
         session_id = self.get_session_id()
         if session_id is None:
             return
@@ -298,10 +350,7 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
             return
 
         try:
-            path = self.path[UPLOAD_PATH_LEN:]
-            if path.find('?') != -1 or path.find('#') != -1:
-                raise Exception()
-            path = self.parse_directory_path(path)
+            path = self.parse_directory_path(self.url_path[UPLOAD_PATH_LEN:])
             file_name = path.pop()
         except:
             self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid directory path or filename')
@@ -330,3 +379,20 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
         self.send_header(CONTENT_LENGTH_HEADER, '0')
         self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
         self.end_headers()
+    
+    def handle_download_file(self):
+        logging.debug('Download file')
+        self.wrap_socket()
+        session_id = self.get_session_id()
+        if session_id is None:
+            return
+        
+        if not self.heartbeat_session(session_id):
+            return
+
+        try:
+            path = self.parse_directory_path(self.url_path[DOWNLOAD_PATH_LEN:])
+            file_name = path.pop()
+        except:
+            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid directory path or filename')
+            return
