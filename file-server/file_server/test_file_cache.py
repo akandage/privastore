@@ -10,10 +10,7 @@ from .file_cache import FileCache
 class TestFileCache(unittest.TestCase):
     
     def setUp(self):
-        cache_config = {
-            'cache-path': 'test_file_cache'
-        }
-        self.cache = FileCache(cache_config)
+        pass
 
     def tearDown(self):
         try:
@@ -22,6 +19,11 @@ class TestFileCache(unittest.TestCase):
             pass
     
     def test_write_file(self):
+        cache_config = {
+            'cache-path': 'test_file_cache',
+        }
+        self.cache = FileCache(cache_config)
+
         f1 = self.cache.open_file(mode='w')
         f2 = self.cache.open_file(mode='w')
 
@@ -60,6 +62,11 @@ class TestFileCache(unittest.TestCase):
         self.cache.close_file(f5)
 
     def test_append_file(self):
+        cache_config = {
+            'cache-path': 'test_file_cache',
+        }
+        self.cache = FileCache(cache_config)
+
         f1 = self.cache.open_file(mode='w')
         self.cache.close_file(f1, readable=False, writable=True, removable=False)
 
@@ -82,6 +89,11 @@ class TestFileCache(unittest.TestCase):
         self.cache.close_file(f3)
     
     def test_remove_file(self):
+        cache_config = {
+            'cache-path': 'test_file_cache',
+        }
+        self.cache = FileCache(cache_config)
+
         f1 = self.cache.open_file(mode='w')
         f2 = self.cache.open_file(mode='w')
 
@@ -110,3 +122,60 @@ class TestFileCache(unittest.TestCase):
         self.assertEqual(self.cache.cache_used(), 50)
         self.cache.remove_file(f2)
         self.assertEqual(self.cache.cache_used(), 0)
+    
+    def test_ensure_cache_space(self):
+        cache_config = {
+            'cache-path': 'test_file_cache',
+            'cache-size': '4KB',
+            'max-file-size': '4KB'
+        }
+        self.cache = FileCache(cache_config)
+
+        chunk = random.randbytes(1024)
+        f1 = self.cache.open_file(file_size=1024, mode='w')
+        f1.append_chunk(chunk)
+        self.cache.close_file(f1)
+        f2 = self.cache.open_file(file_size=1024, mode='w')
+        f2.append_chunk(chunk)
+        self.cache.close_file(f2)
+        f3 = self.cache.open_file(file_size=1024, mode='w')
+        f3.append_chunk(chunk)
+        self.cache.close_file(f3)
+        f4 = self.cache.open_file(file_size=1024, mode='w')
+        f4.append_chunk(chunk)
+        self.cache.close_file(f4, removable=False)
+        self.assertEqual(self.cache.cache_used(), 4096)
+
+        self.assertTrue(self.cache.has_file(f1.file_id()))
+        self.assertTrue(self.cache.has_file(f2.file_id()))
+        self.assertTrue(self.cache.has_file(f3.file_id()))
+        self.assertTrue(self.cache.has_file(f4.file_id()))
+
+        try:
+            self.cache.open_file(file_size=4096, mode='w')
+            self.fail('Expected insufficient space in cache error')
+        except FileCacheError as e:
+            self.assertEqual('Insufficient space in cache', str(e))
+
+        self.assertTrue(self.cache.has_file(f1.file_id()))
+        self.assertTrue(self.cache.has_file(f2.file_id()))
+        self.assertTrue(self.cache.has_file(f3.file_id()))
+        self.assertTrue(self.cache.has_file(f4.file_id()))
+
+        f = self.cache.read_file(f3.file_id())
+        self.cache.close_file(f)
+        f = self.cache.read_file(f1.file_id())
+        self.cache.close_file(f)
+
+        # File access order (LRU -> MRU) F2 -> F4 -> F3 -> F1
+        f = self.cache.open_file(file_size=2048, mode='w')
+        f.append_chunk(chunk)
+        f.append_chunk(chunk)
+        self.cache.close_file(f)
+        self.assertEqual(self.cache.cache_used(), 4096)
+
+        self.assertTrue(self.cache.has_file(f1.file_id()))
+        self.assertFalse(self.cache.has_file(f2.file_id()))
+        self.assertFalse(self.cache.has_file(f3.file_id()))
+        self.assertTrue(self.cache.has_file(f4.file_id()))
+        

@@ -67,6 +67,7 @@ class Controller(object):
         conn = self.db_connect()
         try:
             logging.debug('Acquired database connection')
+
             dir_dao = self._dao_factory.directory_dao(conn)
             file_dao = self._dao_factory.file_dao(conn)
 

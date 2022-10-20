@@ -40,6 +40,9 @@ class FileCache(object):
 
         def wait_ready(self, timeout=None):
             self._ready.wait(timeout)
+        
+        def __str__(self):
+            return 'FileCache.IndexNode({{file_id={}, file_size={}, readable={}, writable={}, removable={}}})'.format(self.file_id(), self.file_size, self.readable, self.writable, self.removable)
 
     class Index(object):
 
@@ -112,6 +115,7 @@ class FileCache(object):
         self._cache_used = 0
         self._cache_size = parse_mem_size(cache_config.get('cache-size', '1GB'))
         self._chunk_size = parse_mem_size(cache_config.get('chunk-size', '1MB'))
+        self._max_file_size = parse_mem_size(cache_config.get('max-file-size', '500MB'))
 
         self._index = FileCache.Index()
         self._index_lock = RLock()
@@ -131,6 +135,7 @@ class FileCache(object):
         logging.debug('File cache used [{}]'.format(str_mem_size(self._cache_used)))
         logging.debug('File cache size [{}]'.format(str_mem_size(self._cache_size)))
         logging.debug('File chunk size [{}]'.format(str_mem_size(self._chunk_size)))
+        logging.debug('Max file size [{}]'.format(str_mem_size(self._max_file_size)))
 
     def cache_path(self):
         return self._cache_path
@@ -139,7 +144,10 @@ class FileCache(object):
         return self._cache_size
     
     def cache_used(self):
-        return self._cache_used
+        cache_used = 0
+        with self._index_lock:
+            cache_used = self._cache_used
+        return cache_used
     
     def cache_free_space(self):
         free_space = 0
@@ -149,13 +157,19 @@ class FileCache(object):
     
     def file_chunk_size(self):
         return self._chunk_size
+    
+    def max_file_size(self):
+        return self._max_file_size
+
+    def has_file(self, file_id):
+        with self._index_lock:
+            return self._index.has_node(file_id)
 
     def create_cache_entry(self, file_id, file_size, readable=False, writable=True, removable=False):
         with self._index_lock:
             if self._index.has_node(file_id):
                 raise FileCacheError('File [{}] already exists in cache'.format(file_id))
-            if file_size > self.cache_free_space():
-                raise FileCacheError('Not enough free space in cache')
+            self.ensure_cache_space(file_size)
             node = FileCache.IndexNode(file_id, file_size, readable, writable, removable)
             self._index.add_node(node)
             self._cache_used += file_size
@@ -281,8 +295,11 @@ class FileCache(object):
 
     '''
     def remove_file(self, file):
+        file_id = file.file_id()
+        self.remove_file_by_id(file_id)
+
+    def remove_file_by_id(self, file_id):
         with self._index_lock:
-            file_id = file.file_id()
             if self._index.has_node(file_id):
                 node = self._index.get_node(file_id)
                 if not node.removable:
@@ -290,7 +307,10 @@ class FileCache(object):
                 self._index.pop_node(file_id)
                 # Notify any readers waiting.
                 node.set_ready()
-                file.remove()
+                try:
+                    shutil.rmtree(os.path.join(self._cache_path, file_id))
+                except Exception as e:
+                    logging.warn('Could not remove file [{}] from cache: {}'.format(file_id, str(e)))
                 self._cache_used -= node.file_size
             else:
                 raise FileCacheError('File [{}] not found in cache'.format(file_id))
@@ -302,3 +322,54 @@ class FileCache(object):
     def remove_lru_file(self):
         # TODO
         pass
+
+    '''
+        Ensure at least the given amount of space is available in the cache.
+        If there is not enough space in the cache then remove files starting
+        from the LRU (least recently used) file until there is.
+        Will only remove files with the removable flag set.
+
+        size - amount of cache space required in bytes.
+
+        Throws FileCacheError if given amount of space is not available.
+    '''
+    def ensure_cache_space(self, size):
+        if size == 0:
+            return
+        if size < 0:
+            raise FileCacheError('Invalid size!')
+        if size > self._max_file_size:
+            raise FileCacheError('File size too large!')
+        
+        with self._index_lock:
+            if self.cache_free_space() >= size:
+                return
+            
+            #
+            # First check if we can make enough space available before
+            # removing any files.
+            #
+
+            total_size = 0
+            # Head node is LRU file.
+            curr_node = self._index.head()
+            while total_size < size and curr_node is not None:
+                if curr_node.file_size > 0 and curr_node.removable:
+                    total_size += curr_node.file_size
+                curr_node = curr_node._next
+
+            if total_size < size:
+                raise FileCacheError('Insufficient space in cache')
+
+            total_size = 0
+            curr_node = self._index.head()
+            while total_size < size and curr_node is not None:
+                next_node = curr_node._next
+
+                if curr_node.removable:
+                    file_id = curr_node.file_id()
+                    self.remove_file_by_id(file_id)
+                    total_size += curr_node.file_size
+                    logging.debug('Evicted file [{}] from cache, recovered [{}] space'.format(file_id, str_mem_size(curr_node.file_size)))
+
+                curr_node = next_node
