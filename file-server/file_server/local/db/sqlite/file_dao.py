@@ -2,6 +2,7 @@ from ..file_dao import FileDAO
 from ....error import DirectoryError, FileError
 from .directory_util import query_directory_id, query_file_id, traverse_path
 from ....file import File
+from ...file_type import FileType
 from ...file_transfer_status import FileTransferStatus
 from ....util.file import str_path
 import logging
@@ -24,16 +25,16 @@ class SqliteFileDAO(FileDAO):
                     raise FileError('File [{}] not found in path [{}]'.format(file_name, str_path(path)))
                 if version is not None:
                     cur.execute('''
-                        SELECT version, local_id, remote_id, size_bytes, transfer_status 
-                        FROM ps_file_version 
-                        WHERE file_id = ? AND version = ?
+                        SELECT F.file_type, V.version, V.local_id, V.remote_id, V.size_bytes, V.transfer_status 
+                        FROM ps_file AS F INNER JOIN ps_file_version AS V ON F.id = V.file_id 
+                        WHERE F.id = ? AND V.version = ?
                     ''', (file_id, version))
                     res = cur.fetchone()
                 else:
                     cur.execute('''
-                        SELECT version, local_id, remote_id, size_bytes, transfer_status 
-                        FROM ps_file_version 
-                        WHERE file_id = ? 
+                        SELECT F.file_type, V.version, V.local_id, V.remote_id, V.size_bytes, V.transfer_status 
+                        FROM ps_file AS F INNER JOIN ps_file_version AS V ON F.id = V.file_id 
+                        WHERE F.id = ? 
                         ORDER BY version DESC
                     ''', (file_id,))
                     res = cur.fetchone()
@@ -41,11 +42,12 @@ class SqliteFileDAO(FileDAO):
                     raise FileError('File [{}] version [{}] not found!'.format(str_path(path + [file_name]), version))
                 self._conn.commit()
                 return {
-                    'version': res[0],
-                    'local_id': res[1],
-                    'remote_id': res[2],
-                    'size_bytes': res[3],
-                    'transfer_status': FileTransferStatus(res[4])
+                    'file_type': FileType(res[0]),
+                    'version': res[1],
+                    'local_id': res[2],
+                    'remote_id': res[3],
+                    'size_bytes': res[4],
+                    'transfer_status': FileTransferStatus(res[5])
                 }
             except DirectoryError as e:
                 logging.error('Directory error: {}'.format(str(e)))

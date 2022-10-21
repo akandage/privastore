@@ -5,6 +5,7 @@ from ....error import DirectoryError, FileError
 from .setup import sqlite_conn_factory, setup_db
 from .directory_dao import SqliteDirectoryDAO
 from .file_dao import SqliteFileDAO
+from ...file_type import FileType
 from ...file_transfer_status import FileTransferStatus
 
 class TestSqliteFileDAO(unittest.TestCase):
@@ -36,6 +37,7 @@ class TestSqliteFileDAO(unittest.TestCase):
         self.dir_dao.create_file([], 'file_1')
         self.dir_dao.create_file([], 'file_2')
         self.assertEqual(self.dao.get_file_version_metadata([], 'file_1'), {
+            'file_type': FileType.BINARY_DATA,
             'version': 1,
             'local_id': None,
             'remote_id': None,
@@ -43,6 +45,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             'transfer_status': FileTransferStatus.EMPTY
         })
         self.assertEqual(self.dao.get_file_version_metadata([], 'file_1'), {
+            'file_type': FileType.BINARY_DATA,
             'version': 1,
             'local_id': None,
             'remote_id': None,
@@ -57,6 +60,7 @@ class TestSqliteFileDAO(unittest.TestCase):
         self.dir_dao.create_file([], 'file_2')
         self.dao.update_file_local([], 'file_1', 1, f1_local_id, 100)
         self.assertEqual(self.dao.get_file_version_metadata([], 'file_1'), {
+            'file_type': FileType.BINARY_DATA,
             'version': 1,
             'local_id': f1_local_id,
             'remote_id': None,
@@ -64,6 +68,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             'transfer_status': FileTransferStatus.RECEIVED
         })
         self.assertEqual(self.dao.get_file_version_metadata([], 'file_2'), {
+            'file_type': FileType.BINARY_DATA,
             'version': 1,
             'local_id': None,
             'remote_id': None,
@@ -72,6 +77,7 @@ class TestSqliteFileDAO(unittest.TestCase):
         })
         self.dao.update_file_local([], 'file_2', 1, f2_local_id, 120)
         self.assertEqual(self.dao.get_file_version_metadata([], 'file_1'), {
+            'file_type': FileType.BINARY_DATA,
             'version': 1,
             'local_id': f1_local_id,
             'remote_id': None,
@@ -79,6 +85,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             'transfer_status': FileTransferStatus.RECEIVED
         })
         self.assertEqual(self.dao.get_file_version_metadata([], 'file_2'), {
+            'file_type': FileType.BINARY_DATA,
             'version': 1,
             'local_id': f2_local_id,
             'remote_id': None,
@@ -96,6 +103,7 @@ class TestSqliteFileDAO(unittest.TestCase):
         self.dao.update_file_local([], 'file_1', 1, f1_local_id, 100)
         self.dao.update_file_remote([], 'file_1', 1, f1_remote_id, FileTransferStatus.TRANSFERRED_TO_REMOTE)
         self.assertEqual(self.dao.get_file_version_metadata([], 'file_1'), {
+            'file_type': FileType.BINARY_DATA,
             'version': 1,
             'local_id': f1_local_id,
             'remote_id': f1_remote_id,
@@ -103,6 +111,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             'transfer_status': FileTransferStatus.TRANSFERRED_TO_REMOTE
         })
         self.assertEqual(self.dao.get_file_version_metadata([], 'file_2'), {
+            'file_type': FileType.BINARY_DATA,
             'version': 1,
             'local_id': None,
             'remote_id': None,
@@ -112,6 +121,7 @@ class TestSqliteFileDAO(unittest.TestCase):
         self.dao.update_file_local([], 'file_2', 1, f2_local_id, 120)
         self.dao.update_file_remote([], 'file_2', 1, f2_remote_id, FileTransferStatus.TRANSFERRED_TO_REMOTE)
         self.assertEqual(self.dao.get_file_version_metadata([], 'file_1'), {
+            'file_type': FileType.BINARY_DATA,
             'version': 1,
             'local_id': f1_local_id,
             'remote_id': f1_remote_id,
@@ -119,6 +129,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             'transfer_status': FileTransferStatus.TRANSFERRED_TO_REMOTE
         })
         self.assertEqual(self.dao.get_file_version_metadata([], 'file_2'), {
+            'file_type': FileType.BINARY_DATA,
             'version': 1,
             'local_id': f2_local_id,
             'remote_id': f2_remote_id,
@@ -132,6 +143,7 @@ class TestSqliteFileDAO(unittest.TestCase):
         self.dir_dao.create_file([], 'file_2')
         self.dao.update_file_transfer_status([], 'file_1', 1, FileTransferStatus.RECEIVING)
         self.assertEqual(self.dao.get_file_version_metadata([], 'file_1'), {
+            'file_type': FileType.BINARY_DATA,
             'version': 1,
             'local_id': None,
             'remote_id': None,
@@ -139,6 +151,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             'transfer_status': FileTransferStatus.RECEIVING
         })
         self.assertEqual(self.dao.get_file_version_metadata([], 'file_2'), {
+            'file_type': FileType.BINARY_DATA,
             'version': 1,
             'local_id': None,
             'remote_id': None,
@@ -147,6 +160,7 @@ class TestSqliteFileDAO(unittest.TestCase):
         })
         self.dao.update_file_local([], 'file_1', 1, f1_local_id, 100)
         self.assertEqual(self.dao.get_file_version_metadata([], 'file_1'), {
+            'file_type': FileType.BINARY_DATA,
             'version': 1,
             'local_id': f1_local_id,
             'remote_id': None,
@@ -154,6 +168,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             'transfer_status': FileTransferStatus.RECEIVED
         })
         self.assertEqual(self.dao.get_file_version_metadata([], 'file_2'), {
+            'file_type': FileType.BINARY_DATA,
             'version': 1,
             'local_id': None,
             'remote_id': None,
@@ -163,6 +178,7 @@ class TestSqliteFileDAO(unittest.TestCase):
         self.dao.update_file_transfer_status([], 'file_2', 1, FileTransferStatus.RECEIVING)
         self.dao.update_file_transfer_status([], 'file_1', 1, FileTransferStatus.TRANSFERRING_TO_REMOTE)
         self.assertEqual(self.dao.get_file_version_metadata([], 'file_1'), {
+            'file_type': FileType.BINARY_DATA,
             'version': 1,
             'local_id': f1_local_id,
             'remote_id': None,
@@ -170,6 +186,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             'transfer_status': FileTransferStatus.TRANSFERRING_TO_REMOTE
         })
         self.assertEqual(self.dao.get_file_version_metadata([], 'file_2'), {
+            'file_type': FileType.BINARY_DATA,
             'version': 1,
             'local_id': None,
             'remote_id': None,

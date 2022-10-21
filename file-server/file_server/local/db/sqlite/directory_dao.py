@@ -2,6 +2,7 @@ from ..directory_dao import DirectoryDAO
 from .directory_util import query_directory_id, query_file_id, traverse_path
 from ....error import DirectoryError, FileError
 from ...file_transfer_status import FileTransferStatus
+from ...file_type import FileType
 from ....util.file import str_path
 import logging
 
@@ -45,7 +46,7 @@ class SqliteDirectoryDAO(DirectoryDAO):
             except:
                 pass
     
-    def create_file(self, path, file_name, is_hidden=False):
+    def create_file(self, path, file_name, file_type=FileType.BINARY_DATA, is_hidden=False):
         if len(file_name) == 0:
             raise FileError('File name can\'t be empty!')
         cur = self._conn.cursor()
@@ -57,7 +58,7 @@ class SqliteDirectoryDAO(DirectoryDAO):
                     raise DirectoryError('Directory [{}] exists in path [{}]'.format(file_name, str_path(path)))
                 elif query_file_id(cur, directory_id, file_name, is_hidden) is not None:
                     raise FileError('File [{}] exists in path [{}]'.format(file_name, str_path(path)))
-                cur.execute('INSERT INTO ps_file (name, parent_id, is_hidden) VALUES (?, ?, ?)', (file_name, directory_id, is_hidden))
+                cur.execute('INSERT INTO ps_file (name, file_type, parent_id, is_hidden) VALUES (?, ?, ?, ?)', (file_name, file_type.value, directory_id, is_hidden))
                 created_file_id = cur.lastrowid
                 cur.execute('INSERT INTO ps_file_version (file_id, version, size_bytes, transfer_status) VALUES (?, ?, ?, ?)', 
                     (created_file_id, 1, 0, FileTransferStatus.EMPTY.value))

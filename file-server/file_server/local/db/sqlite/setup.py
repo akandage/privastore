@@ -80,6 +80,7 @@ def create_file_table(conn):
         CREATE TABLE ps_file (
             id INTEGER PRIMARY KEY NOT NULL,
             name VARCHAR(256) NOT NULL,
+            file_type INTEGER NOT NULL,
             parent_id INTEGER NOT NULL,
             is_hidden BOOLEAN NOT NULL DEFAULT 0,
             is_removed BOOLEAN NOT NULL DEFAULT 0,

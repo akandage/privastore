@@ -1,4 +1,5 @@
-from ..error import FileUploadError, SessionError
+from ..error import FileDownloadError, FileUploadError, SessionError
+from .file_transfer_status import FileTransferStatus
 from ..util.file import chunked_copy, str_mem_size, str_path
 import logging
 
@@ -120,18 +121,75 @@ class Controller(object):
                 try:
                     dir_dao.remove_file(path, file_name, delete=True)
                 except Exception as e:
-                    logging.error('Could not cleanup uploaded file: {}'.format(str(e)))
+                    logging.error('Could not cleanup uploaded file in db: {}'.format(str(e)))
 
                 if upload_file is not None:
+                    try:
+                        self._cache.close_file(upload_file)
+                    except Exception as e:
+                        logging.error('Could not close uploaded file in cache: {}'.format(str(e)))
+
                     try:
                         self._cache.remove_file(upload_file)
                         logging.debug('Removed file from cache')
                     except Exception as e:
-                        logging.error('Could not cleanup uploaded file: {}'.format(str(e)))
+                        logging.error('Could not remove uploaded file from cache: {}'.format(str(e)))
 
                 raise e
 
             logging.debug('Uploaded file [{}]'.format(str_path(path + [file_name])))
+        finally:
+            self.db_close(conn)
+
+    def download_file(self, path, file_name, file, file_version=None, timeout=None, api_callback=None):
+        logging.debug('Download file [{}]'.format(str_path(path + [file_name])))
+        conn = self.db_connect()
+        try:
+            logging.debug('Acquired database connection')
+
+            file_dao = self._dao_factory.file_dao()
+            file_metadata = file_dao.get_file_version_metadata(path, file_name, file_version)
+            file_type = file_metadata['file_type']
+            file_id = file_metadata['local_id']
+            file_size = file_metadata['size_bytes']
+            transfer_status = file_metadata['transfer_status']
+
+            if transfer_status == FileTransferStatus.RECEIVING:
+                raise FileDownloadError('File upload not complete!')
+            elif transfer_status == FileTransferStatus.RECEIVING_FAILED:
+                raise FileDownloadError('File upload failed!')
+            
+            if api_callback is not None:
+                #
+                # Notify the API of the file-type, file-size etc. in case it
+                # needs to send headers before we transfer the actual file.
+                #
+                api_callback(file_id, file_type, file_size)
+            
+            #
+            # First, try reading the file from the cache if it is already
+            # present there.
+            #
+            download_file = self._cache.read_file(file_id)
+
+            if download_file is not None:
+                #
+                # Cache hit, send the file to the client.
+                #
+
+                try:
+                    bytes_transferred = chunked_copy(download_file, file, file_size, self._chunk_size)
+                    if bytes_transferred < file_size:
+                        raise FileDownloadError('Could not download all file data! [{}/{}]'.format(str_mem_size(bytes_transferred), str_mem_size(file_size)))
+                finally:
+                    try:
+                        self._cache.close_file(download_file)
+                    except Exception as e:
+                        logging.warn('Could not close download file in cache: {}'.format(str(e)))
+            else:
+                # Cache miss.
+                # TODO: Handle this.
+                pass
         finally:
             self.db_close(conn)
 

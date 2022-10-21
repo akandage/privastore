@@ -18,7 +18,7 @@ def chunked_copy(in_file, out_file, file_size, chunk_size):
 
         if read == 0:
             if buf_len > 0:
-                out_file.write(buf)
+                write_all(out_file, buf)
                 bytes_copied += buf_len
             break
         elif read > read_size:
