@@ -64,7 +64,7 @@ class Controller(object):
             self.db_close(conn)
 
     def upload_file(self, path, file_name, file, file_size, file_version=1):
-        logging.debug('Upload file [{}]'.format(str_path(path + [file_name])))
+        logging.debug('Upload file [{}] version [{}] size [{}]'.format(str_path(path + [file_name]), file_version, file_size))
         conn = self.db_connect()
         try:
             logging.debug('Acquired database connection')
@@ -142,12 +142,12 @@ class Controller(object):
             self.db_close(conn)
 
     def download_file(self, path, file_name, file, file_version=None, timeout=None, api_callback=None):
-        logging.debug('Download file [{}]'.format(str_path(path + [file_name])))
+        logging.debug('Download file [{}] version [{}] timeout [{}]'.format(str_path(path + [file_name]), file_version, timeout))
         conn = self.db_connect()
         try:
             logging.debug('Acquired database connection')
 
-            file_dao = self._dao_factory.file_dao()
+            file_dao = self._dao_factory.file_dao(conn)
             file_metadata = file_dao.get_file_version_metadata(path, file_name, file_version)
             logging.debug('Retrieved file metadata')
             file_type = file_metadata['file_type']

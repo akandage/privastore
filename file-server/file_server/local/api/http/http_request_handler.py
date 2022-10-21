@@ -35,6 +35,8 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
 
         if self.url_path.startswith(DIRECTORY_PATH):
             self.handle_list_directory()
+        elif self.url_path.startswith(DOWNLOAD_PATH):
+            self.handle_download_file()
         else:
             logging.error('Invalid path: [{}]'.format(self.url_path))
             self.send_error_response(HTTPStatus.NOT_FOUND)
@@ -47,8 +49,6 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
             self.handle_login_user()
         elif self.url_path.startswith(UPLOAD_PATH):
             self.handle_upload_file()
-        elif self.url_path.startswith(DOWNLOAD_PATH):
-            self.handle_download_file()
         else:
             logging.error('Invalid path: [{}]'.format(self.url_path))
             self.send_error_response(HTTPStatus.NOT_FOUND)
@@ -420,3 +420,19 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
         except:
             self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid timeout value')
             return
+        
+        try:
+            self._controller.download_file(path, file_name, self.wfile, file_version, timeout=timeout, api_callback=self.send_download_file_headers)
+        except DirectoryError as e:
+            self.handle_directory_error(e)
+        except FileError as e:
+            self.handle_file_error(e)
+        except Exception as e:
+            self.handle_internal_error(e)
+    
+    def send_download_file_headers(self, file_id, file_type, file_size):
+        logging.debug('Send download file headers [{}] [{}] [{}]'.format(file_id, file_type.mime_type, file_size))
+        self.send_response(HTTPStatus.OK)
+        self.send_header(CONTENT_TYPE_HEADER, file_type.mime_type)
+        self.send_header(CONTENT_LENGTH_HEADER, str(file_size))
+        self.end_headers()

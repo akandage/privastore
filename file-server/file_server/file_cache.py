@@ -130,7 +130,8 @@ class FileCache(object):
             for file_id in os.listdir(self._cache_path):
                 try:
                     f = File(self._cache_path, file_id, mode='r')
-                    self.create_cache_entry(file_id, f.size_on_disk(), readable=True, writable=False, removable=True)
+                    node = self.create_cache_entry(file_id, f.size_on_disk())
+                    node.removable = True
                     f.close()
                 except Exception as e:
                     logging.error('Error initializing cache file [{}]: {}'.format(file_id, str(e)))
@@ -174,9 +175,9 @@ class FileCache(object):
                 raise FileCacheError('File [{}] already exists in cache'.format(file_id))
             self.ensure_cache_space(file_size)
             node = FileCache.IndexNode(file_id, file_size)
-            node.num_writers = 1
             self._index.add_node(node)
             self._cache_used += file_size
+            return node
 
     '''
         Open file in cache for reading.
@@ -245,13 +246,14 @@ class FileCache(object):
         if mode == 'w':
             if file_id is not None:
                 if File.is_valid_file_id(file_id):
-                    self.create_cache_entry(file_id, file_size)
+                    node = self.create_cache_entry(file_id, file_size)
                     file = self._file_factory(self._cache_path, file_id=file_id, mode=mode)
                 else:
                     raise FileCacheError('Invalid file id')
             else:
                 file = self._file_factory(self._cache_path, file_id=file_id, mode=mode)
-                self.create_cache_entry(file.file_id(), file_size)
+                node = self.create_cache_entry(file.file_id(), file_size)
+            node.num_writers += 1
             return file
         elif mode == 'a':
             if file_id is not None:
