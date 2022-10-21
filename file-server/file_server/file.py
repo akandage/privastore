@@ -82,6 +82,9 @@ class File(object):
     def size_on_disk(self):
         return self._size_on_disk
 
+    def closed(self):
+        return self._closed
+
     def write(self, data):
         '''
             Implement this so it behaves like file-like object.

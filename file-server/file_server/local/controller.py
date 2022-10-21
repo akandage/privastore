@@ -149,6 +149,7 @@ class Controller(object):
 
             file_dao = self._dao_factory.file_dao()
             file_metadata = file_dao.get_file_version_metadata(path, file_name, file_version)
+            logging.debug('Retrieved file metadata')
             file_type = file_metadata['file_type']
             file_id = file_metadata['local_id']
             file_size = file_metadata['size_bytes']
@@ -172,24 +173,28 @@ class Controller(object):
             #
             download_file = self._cache.read_file(file_id)
 
-            if download_file is not None:
+            if download_file is None:
                 #
-                # Cache hit, send the file to the client.
+                # TODO: Handle cache miss.
                 #
+                raise Exception('Not implemented!')
 
+            #
+            # Cache hit, send the file to the client.
+            #
+            logging.debug('Opened file [{}] for reading in cache'.format(download_file.file_id()))
+
+            try:
+                bytes_transferred = chunked_copy(download_file, file, file_size, self._chunk_size)
+                if bytes_transferred < file_size:
+                    raise FileDownloadError('Could not download all file data! [{}/{}]'.format(str_mem_size(bytes_transferred), str_mem_size(file_size)))
+            finally:
                 try:
-                    bytes_transferred = chunked_copy(download_file, file, file_size, self._chunk_size)
-                    if bytes_transferred < file_size:
-                        raise FileDownloadError('Could not download all file data! [{}/{}]'.format(str_mem_size(bytes_transferred), str_mem_size(file_size)))
-                finally:
-                    try:
-                        self._cache.close_file(download_file)
-                    except Exception as e:
-                        logging.warn('Could not close download file in cache: {}'.format(str(e)))
-            else:
-                # Cache miss.
-                # TODO: Handle this.
-                pass
+                    self._cache.close_file(download_file)
+                except Exception as e:
+                    logging.warn('Could not close download file in cache: {}'.format(str(e)))
+            
+            logging.debug('File data downloaded [{}]'.format(str_mem_size(bytes_transferred)))
         finally:
             self.db_close(conn)
 
