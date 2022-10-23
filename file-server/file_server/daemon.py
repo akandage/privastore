@@ -1,4 +1,5 @@
 import logging
+import time
 from threading import Event, Thread
 
 class Daemon(object):
@@ -8,6 +9,7 @@ class Daemon(object):
         self._name = name
         self._daemon = daemon
         self._stop = False
+        self._started = Event()
         self._stopped = Event()
         self._thread = None
     
@@ -18,6 +20,12 @@ class Daemon(object):
         self._thread = Thread(name=self._name, target=self.run, daemon=self._daemon)
         self._thread.start()
 
+    def wait_started(self, timeout=None):
+        if self._thread is None:
+            raise Exception('Not started!')
+        if not self._started.wait(timeout):
+            raise Exception('Timed out waiting for {} daemon to start!'.format(self._name))
+
     def stop(self):
         self._stop = True
         logging.debug('Requested {} daemon stop'.format(self._name))
@@ -27,8 +35,15 @@ class Daemon(object):
             raise Exception('Not started!')
 
         logging.debug('Joining {} daemon'.format(self._name))
-        self._stopped.wait()
+        start_t = time.time()
+        if not self._stopped.wait(timeout):
+            raise Exception('Timed out waiting for {} daemon to stop!'.format(self._name))
+        if timeout is not None:
+            timeout -= min(timeout, time.time()-start_t)
         self._thread.join(timeout)
+        if self._thread.is_alive():
+            raise Exception('Timed out joining {} daemon!'.format(self._name))
+            
         self._thread = None
 
     def run(self):

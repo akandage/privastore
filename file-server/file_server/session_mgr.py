@@ -11,6 +11,7 @@ class SessionManager(Daemon):
         self._cleanup_interval = cleanup_interval
 
     def run(self):
+        self._started.set()
         logging.debug('Session manager started')
         now = last_cleanup_t = round(time.time())
         while not self._stop:

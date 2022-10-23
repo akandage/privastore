@@ -19,6 +19,7 @@ class HttpDaemon(Daemon):
         # TODO: SSL.
     
     def run(self):
+        self._started.set()
         logging.debug('HTTP daemon started')
         while not self._stop:
             self._server.handle_request()

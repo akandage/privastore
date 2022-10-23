@@ -81,7 +81,9 @@ class LocalServer(object):
             raise Exception('Unsupported API type: {}'.format(api_type))
 
         session_mgr.start()
+        session_mgr.wait_started()
         api_daemon.start()
+        api_daemon.wait_started()
         logging.info('Server started')
         self._stop.wait()
         logging.info('Server stopping')
