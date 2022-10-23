@@ -1,9 +1,13 @@
 import logging
+import os
 import sqlite3
 from ....util.crypto import hash_user_password
 
 def setup_db(db_config):
     db_path = db_config.get('sqlite-db-path', 'local_server.db')
+
+    if os.path.exists(db_path):
+        raise Exception('SQLite database [{}] exists!'.format(db_path))
 
     logging.debug('Setting up SQLite database \'{}\''.format(db_path))
     conn = sqlite3.connect(db_path)

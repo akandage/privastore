@@ -14,7 +14,7 @@ class HttpDaemon(Daemon):
         self._hostname = hostname = http_config.get('api-hostname', 'localhost')
         self._port = port = int(http_config.get('api-port', 8080))
         self._server = ThreadingHTTPServer((hostname, port), request_handler)
-        self._server.timeout = 1
+        self._server.timeout = 0.1
 
         # TODO: SSL.
     
