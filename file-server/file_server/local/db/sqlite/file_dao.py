@@ -35,7 +35,7 @@ class SqliteFileDAO(FileDAO):
                         SELECT F.file_type, V.version, V.local_id, V.remote_id, V.size_bytes, V.transfer_status 
                         FROM ps_file AS F INNER JOIN ps_file_version AS V ON F.id = V.file_id 
                         WHERE F.id = ? 
-                        ORDER BY version DESC
+                        ORDER BY V.version DESC
                     ''', (file_id,))
                     res = cur.fetchone()
                 if res is None:

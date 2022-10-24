@@ -134,7 +134,7 @@ class SqliteDirectoryDAO(DirectoryDAO):
                 cur.execute('BEGIN')
                 directory_id = traverse_path(cur, path)
                 entries = []
-                cur.execute('''SELECT name 
+                cur.execute('''SELECT D.name 
                     FROM ps_directory AS D INNER JOIN ps_link AS L ON D.id = L.child_id 
                     WHERE L.parent_id = ? AND (D.is_hidden <> 1 OR D.is_hidden = ?) 
                         AND D.is_removed <> 1 
@@ -145,7 +145,7 @@ class SqliteDirectoryDAO(DirectoryDAO):
                     FROM ps_file AS F INNER JOIN ps_file_version AS V ON F.id = V.file_id
                     WHERE F.parent_id = ? AND (F.is_hidden <> 1 OR F.is_hidden = ?) AND V.transfer_status <> ?
                         AND F.is_removed <> 1 
-                    ORDER BY name ASC''', (directory_id, show_hidden, FileTransferStatus.RECEIVING_FAILED.value))
+                    ORDER BY F.name ASC''', (directory_id, show_hidden, FileTransferStatus.RECEIVING_FAILED.value))
                 for file_name in cur.fetchall():
                     entries.append(('f', file_name[0]))
                 self._conn.commit()
