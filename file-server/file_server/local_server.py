@@ -3,9 +3,10 @@ import configparser
 import logging
 import os
 import signal
-from threading import Event
+from threading import Event, Thread
 
 from .local.controller import Controller
+from .daemon import Daemon
 from .file_cache import FileCache
 from .pool import Pool
 from .session_mgr import SessionManager
@@ -31,9 +32,10 @@ def config_logging(log_config):
     # TODO: Configurability of log message format.
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(thread)d:%(funcName)s:%(filename)s:%(lineno)d - %(message)s', level=log_level)
 
-class LocalServer(object):
+class LocalServer(Daemon):
 
     def __init__(self, config):
+        super().__init__('local_server')
         self._config = config
         self._stop = Event()
 
@@ -45,7 +47,7 @@ class LocalServer(object):
             from .local.db.sqlite.setup import sqlite_conn_factory
             from .local.db.sqlite.dao_factory import SqliteDAOFactory
 
-            db_path = db_config.get('db-path', 'local_server.db')
+            db_path = db_config.get('sqlite-db-path', 'local_server.db')
             if not os.path.exists(db_path):
                 raise Exception('SQLite database [{}] does not exist!'.format(db_path))
             logging.debug('Using SQLite database: [{}]'.format(db_path))
@@ -84,6 +86,7 @@ class LocalServer(object):
         session_mgr.wait_started()
         api_daemon.start()
         api_daemon.wait_started()
+        self._started.set()
         logging.info('Server started')
         self._stop.wait()
         logging.info('Server stopping')
@@ -91,6 +94,7 @@ class LocalServer(object):
         api_daemon.join()
         session_mgr.stop()
         session_mgr.join()
+        self._stopped.set()
         logging.info('Server stopped')
 
     def setup_db(self):

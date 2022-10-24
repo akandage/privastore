@@ -12,7 +12,8 @@ class Sessions(object):
         self._sessions = dict()
         self._mutex = RLock()
     
-    def validate_session(self, session_id):
+    @staticmethod
+    def validate_session(session_id):
         if not session_id.startswith('S-'):
             raise SessionError('Invalid session id [{}]'.format(session_id))
         try:
