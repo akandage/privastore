@@ -1,5 +1,6 @@
 from http import HTTPStatus
 import os
+import random
 import requests
 import shutil
 import urllib
@@ -51,8 +52,8 @@ class TestLocalServer(unittest.TestCase):
         except:
             pass
 
-    def send_request(self, url, headers={}, method=requests.get):
-        r = method(url, headers=headers)
+    def send_request(self, url, headers={}, method=requests.get, data=None):
+        r = method(url, headers=headers, data=data)
         content_len = r.headers.get('Content-Length')
         if content_len is not None:
             content_len = int(content_len)
@@ -138,4 +139,86 @@ class TestLocalServer(unittest.TestCase):
         self.assertEqual(r, [])
 
     def test_file_api(self):
-        pass
+        r = requests.post(URL.format('/1/login'), auth=('psadmin', 'psadmin'))
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        session_id = r.headers.get('x-privastore-session-id')
+        inv_session_id = 'S-{}'.format(str(uuid.uuid4()))
+        req_headers = {
+            'x-privastore-session-id': session_id
+        }
+
+        r = self.send_request(URL.format('/1/directory/dir_1'), req_headers, method=requests.put)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = self.send_request(URL.format('/1/directory/dir_1/dir_1a'), req_headers, method=requests.put)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+
+        # TODO: Test with different content types.
+        req_headers['Content-Type'] = 'application/octet-stream'
+
+        small_file = random.randbytes(500*1024)
+        chunk_file = random.randbytes(1024*1024)
+        large_file = random.randbytes(5*1024*1024)
+
+        r = self.send_request(URL.format('/1/upload/file_1'), data=small_file, headers={}, method=requests.post)
+        self.assertEqual(r.status_code, HTTPStatus.BAD_REQUEST)
+        r = self.send_request(URL.format('/1/upload/file_1'), data=small_file, headers={'x-privastore-session-id':inv_session_id}, method=requests.post)
+        self.assertEqual(r.status_code, HTTPStatus.UNAUTHORIZED)
+        r = self.send_request(URL.format('/1/upload/dir_1'), data=small_file, headers=req_headers, method=requests.post)
+        self.assertEqual(r.status_code, HTTPStatus.CONFLICT)
+        r = self.send_request(URL.format('/1/upload/file_1'), data=small_file, headers=req_headers, method=requests.post)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = self.send_request(URL.format('/1/upload/file_1'), data=small_file, headers=req_headers, method=requests.post)
+        self.assertEqual(r.status_code, HTTPStatus.CONFLICT)
+
+        r = self.send_request(URL.format('/1/download/file_1'), headers={}, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.BAD_REQUEST)
+        r = self.send_request(URL.format('/1/download/file_1'), headers={'x-privastore-session-id':inv_session_id}, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.UNAUTHORIZED)
+        r = self.send_request(URL.format('/1/download/file_2'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.NOT_FOUND)
+        r = self.send_request(URL.format('/1/download/file_1'), headers=req_headers, method=requests.get)
+        self.assertTrue(r.headers.get('Content-Type') is not None)
+        self.assertEqual(r.headers.get('Content-Type'), 'application/octet-stream')
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        self.assertEqual(r.content, small_file)
+
+        r = self.send_request(URL.format('/1/upload/file_2'), data=chunk_file, headers=req_headers, method=requests.post)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = self.send_request(URL.format('/1/upload/file_3'), data=large_file, headers=req_headers, method=requests.post)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = self.send_request(URL.format('/1/upload/dir_1/file_1'), data=small_file, headers=req_headers, method=requests.post)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = self.send_request(URL.format('/1/upload/dir_1/file_2'), data=chunk_file, headers=req_headers, method=requests.post)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = self.send_request(URL.format('/1/upload/dir_1/file_3'), data=large_file, headers=req_headers, method=requests.post)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = self.send_request(URL.format('/1/upload/dir_1/dir_1a/file_1'), data=small_file, headers=req_headers, method=requests.post)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = self.send_request(URL.format('/1/upload/dir_1/dir_1a/file_2'), data=chunk_file, headers=req_headers, method=requests.post)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = self.send_request(URL.format('/1/upload/dir_1/dir_1a/file_3'), data=large_file, headers=req_headers, method=requests.post)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = self.send_request(URL.format('/1/download/file_2'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        self.assertEqual(r.content, chunk_file)
+        r = self.send_request(URL.format('/1/download/file_3'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        self.assertEqual(r.content, large_file)
+        r = self.send_request(URL.format('/1/download/dir_1/file_1'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        self.assertEqual(r.content, small_file)
+        r = self.send_request(URL.format('/1/download/dir_1/file_2'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        self.assertEqual(r.content, chunk_file)
+        r = self.send_request(URL.format('/1/download/dir_1/file_3'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        self.assertEqual(r.content, large_file)
+        r = self.send_request(URL.format('/1/download/dir_1/dir_1a/file_1'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        self.assertEqual(r.content, small_file)
+        r = self.send_request(URL.format('/1/download/dir_1/dir_1a/file_2'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        self.assertEqual(r.content, chunk_file)
+        r = self.send_request(URL.format('/1/download/dir_1/dir_1a/file_3'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        self.assertEqual(r.content, large_file)
