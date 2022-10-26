@@ -39,7 +39,7 @@ class TestLocalServer(unittest.TestCase):
             'db': {
                 'db-type': 'sqlite',
                 'sqlite-db-path': os.path.join('test_local_server', 'local_server.db'),
-                'connection-pool-size': '0'
+                'connection-pool-size': '1'
             },
             'encryption': {
                 'key-algorithm': 'aes-128-cbc',
