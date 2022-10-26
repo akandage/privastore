@@ -7,9 +7,12 @@ from threading import Event, Thread
 
 from .local.controller import Controller
 from .daemon import Daemon
+from .file import File
 from .file_cache import FileCache
+from .file_chunk import get_encrypted_chunk_encoder, get_encrypted_chunk_decoder
 from .pool import Pool
 from .session_mgr import SessionManager
+from .util.crypto import get_encryptor_factory, get_decryptor_factory
 
 def read_config(config_path):
     config = configparser.ConfigParser()
@@ -60,9 +63,26 @@ class LocalServer(Daemon):
         session_mgr = SessionManager(daemon=False)
         conn_pool_size = int(db_config.get('connection-pool-size', '5'))
 
+        encrypt_config = self._config['encryption']
+        key_alg = encrypt_config.get('key-algorithm', 'aes-128-cbc')
+        key_bytes = encrypt_config.get('key-bytes')
+        logging.info('Initializing file encryption (using [{}] algorithm)'.format(key_alg))
+
+        if key_bytes is not None:
+            key_bytes = bytes.fromhex(key_bytes)
+            enc_factory = get_encryptor_factory(key_alg, key_bytes)
+            dec_factory = get_decryptor_factory(key_alg, key_bytes)
+            encode_chunk = get_encrypted_chunk_encoder(enc_factory)
+            decode_chunk = get_encrypted_chunk_decoder(dec_factory)
+
+            def file_factory(cache_path, file_id=None, mode='r'):
+                return File(cache_path, file_id, mode, encode_chunk, decode_chunk)
+        else:
+            raise Exception('No encryption key!')
+
         logging.debug('Initializing cache')
         cache_config = self._config['cache']
-        cache = FileCache(cache_config)
+        cache = FileCache(cache_config, file_factory)
 
         if conn_pool_size > 0:
             logging.debug('Initializing database connection pool with {} connections'.format(conn_pool_size))

@@ -16,6 +16,10 @@ URL = 'http://{}:{}{{}}'.format(HOSTNAME, PORT)
 class TestLocalServer(unittest.TestCase):
     
     def setUp(self):
+        try:
+            shutil.rmtree('test_local_server')
+        except:
+            pass
         os.mkdir('test_local_server')
         config = {
             'logging': {
@@ -36,6 +40,10 @@ class TestLocalServer(unittest.TestCase):
                 'db-type': 'sqlite',
                 'sqlite-db-path': os.path.join('test_local_server', 'local_server.db'),
                 'connection-pool-size': '0'
+            },
+            'encryption': {
+                'key-algorithm': 'aes-128-cbc',
+                'key-bytes': '770A8A65DA156D24EE2A093277530142'
             }
         }
         config_logging(config['logging'])
