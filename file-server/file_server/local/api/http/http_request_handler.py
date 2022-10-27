@@ -65,7 +65,7 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
             logging.error('Invalid path: [{}]'.format(self.url_path))
             self.send_error_response(HTTPStatus.NOT_FOUND)
 
-    def wrap_socket(self):
+    def wrap_sockets(self):
         '''
             Wrap the read end of the connection so we can track how much of the
             body has been read so far.
@@ -225,7 +225,7 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
 
     def handle_login_user(self):
         logging.debug('Login request')
-        self.wrap_socket()
+        self.wrap_sockets()
         self.read_body()
         auth_header = self.headers.get(AUTHORIZATION_HEADER)
 
@@ -257,7 +257,7 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
     
     def handle_heartbeat_session(self):
         logging.debug('Heartbeat request')
-        self.wrap_socket()
+        self.wrap_sockets()
         self.read_body()
 
         session_id = self.get_session_id()
@@ -274,7 +274,7 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
     
     def handle_create_directory(self):
         logging.debug('Create directory request')
-        self.wrap_socket()
+        self.wrap_sockets()
         self.read_body()
 
         session_id = self.get_session_id()
@@ -307,7 +307,7 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
     
     def handle_list_directory(self):
         logging.debug('List directory request')
-        self.wrap_socket()
+        self.wrap_sockets()
         self.read_body()
         session_id = self.get_session_id()
         if session_id is None:
@@ -341,7 +341,7 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
     
     def handle_upload_file(self):
         logging.debug('Upload file')
-        self.wrap_socket()
+        self.wrap_sockets()
         session_id = self.get_session_id()
         if session_id is None:
             return
@@ -382,7 +382,7 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
     
     def handle_download_file(self):
         logging.debug('Download file')
-        self.wrap_socket()
+        self.wrap_sockets()
         session_id = self.get_session_id()
         if session_id is None:
             return
