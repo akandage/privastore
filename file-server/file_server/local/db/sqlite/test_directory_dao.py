@@ -1,7 +1,8 @@
 import os
 import unittest
 from ....error import DirectoryError, FileError
-from .setup import sqlite_conn_factory, setup_db
+from ....db.sqlite.conn_factory import sqlite_conn_factory
+from .setup import setup_db
 from .directory_dao import SqliteDirectoryDAO
 
 class TestSqliteDirectoryDAO(unittest.TestCase):

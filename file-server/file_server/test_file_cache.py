@@ -8,15 +8,18 @@ from .file import File
 from .file_cache import FileCache
 
 class TestFileCache(unittest.TestCase):
-    
-    def setUp(self):
-        pass
 
-    def tearDown(self):
+    def cleanup(self):
         try:
             shutil.rmtree(self.cache.cache_path())
         except:
             pass
+    
+    def setUp(self):
+        self.cleanup()
+
+    def tearDown(self):
+        self.cleanup()
     
     def test_write_file(self):
         cache_config = {

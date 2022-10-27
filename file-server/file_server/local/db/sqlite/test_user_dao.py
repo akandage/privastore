@@ -1,7 +1,8 @@
 import os
 import unittest
 from ....error import AuthenticationError
-from .setup import sqlite_conn_factory, setup_db
+from ....db.sqlite.conn_factory import sqlite_conn_factory
+from .setup import setup_db
 from .user_dao import SqliteUserDAO
 
 class TestSqliteUserDAO(unittest.TestCase):

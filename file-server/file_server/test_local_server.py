@@ -15,11 +15,14 @@ URL = 'http://{}:{}{{}}'.format(HOSTNAME, PORT)
 
 class TestLocalServer(unittest.TestCase):
     
-    def setUp(self):
+    def cleanup(self):
         try:
             shutil.rmtree('test_local_server')
         except:
             pass
+
+    def setUp(self):
+        self.cleanup()
         os.mkdir('test_local_server')
         config = {
             'logging': {
@@ -55,10 +58,7 @@ class TestLocalServer(unittest.TestCase):
     def tearDown(self):
         self.server.stop()
         self.server.join()
-        try:
-            shutil.rmtree('test_local_server')
-        except:
-            pass
+        self.cleanup()
 
     def send_request(self, url, headers={}, method=requests.get, data=None):
         r = method(url, headers=headers, data=data)

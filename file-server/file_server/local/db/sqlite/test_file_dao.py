@@ -2,7 +2,8 @@ import os
 import unittest
 import uuid
 from ....error import DirectoryError, FileError
-from .setup import sqlite_conn_factory, setup_db
+from ....db.sqlite.conn_factory import sqlite_conn_factory
+from .setup import setup_db
 from .directory_dao import SqliteDirectoryDAO
 from .file_dao import SqliteFileDAO
 from ...file_type import FileType

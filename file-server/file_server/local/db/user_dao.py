@@ -1,4 +1,4 @@
-from .dao import DataAccessObject
+from ...db.dao import DataAccessObject
 
 class UserDAO(DataAccessObject):
 

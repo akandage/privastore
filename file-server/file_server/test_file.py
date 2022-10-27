@@ -9,14 +9,18 @@ from .util.crypto import get_encryptor_factory, get_decryptor_factory
 
 class TestFile(unittest.TestCase):
     
-    def setUp(self):
-        os.mkdir('test_file')
-
-    def tearDown(self):
+    def cleanup(self):
         try:
             shutil.rmtree('test_file')
         except:
             pass
+
+    def setUp(self):
+        self.cleanup()
+        os.mkdir('test_file')
+
+    def tearDown(self):
+        self.cleanup()
     
     def test_write_file(self):
         chunk1 = random.randbytes(1024)

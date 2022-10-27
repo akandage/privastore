@@ -47,7 +47,7 @@ class LocalServer(Daemon):
         db_type = db_config.get('db-type', 'sqlite')
 
         if db_type == 'sqlite':
-            from .local.db.sqlite.setup import sqlite_conn_factory
+            from .db.sqlite.conn_factory import sqlite_conn_factory
             from .local.db.sqlite.dao_factory import SqliteDAOFactory
 
             db_path = db_config.get('sqlite-db-path', 'local_server.db')
