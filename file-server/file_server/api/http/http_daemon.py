@@ -1,10 +1,6 @@
 from http.server import ThreadingHTTPServer
 import logging
-from ....daemon import Daemon
-from .http_request_handler import HttpRequestHandler
-
-def http_request_handler_factory(controller):
-    return lambda request, client_address, server: HttpRequestHandler(request, client_address, server, controller)
+from ...daemon import Daemon
 
 class HttpDaemon(Daemon):
 
