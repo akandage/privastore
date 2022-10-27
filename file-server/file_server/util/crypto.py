@@ -13,8 +13,11 @@ def hash_user_password(password):
 
     return sha256(password)
 
-def sha256(b):
-    return hashlib.sha256(b).digest()
+def sha256(*args):
+    hash = hashlib.sha256()
+    for b in args:
+        hash.update(b)
+    return hash.digest()
 
 '''
     Decorator for encryptor to pad data (ex. for AES-CBC).
