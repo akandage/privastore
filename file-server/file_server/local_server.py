@@ -6,6 +6,7 @@ import signal
 from threading import Event, Thread
 
 from .local.controller import Controller
+from .db.db_conn_mgr import DbConnectionManager
 from .daemon import Daemon
 from .file import File
 from .file_cache import FileCache
@@ -56,13 +57,13 @@ class LocalServer(Daemon):
             logging.debug('Using SQLite database: [{}]'.format(db_path))
             conn_factory = sqlite_conn_factory(db_path)
             dao_factory = SqliteDAOFactory()
+            db_conn_mgr = DbConnectionManager(db_config, conn_factory)
         else:
             raise Exception('Unsupported database: {}'.format(db_type))
         
         logging.info('Starting PrivaStore local server ...')
         session_config = self._config['session']
         session_mgr = SessionManager(session_config)
-        conn_pool_size = int(db_config.get('connection-pool-size', '5'))
 
         encrypt_config = self._config['encryption']
         key_alg = encrypt_config.get('key-algorithm', 'aes-128-cbc')
@@ -85,13 +86,8 @@ class LocalServer(Daemon):
         cache_config = self._config['cache']
         cache = FileCache(cache_config, file_factory)
 
-        if conn_pool_size > 0:
-            logging.debug('Initializing database connection pool with {} connections'.format(conn_pool_size))
-            conn_pool = Pool(conn_factory, conn_pool_size)
-            logging.debug('Initialized database connection pool')
-            controller = Controller(cache, session_mgr, dao_factory, conn_pool=conn_pool)
-        else:
-            controller = Controller(cache, session_mgr, dao_factory, conn_factory=conn_factory)
+        logging.debug('Initializing controller')
+        controller = Controller(cache, dao_factory, db_conn_mgr, session_mgr)
 
         api_config = self._config['api']
         api_type = api_config.get('api-type', 'http')

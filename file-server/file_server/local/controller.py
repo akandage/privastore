@@ -12,33 +12,17 @@ class Controller(object):
         conn_pool - database connection pool
         sessions - session store
     '''
-    def __init__(self, cache, session_mgr, dao_factory, conn_factory=None, conn_pool=None):
+    def __init__(self, cache, dao_factory, db_conn_mgr, session_mgr):
         super().__init__()
         self._cache = cache
         self._chunk_size = cache.file_chunk_size()
-        self._conn_factory = conn_factory
-        self._conn_pool = conn_pool
-        self._session_mgr = session_mgr
         self._dao_factory = dao_factory
-    
-    def db_connect(self):
-        if self._conn_factory:
-            conn = self._conn_factory()
-        else:
-            conn = self._conn_pool.acquire(timeout=30)
-            if conn is None:
-                raise Exception('Database connection pool timeout')
-        return conn
-
-    def db_close(self, conn):
-        if self._conn_factory:
-            conn.close()
-        else:
-            self._conn_pool.release(conn)
-    
+        self._db_conn_mgr = db_conn_mgr
+        self._session_mgr = session_mgr
+        
     def login_user(self, username, password):
         logging.debug('User [{}] login attempt'.format(username))
-        conn = self.db_connect()
+        conn = self._db_conn_mgr.db_connect()
         try:
             logging.debug('Acquired database connection')
             user_dao = self._dao_factory.user_dao(conn)
@@ -47,25 +31,25 @@ class Controller(object):
             session_id = self._session_mgr.start_session(username)
             return session_id
         finally:
-            self.db_close(conn)
+            self._db_conn_mgr.db_close(conn)
     
     def heartbeat_session(self, session_id):
         self._session_mgr.renew_session(session_id)
 
     def create_directory(self, path, directory_name, is_hidden=False):
         logging.debug('Create directory [{}]'.format(str_path(path + [directory_name])))
-        conn = self.db_connect()
+        conn = self._db_conn_mgr.db_connect()
         try:
             logging.debug('Acquired database connection')
             dir_dao = self._dao_factory.directory_dao(conn)
             dir_dao.create_directory(path, directory_name, is_hidden)
             logging.debug('Created directory [{}]'.format(str_path(path + [directory_name])))
         finally:
-            self.db_close(conn)
+            self._db_conn_mgr.db_close(conn)
 
     def upload_file(self, path, file_name, file, file_size, file_version=1):
         logging.debug('Upload file [{}] version [{}] size [{}]'.format(str_path(path + [file_name]), file_version, file_size))
-        conn = self.db_connect()
+        conn = self._db_conn_mgr.db_connect()
         try:
             logging.debug('Acquired database connection')
 
@@ -139,11 +123,11 @@ class Controller(object):
 
             logging.debug('Uploaded file [{}]'.format(str_path(path + [file_name])))
         finally:
-            self.db_close(conn)
+            self._db_conn_mgr.db_close(conn)
 
     def download_file(self, path, file_name, file, file_version=None, timeout=None, api_callback=None):
         logging.debug('Download file [{}] version [{}] timeout [{}]'.format(str_path(path + [file_name]), file_version, timeout))
-        conn = self.db_connect()
+        conn = self._db_conn_mgr.db_connect()
         try:
             logging.debug('Acquired database connection')
 
@@ -196,11 +180,11 @@ class Controller(object):
             
             logging.debug('File data downloaded [{}]'.format(str_mem_size(bytes_transferred)))
         finally:
-            self.db_close(conn)
+            self._db_conn_mgr.db_close(conn)
 
     def list_directory(self, path, show_hidden=False):
         logging.debug('List directory [{}]'.format(str_path(path)))
-        conn = self.db_connect()
+        conn = self._db_conn_mgr.db_connect()
         try:
             logging.debug('Acquired database connection')
             dir_dao = self._dao_factory.directory_dao(conn)
@@ -208,4 +192,4 @@ class Controller(object):
             logging.debug('Listed directory [{}]'.format(str_path(path)))
             return dir_entries
         finally:
-            self.db_close(conn)
+            self._db_conn_mgr.db_close(conn)
