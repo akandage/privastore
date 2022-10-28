@@ -97,10 +97,10 @@ class LocalServer(Daemon):
 
         if api_type == 'http':
             from .api.http.http_daemon import HttpDaemon
-            from .local.api.http.http_request_handler import HttpRequestHandler
+            from .local.api.http.http_request_handler import HttpApiRequestHandler
 
             def http_request_handler_factory(request, client_address, server):
-                return HttpRequestHandler(request, client_address, server, controller)
+                return HttpApiRequestHandler(request, client_address, server, controller)
 
             api_daemon = HttpDaemon(api_config, http_request_handler_factory)
         else:

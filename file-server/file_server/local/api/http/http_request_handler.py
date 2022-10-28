@@ -1,11 +1,11 @@
 import base64
 from ....error import AuthenticationError, DirectoryError, FileError, SessionError
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler
+from ....api.http.http_request_handler import BaseHttpApiRequestHandler
+from ....api.http.http_request_handler import AUTHORIZATION_HEADER, CONNECTION_HEADER, CONNECTION_CLOSE, CONTENT_TYPE_HEADER, CONTENT_TYPE_JSON, CONTENT_LENGTH_HEADER
 import json
 import logging
 import urllib.parse
-from ....util.sock import SocketWrapper
 
 DIRECTORY_PATH = '/1/directory'
 DIRECTORY_PATH_LEN = len(DIRECTORY_PATH)
@@ -15,15 +15,9 @@ UPLOAD_PATH = '/1/upload'
 UPLOAD_PATH_LEN = len(UPLOAD_PATH)
 DOWNLOAD_PATH = '/1/download'
 DOWNLOAD_PATH_LEN = len(DOWNLOAD_PATH)
-AUTHORIZATION_HEADER = 'Authorization'
-CONNECTION_HEADER = 'Connection'
-CONNECTION_CLOSE = 'close'
-CONTENT_TYPE_HEADER = 'Content-Type'
-CONTENT_TYPE_JSON = 'application/json'
-CONTENT_LENGTH_HEADER = 'Content-Length'
 SESSION_ID_HEADER = 'x-privastore-session-id'
 
-class HttpRequestHandler(BaseHTTPRequestHandler):
+class HttpApiRequestHandler(BaseHttpApiRequestHandler):
 
     def __init__(self, request, client_address, server, controller):
         self._controller = controller
@@ -65,62 +59,6 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
             logging.error('Invalid path: [{}]'.format(self.url_path))
             self.send_error_response(HTTPStatus.NOT_FOUND)
 
-    def wrap_sockets(self):
-        '''
-            Wrap the read end of the connection so we can track how much of the
-            body has been read so far.
-
-        '''
-        self.rfile = SocketWrapper(self.rfile)
-
-    def read_body(self):
-        content_len = 0
-
-        try:
-            content_len = int(self.headers.get(CONTENT_LENGTH_HEADER))
-            logging.debug('Body length={}'.format(content_len))
-        except:
-            pass
-
-        # Try not to read past the end of the request body.
-        try:
-            bytes_read = self.rfile.bytes_read()
-            content_len = content_len - bytes_read
-            logging.debug('Already read={}'.format(bytes_read))
-        except:
-            pass
-
-        if content_len > 0:
-            try:
-                body_read = 0
-                while body_read < content_len:
-                    data = self.rfile.read(min(content_len - body_read, 4096))
-                    data_len = len(data)
-                    if data_len == 0:
-                        raise Exception('Unexpected EOF')
-                    body_read += data_len
-                    logging.debug('Read {} bytes'.format(body_read))
-            except Exception as e:
-                logging.warn('Could not read HTTP request body: {}'.format(str(e)))
-
-    def send_error_response(self, code, error_msg=''):
-        # May not have read the complete body if provided.
-        self.read_body()
-
-        if error_msg:
-            logging.error(error_msg)
-            body = '{{error:"{}"}}'.format(error_msg).encode('utf-8')
-        else:
-            body = b''
-
-        self.send_response(code)
-        self.send_header(CONTENT_LENGTH_HEADER, len(body))
-        self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
-        self.end_headers()
-        if body:
-            self.wfile.write(body)
-        # self.wfile.flush()
-
     def get_session_id(self):
         session_id = self.headers.get(SESSION_ID_HEADER)
 
@@ -146,23 +84,6 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
             self.handle_internal_error(e)
             return False
 
-    def parse_content_length(self):
-        content_len =  self.headers.get(CONTENT_LENGTH_HEADER)
-
-        if content_len is None:
-            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Missing {} header'.format(CONTENT_LENGTH_HEADER))
-            return
-
-        try:
-            content_len = int(content_len)
-            if content_len < 0:
-                raise Exception()
-        except:
-            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid {} header value'.format(CONTENT_LENGTH_HEADER))
-            return
-        
-        return content_len
-
     def parse_directory_path(self, path):
         if len(path) == 0:
             raise Exception('Path is empty')
@@ -175,29 +96,6 @@ class HttpRequestHandler(BaseHTTPRequestHandler):
                 raise Exception('Invalid path. One or more path components is empty')
             return list(map(urllib.parse.unquote, path))
         return []
-
-    def parse_path(self):
-        try:
-            url_parsed = urllib.parse.urlparse(self.path)
-
-            # Only use the path and query-string for APIs.
-            if url_parsed.fragment != '' or url_parsed.params != '':
-                raise Exception()
-            url_path = url_parsed.path
-            if url_path == '':
-                raise Exception()
-            url_query = url_parsed.query
-            if url_query != '':
-                url_query = urllib.parse.parse_qs(url_query)
-            else:
-                url_query = dict()
-
-            self.url_path = url_path
-            self.url_query = url_query
-            return True
-        except:
-            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid URL path')
-            return False
 
     def handle_directory_error(self, e):
         logging.error('Directory error: {}'.format(str(e)))
