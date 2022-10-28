@@ -53,7 +53,7 @@ class TestLocalServer(unittest.TestCase):
                 'session-cleanup-interval': '60'
             }
         }
-        config_logging(config['logging'])
+        config_logging(config['logging']['log-level'])
         self.server = LocalServer(config)
         self.server.setup_db()
         self.server.start()

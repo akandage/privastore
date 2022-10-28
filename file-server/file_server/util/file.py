@@ -1,3 +1,5 @@
+import configparser
+
 KILOBYTE = 1024
 MEGABYTE = 1024 * KILOBYTE
 GIGABYTE = 1024 * MEGABYTE
@@ -75,3 +77,8 @@ def str_path(path):
         return '/' + '/'.join(path)
     except:
         return '[invalid path]'
+
+def read_config(config_path):
+    config = configparser.ConfigParser()
+    config.read(config_path)
+    return config

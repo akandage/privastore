@@ -1,69 +1,50 @@
 import argparse
-import configparser
 import logging
 import os
 import signal
-from threading import Event, Thread
 
 from .local.controller import Controller
-from .db.db_conn_mgr import DbConnectionManager
-from .daemon import Daemon
 from .file import File
 from .file_cache import FileCache
 from .file_chunk import get_encrypted_chunk_encoder, get_encrypted_chunk_decoder
-from .pool import Pool
-from .session_mgr import SessionManager
+from .server import Server
 from .util.crypto import get_encryptor_factory, get_decryptor_factory
+from .util.file import read_config
+from .util.logging import config_logging
 
-def read_config(config_path):
-    config = configparser.ConfigParser()
-    config.read(config_path)
-    return config
-
-def config_logging(log_config):
-    log_level = log_config.get('log-level', 'INFO')
-    if log_level == 'CRITICAL':
-        log_level = logging.CRITICAL
-    elif log_level == 'ERROR':
-        log_level = logging.ERROR
-    elif log_level == 'WARN':
-        log_level = logging.WARN
-    elif log_level == 'INFO':
-        log_level = logging.INFO
-    elif log_level == 'DEBUG':
-        log_level = logging.DEBUG
-    
-    # TODO: Configurability of log message format.
-    logging.basicConfig(format='%(asctime)s - %(levelname)s - %(thread)d:%(funcName)s:%(filename)s:%(lineno)d - %(message)s', level=log_level)
-
-class LocalServer(Daemon):
+class LocalServer(Server):
 
     def __init__(self, config):
-        super().__init__('local_server')
-        self._config = config
-        self._stop = Event()
+        super().__init__('local_server', config)
+        self._controller = None
+    
+    def init_api(self):
+        api_type = self.api_config().get('api-type', 'http')
 
-    def run(self):
-        db_config = self._config['db']
-        db_type = db_config.get('db-type', 'sqlite')
+        if api_type == 'http':
+            logging.debug('Initializing HTTP API')
+            from .api.http.http_daemon import HttpDaemon
+            from .local.api.http.http_request_handler import HttpApiRequestHandler
 
-        if db_type == 'sqlite':
-            from .db.sqlite.conn_factory import sqlite_conn_factory
-            from .local.db.sqlite.dao_factory import SqliteDAOFactory
+            def http_request_handler_factory(request, client_address, server):
+                return HttpApiRequestHandler(request, client_address, server, self._controller)
 
-            db_path = db_config.get('sqlite-db-path', 'local_server.db')
-            if not os.path.exists(db_path):
-                raise Exception('SQLite database [{}] does not exist!'.format(db_path))
-            logging.debug('Using SQLite database: [{}]'.format(db_path))
-            conn_factory = sqlite_conn_factory(db_path)
-            dao_factory = SqliteDAOFactory()
-            db_conn_mgr = DbConnectionManager(db_config, conn_factory)
+            self._api_daemon = HttpDaemon(self.api_config(), http_request_handler_factory)
         else:
-            raise Exception('Unsupported database: {}'.format(db_type))
-        
+            raise Exception('Unsupported API type: {}'.format(api_type))
+
+    def init_db(self):
+        super().init_db()
+        db_type = db_type = self.db_config().get('db-type')
+        if db_type == 'sqlite':
+            from .local.db.sqlite.dao_factory import SqliteDAOFactory
+            self._dao_factory = SqliteDAOFactory()
+
+    def do_start(self):      
         logging.info('Starting PrivaStore local server ...')
-        session_config = self._config['session']
-        session_mgr = SessionManager(session_config)
+
+        self.init_db()
+        self.init_session()
 
         encrypt_config = self._config['encryption']
         key_alg = encrypt_config.get('key-algorithm', 'aes-128-cbc')
@@ -83,43 +64,27 @@ class LocalServer(Daemon):
             raise Exception('No encryption key!')
 
         logging.debug('Initializing cache')
-        cache_config = self._config['cache']
-        cache = FileCache(cache_config, file_factory)
+        cache_config = self.config('cache')
+        self._cache = FileCache(cache_config, file_factory)
 
         logging.debug('Initializing controller')
-        controller = Controller(cache, dao_factory, db_conn_mgr, session_mgr)
+        self._controller = Controller(self._cache, self._dao_factory, self._db_conn_mgr, self._session_mgr)
 
-        api_config = self._config['api']
-        api_type = api_config.get('api-type', 'http')
+        self.init_api()
 
-        if api_type == 'http':
-            from .api.http.http_daemon import HttpDaemon
-            from .local.api.http.http_request_handler import HttpApiRequestHandler
+        self._session_mgr.start()
+        self._session_mgr.wait_started()
+        self._api_daemon.start()
+        self._api_daemon.wait_started()
 
-            def http_request_handler_factory(request, client_address, server):
-                return HttpApiRequestHandler(request, client_address, server, controller)
-
-            api_daemon = HttpDaemon(api_config, http_request_handler_factory)
-        else:
-            raise Exception('Unsupported API type: {}'.format(api_type))
-
-        session_mgr.start()
-        session_mgr.wait_started()
-        api_daemon.start()
-        api_daemon.wait_started()
-        self._started.set()
-        logging.info('Server started')
-        self._stop.wait()
-        logging.info('Server stopping')
-        api_daemon.stop()
-        api_daemon.join()
-        session_mgr.stop()
-        session_mgr.join()
-        self._stopped.set()
-        logging.info('Server stopped')
+    def do_stop(self):
+        self._api_daemon.stop()
+        self._api_daemon.join()
+        self._session_mgr.stop()
+        self._session_mgr.join()
 
     def setup_db(self):
-        db_config = self._config['db']
+        db_config = self.db_config()
         db_type = db_config.get('db-type', 'sqlite')
 
         if db_type == 'sqlite':
@@ -131,12 +96,6 @@ class LocalServer(Daemon):
             return
         else:
             raise Exception('Unsupported database: {}'.format(db_type))
-
-    def stop(self):
-        if self._stop.is_set():
-            return
-        self._stop.set()
-        logging.debug('Server stop requested')
 
 def server_main():
     argparser = argparse.ArgumentParser()
@@ -151,7 +110,8 @@ def server_main():
         # TODO: Setup defaults here.
         raise Exception('config.ini not found!')
 
-    config_logging(server_config['logging'])
+    log_config = server_config['logging']
+    config_logging(log_config.get('log-level', 'INFO'))
     if args.setup_db:
         server.setup_db()
         return

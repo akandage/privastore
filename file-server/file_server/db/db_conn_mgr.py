@@ -14,6 +14,11 @@ class DbConnectionManager(object):
         else:
             self._conn_pool = None
         
+    def conn_factory(self):
+        return self._conn_factory
+    
+    def conn_pool(self):
+        return self._conn_pool
 
     def db_connect(self):
         if self._conn_pool:
