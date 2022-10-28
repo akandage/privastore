@@ -4,8 +4,8 @@ from ...daemon import Daemon
 
 class HttpDaemon(Daemon):
 
-    def __init__(self, http_config, request_handler):
-        super().__init__('http-api')
+    def __init__(self, http_config, request_handler, daemon=True):
+        super().__init__('http-api', daemon)
 
         self._hostname = hostname = http_config.get('api-hostname', 'localhost')
         self._port = port = int(http_config.get('api-port', 8080))

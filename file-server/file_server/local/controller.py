@@ -12,13 +12,13 @@ class Controller(object):
         conn_pool - database connection pool
         sessions - session store
     '''
-    def __init__(self, cache, sessions, dao_factory, conn_factory=None, conn_pool=None):
+    def __init__(self, cache, session_mgr, dao_factory, conn_factory=None, conn_pool=None):
         super().__init__()
         self._cache = cache
         self._chunk_size = cache.file_chunk_size()
         self._conn_factory = conn_factory
         self._conn_pool = conn_pool
-        self._sessions = sessions
+        self._session_mgr = session_mgr
         self._dao_factory = dao_factory
     
     def db_connect(self):
@@ -44,13 +44,13 @@ class Controller(object):
             user_dao = self._dao_factory.user_dao(conn)
             user_dao.login_user(username, password)
             logging.debug('User [{}] logged in successfully'.format(username))
-            session_id = self._sessions.start_session(username)
+            session_id = self._session_mgr.start_session(username)
             return session_id
         finally:
             self.db_close(conn)
     
     def heartbeat_session(self, session_id):
-        self._sessions.renew_session(session_id)
+        self._session_mgr.renew_session(session_id)
 
     def create_directory(self, path, directory_name, is_hidden=False):
         logging.debug('Create directory [{}]'.format(str_path(path + [directory_name])))
