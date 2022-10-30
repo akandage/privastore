@@ -46,7 +46,7 @@ class LocalServer(Server):
         self.init_db()
         self.init_session()
 
-        encrypt_config = self._config['encryption']
+        encrypt_config = self.config('encryption')
         key_alg = encrypt_config.get('key-algorithm', 'aes-128-cbc')
         key_bytes = encrypt_config.get('key-bytes')
         logging.info('Initializing file encryption (using [{}] algorithm)'.format(key_alg))
@@ -55,20 +55,19 @@ class LocalServer(Server):
             key_bytes = bytes.fromhex(key_bytes)
             enc_factory = get_encryptor_factory(key_alg, key_bytes)
             dec_factory = get_decryptor_factory(key_alg, key_bytes)
-            encode_chunk = get_encrypted_chunk_encoder(enc_factory)
-            decode_chunk = get_encrypted_chunk_decoder(dec_factory)
-
-            def file_factory(cache_path, file_id=None, mode='r'):
-                return File(cache_path, file_id, mode, encode_chunk, decode_chunk)
+            encrypt_chunk = get_encrypted_chunk_encoder(enc_factory)
+            decrypt_chunk = get_encrypted_chunk_decoder(dec_factory)
         else:
             raise Exception('No encryption key!')
 
         logging.debug('Initializing cache')
         cache_config = self.config('cache')
-        self._cache = FileCache(cache_config, file_factory)
+        self._cache = FileCache(cache_config)
 
         logging.debug('Initializing controller')
-        self._controller = Controller(self._cache, self._dao_factory, self._db_conn_mgr, self._session_mgr)
+        self._controller = Controller(self._cache, self._dao_factory, 
+            self._db_conn_mgr, self._session_mgr, encode_chunk=encrypt_chunk,
+            decode_chunk=decrypt_chunk)
 
         self.init_api()
 

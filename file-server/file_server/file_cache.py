@@ -1,51 +1,148 @@
-from .error import FileCacheError, FileError
+from .error import FileCacheError
 from .file import File
+from .file_chunk import default_chunk_encoder, default_chunk_decoder
 from .util.file import parse_mem_size, str_mem_size
 import logging
 import os
 import shutil
-from threading import Event, RLock
-
-READY = 'ready'
-READABLE_FLAG = 'readable'
-WRITABLE_FLAG = 'writable'
-REMOVABLE_FLAG = 'removable'
-FILE_PATH = 'file_path'
-FILE_NAME = 'file_name'
-FILE_SIZE = 'file_size'
-FILE_VERSION = 'file_version'
-
-def default_file_factory(cache_path, file_id=None, mode='r'):
-    return File(cache_path, file_id=file_id, mode=mode)
+from threading import Condition, Lock, RLock
+import time
 
 class FileCache(object):
 
+    class CacheFileReader(File):
+
+        def __init__(self, cache_path, file_id, node, encode_chunk=default_chunk_encoder, decode_chunk=default_chunk_decoder, read_timeout=90):
+            super().__init__(cache_path, file_id, mode='r', encode_chunk=encode_chunk, decode_chunk=decode_chunk, skip_metadata=True)
+            self._node = node
+            self._read_timeout = read_timeout
+
+            with self._node.lock:
+                self._node.num_readers += 1
+
+        def file_size(self):
+            #
+            # This object is essentially a stream. Cannot be relied upon as we
+            # are not updating this field in the reader object.
+            #
+            raise Exception('Not implemented!')
+        
+        def size_on_disk(self):
+            #
+            # This object is essentially a stream. Cannot be relied upon as we
+            # are not updating this field in the reader object.
+            #
+            raise Exception('Not implemented!')
+
+        def read_chunk(self):
+            start_t = time.time()
+            end_t = start_t + self._read_timeout
+
+            while True:
+                now = time.time()
+                if now >= end_t:
+                    raise FileCacheError('Timed out reading file [{}]!'.format(self.file_id()))
+                with self._node.lock:
+                    if self._node.error:
+                        raise FileCacheError('File [{}] could not be read!'.format(self.file_id()))
+
+                    self._total_chunks = self._node.file_chunks
+
+                    if self._node.num_writers == 0:
+                        # Write end of the file closed.
+                        break
+                    if self._chunks_read < self._total_chunks:
+                        # We have chunks to read.
+                        break
+
+                    timeout = end_t - now
+                    self._node.reader_cv.wait(timeout=timeout)
+
+            return super().read_chunk()
+        
+        def close(self):
+            if not self.closed():
+                with self._node.lock:
+                    if self._node.num_readers <= 0:
+                        raise FileCacheError('Invalid file [{}] state!'.format(self.file_id()))
+                    self._node.num_readers -= 1
+                
+                super().close()
+
+    class CacheFileWriter(File):
+
+        def __init__(self, cache_path, file_id, node, encode_chunk=default_chunk_encoder, decode_chunk=default_chunk_decoder,):
+            super().__init__(cache_path, file_id, mode='w', encode_chunk=encode_chunk, decode_chunk=decode_chunk)
+            self._node = node
+
+            with self._node.lock:
+                if self._node.num_writers != 0:
+                    raise Exception('File [{}] already has writer!'.format(self.file_id()))
+                self._node.num_writers = 1
+
+        def write(self, data):
+            lock = self._node.lock
+            try:
+                prev_chunks = self.total_chunks()
+                written = super().write(data)
+                with lock:
+                    self._node.file_chunks += self.total_chunks() - prev_chunks
+                    self._node.reader_cv.notify_all()
+                return written
+            except Exception as e:
+                with lock:
+                    self._node.error = True
+                    self._node.reader_cv.notify_all()
+                raise e
+
+        def append_chunk(self, chunk_bytes):
+            lock = self._node.lock
+            try:
+                super().append_chunk(chunk_bytes)
+                with lock:
+                    self._node.file_chunks += 1
+                    self._node.reader_cv.notify_all()
+            except Exception as e:
+                with lock:
+                    self._node.error = True
+                    self._node.reader_cv.notify_all()
+                raise e
+
+        def close(self):
+            lock = self._node.lock
+            try:
+                super().close()
+                with lock:
+                    if self._node.num_writers != 1:
+                        raise FileCacheError('Invalid file [{}] state!'.format(self.file_id()))
+                    self._node.num_writers = 0
+                    self._node.reader_cv.notify_all()
+            except Exception as e:
+                with lock:
+                    self._node.error = True
+                    self._node.reader_cv.notify_all()
+                raise e
+
     class IndexNode(object):
 
-        def __init__(self, file_id, file_size):
+        def __init__(self, file_id, file_size, file_chunks):
             self._file_id = file_id
+            # Size of the file on disk. Used for cache space management.
             self.file_size = file_size
+            # Number of file chunks *currently* available to read.
+            self.file_chunks = file_chunks
             self.num_readers = 0
             self.num_writers = 0
+            self.error = False
             self.removable = False
             self._prev = None
             self._next = None
-            self._ready = Event()
+            self.lock = Lock()
+            # Used to signal readers that the file has changed.
+            self.reader_cv = Condition(self.lock)
         
         def file_id(self):
             return self._file_id
-        
-        def set_ready(self):
-            self._ready.set()
-
-        def clear_ready(self):
-            self._ready.clear()
-
-        def wait_ready(self, timeout=None):
-            return self._ready.wait(timeout)
-        
-        def __str__(self):
-            return 'FileCache.IndexNode({{file_id={}, file_size={}, num_readers={}, num_writers={}}})'.format(self.file_id(), self.file_size, self.num_readers, self.num_writers)
 
     class Index(object):
 
@@ -64,9 +161,15 @@ class FileCache(object):
             return len(self._files)
 
         def has_node(self, file_id):
+            if file_id is None or not File.is_valid_file_id(file_id):
+                raise FileCacheError('Invalid file id!')
+
             return file_id in self._files
 
         def get_node(self, file_id):
+            if file_id is None or not File.is_valid_file_id(file_id):
+                raise FileCacheError('Invalid file id!')
+
             return self._files.get(file_id)
 
         def add_node(self, node):
@@ -112,8 +215,7 @@ class FileCache(object):
             self.add_node(node)
 
 
-    def __init__(self, cache_config, file_factory=default_file_factory):
-        self._file_factory = file_factory
+    def __init__(self, cache_config):
         self._cache_path = cache_config.get('cache-path', './cache')
         self._cache_used = 0
         self._cache_size = parse_mem_size(cache_config.get('cache-size', '1GB'))
@@ -130,7 +232,7 @@ class FileCache(object):
             for file_id in os.listdir(self._cache_path):
                 try:
                     f = File(self._cache_path, file_id, mode='r')
-                    node = self.create_cache_entry(file_id, f.size_on_disk())
+                    node = self.create_cache_entry(file_id, f.size_on_disk(), f.total_chunks())
                     node.removable = True
                     f.close()
                 except Exception as e:
@@ -169,12 +271,12 @@ class FileCache(object):
         with self._index_lock:
             return self._index.has_node(file_id)
 
-    def create_cache_entry(self, file_id, file_size):
+    def create_cache_entry(self, file_id, file_size, file_chunks=0):
         with self._index_lock:
             if self._index.has_node(file_id):
                 raise FileCacheError('File [{}] already exists in cache'.format(file_id))
             self.ensure_cache_space(file_size)
-            node = FileCache.IndexNode(file_id, file_size)
+            node = FileCache.IndexNode(file_id, file_size, file_chunks)
             self._index.add_node(node)
             self._cache_used += file_size
             return node
@@ -182,110 +284,48 @@ class FileCache(object):
     '''
         Open file in cache for reading.
         While file is opened, it will be locked preventing its removal from the cache.
-        Allow multipled readers and single writer.
+        Allow multipledreaders and single writer.
 
-        If file is found (cache hit) return the index entry - the readable
-        flag will indicate whether the file can be read from.
-        Otherwise, the file is not found (cache miss) and None is returned.
-        If a timeout (in seconds) is specified, the read will be blocking.
- 
+        If file is not found, return None.
+        Otherwise, return a file like object for reading.
     '''
-    def read_file(self, file_id, timeout=None):
-        self._index_lock.acquire()
-        try:
+    def read_file(self, file_id, encode_chunk=default_chunk_encoder, decode_chunk=default_chunk_decoder):
+        with self._index_lock:
             if self._index.has_node(file_id):
                 node = self._index.get_node(file_id)
-                if timeout is not None:
-                    #
-                    # Release the lock and then wait for the file to
-                    # be ready to read. Once the flag is set or we timeout
-                    # reacquire the lock and check the index entry again.
-                    #
-                    self._index_lock.release()
-                    if not node.wait_ready(timeout):
-                        logging.debug('Timed out waiting to read file [{}]'.format(file_id))
-                        return
-                    self._index_lock.acquire()
-                    if not self._index.has_node(file_id):
-                        #
-                        # File was removed while we waited, cache miss.
-                        #
-                        return
-
-                node = self._index.get_node(file_id)
-                if node.num_writers != 0:
-                    raise FileCacheError('File [{}] is being written')
 
                 #
                 # Disallow removing the file from the cache while it is being
                 # read.
                 #
                 node.removable = False
-                node.num_readers += 1
                 #
                 # This is now the MRU (most recently used) file.
                 #
                 self._index.move_to_back(file_id)
-                return self._file_factory(self._cache_path, file_id, mode='r')
-        finally:
-            try:
-                self._index_lock.release()
-            except Exception as e:
-                logging.warn('Error releasing cache index lock: {}'.format(str(e)))
 
+                return FileCache.CacheFileReader(self._cache_path, file_id, node, encode_chunk=encode_chunk, decode_chunk=decode_chunk)
 
     '''
-        Open file in cache for writing or appending.
+        Open file in cache for writing.
         While file is opened, it will be locked preventing its removal from the cache.
-        Allow multipled readers and single writer.
+        Allow multiple readers and single writer.
 
-        New file is opened for writing in the cache and returned. The file
-        must be closed in order for it be accessed by readers.
+        Return a file like object for writing.
     '''
-    def open_file(self, file_id=None, file_size=0, mode='w'):
-        if mode == 'w':
-            if file_id is not None:
-                if File.is_valid_file_id(file_id):
-                    node = self.create_cache_entry(file_id, file_size)
-                    file = self._file_factory(self._cache_path, file_id=file_id, mode=mode)
-                else:
-                    raise FileCacheError('Invalid file id')
-            else:
-                file = self._file_factory(self._cache_path, file_id=file_id, mode=mode)
-                node = self.create_cache_entry(file.file_id(), file_size)
-            node.num_writers += 1
-            return file
-        elif mode == 'a':
-            if file_id is not None:
-                if File.is_valid_file_id(file_id):
-                    with self._index_lock:
-                        if self._index.has_node(file_id):
-                            node = self._index.get_node(file_id)
-                            if node.num_readers != 0:
-                                raise FileCacheError('File [{}] is being read'.format(file_id))
-                            if node.num_writers != 0:
-                                raise FileCacheError('File [{}] is being written'.format(file_id))
+    def write_file(self, file_id=None, file_size=0, encode_chunk=default_chunk_encoder, decode_chunk=default_chunk_decoder):
+        with self._index_lock:
+            if file_id is None:
+                file_id = File.generate_file_id()
 
-                            #
-                            # Disallow removing the file from the cache while it is being
-                            # written.
-                            #
-                            node.removable = False
-                            node.num_writers += 1
-                            node.clear_ready()
-                            #
-                            # This is now the MRU (most recently used) file.
-                            #
-                            self._index.move_to_back(file_id)
-                            return self._file_factory(self._cache_path, file_id, mode)
-                        else:
-                            raise FileCacheError('File [{}] not found in cache'.format(file_id))
-                else:
-                    raise FileCacheError('Invalid file id')
-            else:
-                raise FileCacheError('No file id specified')
-        else:
-            raise FileCacheError('Invalid mode')
+            node = self.create_cache_entry(file_id, file_size)
+            #
+            # Disallow removing the file from the cache while it is being
+            # written to.
+            #
+            node.removable = False
+
+            return FileCache.CacheFileWriter(self._cache_path, file_id, node, encode_chunk=encode_chunk, decode_chunk=decode_chunk)
 
     '''
         Close file in cache.
@@ -300,28 +340,19 @@ class FileCache(object):
             mode = file.mode()
             if self._index.has_node(file_id):
                 node = self._index.get_node(file_id)
-                if mode == 'r':
-                    node.num_readers -= 1
-                    if node.num_readers == 0:
+                with node.lock:
+                    if mode == 'w':
+                        prev_size = node.file_size
+                        curr_size = file.size_on_disk()
+                        node.file_size = curr_size
+                        if curr_size >= prev_size:
+                            self._cache_used += curr_size-prev_size
+                        else:
+                            self._cache_used -= prev_size-curr_size
+                        if self._cache_used > self._cache_size:
+                            raise FileCacheError('File cache is full!')
+                    if node.num_readers == 0 and node.num_writers == 0:
                         node.removable = removable
-                    elif node.num_readers < 0:
-                        raise FileCacheError('Invalid state')
-                elif mode == 'w' or mode == 'a':
-                    node.num_writers -= 1
-                    if node.num_writers == 0:
-                        node.removable = removable
-                    elif node.num_writers < 0:
-                        raise FileCacheError('Invalid state')
-                    prev_size = node.file_size
-                    curr_size = file.size_on_disk()
-                    node.file_size = curr_size
-                    if curr_size >= prev_size:
-                        self._cache_used += curr_size-prev_size
-                    else:
-                        self._cache_used -= prev_size-curr_size
-                    if self._cache_used > self._cache_size:
-                        raise FileCacheError('File cache is full!')
-                    node.set_ready()
             else:
                 raise FileCacheError('File [{}] not found in cache'.format(file_id))
 

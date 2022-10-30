@@ -27,8 +27,8 @@ class TestFileCache(unittest.TestCase):
         }
         self.cache = FileCache(cache_config)
 
-        f1 = self.cache.open_file(mode='w')
-        f2 = self.cache.open_file(mode='w')
+        f1 = self.cache.write_file()
+        f2 = self.cache.write_file()
 
         self.assertNotEqual(f1.file_id(), f2.file_id())
         chunk1 = random.randbytes(100)
@@ -56,9 +56,9 @@ class TestFileCache(unittest.TestCase):
         self.cache.close_file(f4)
 
         f5_id = File.generate_file_id()
-        f5 = self.cache.open_file(file_id=f5_id, mode='w')
+        f5 = self.cache.write_file(file_id=f5_id)
         try:
-            self.cache.open_file(file_id=f5_id, mode='w')
+            self.cache.write_file(file_id=f5_id)
             self.fail('Expected file already exists in cache error')
         except FileCacheError as e:
             self.assertEqual('File [{}] already exists in cache'.format(f5_id), str(e))
@@ -70,26 +70,29 @@ class TestFileCache(unittest.TestCase):
         }
         self.cache = FileCache(cache_config)
 
-        f1 = self.cache.open_file(mode='w')
-        self.cache.close_file(f1, removable=False)
+        #
+        # Append no longer supported.
+        #
+        # f1 = self.cache.open_file(mode='w')
+        # self.cache.close_file(f1, removable=False)
 
-        self.assertEqual(f1.file_size(), 0)
-        self.assertEqual(f1.size_on_disk(), 0)
+        # self.assertEqual(f1.file_size(), 0)
+        # self.assertEqual(f1.size_on_disk(), 0)
 
-        f2 = self.cache.open_file(file_id=f1.file_id(), mode='a')
-        self.assertTrue(f2 is not None)
-        chunk1 = random.randbytes(100)
-        chunk2 = random.randbytes(50)
-        f2.append_chunk(chunk1)
-        f2.append_chunk(chunk2)
-        self.cache.close_file(f2)
+        # f2 = self.cache.open_file(file_id=f1.file_id(), mode='a')
+        # self.assertTrue(f2 is not None)
+        # chunk1 = random.randbytes(100)
+        # chunk2 = random.randbytes(50)
+        # f2.append_chunk(chunk1)
+        # f2.append_chunk(chunk2)
+        # self.cache.close_file(f2)
 
-        f3 = self.cache.read_file(f1.file_id())
-        self.assertTrue(f3 is not None)
-        self.assertEqual(f3.read_chunk(), chunk1)
-        self.assertEqual(f3.read_chunk(), chunk2)
-        self.assertTrue(f3.read_chunk() is None)
-        self.cache.close_file(f3)
+        # f3 = self.cache.read_file(f1.file_id())
+        # self.assertTrue(f3 is not None)
+        # self.assertEqual(f3.read_chunk(), chunk1)
+        # self.assertEqual(f3.read_chunk(), chunk2)
+        # self.assertTrue(f3.read_chunk() is None)
+        # self.cache.close_file(f3)
     
     def test_remove_file(self):
         cache_config = {
@@ -97,8 +100,8 @@ class TestFileCache(unittest.TestCase):
         }
         self.cache = FileCache(cache_config)
 
-        f1 = self.cache.open_file(mode='w')
-        f2 = self.cache.open_file(mode='w')
+        f1 = self.cache.write_file()
+        f2 = self.cache.write_file()
 
         chunk1 = random.randbytes(100)
         chunk2 = random.randbytes(50)
@@ -135,16 +138,16 @@ class TestFileCache(unittest.TestCase):
         self.cache = FileCache(cache_config)
 
         chunk = random.randbytes(1024)
-        f1 = self.cache.open_file(file_size=1024, mode='w')
+        f1 = self.cache.write_file(file_size=1024)
         f1.append_chunk(chunk)
         self.cache.close_file(f1)
-        f2 = self.cache.open_file(file_size=1024, mode='w')
+        f2 = self.cache.write_file(file_size=1024)
         f2.append_chunk(chunk)
         self.cache.close_file(f2)
-        f3 = self.cache.open_file(file_size=1024, mode='w')
+        f3 = self.cache.write_file(file_size=1024)
         f3.append_chunk(chunk)
         self.cache.close_file(f3)
-        f4 = self.cache.open_file(file_size=1024, mode='w')
+        f4 = self.cache.write_file(file_size=1024)
         f4.append_chunk(chunk)
         self.cache.close_file(f4, removable=False)
         self.assertEqual(self.cache.cache_used(), 4096)
@@ -155,7 +158,7 @@ class TestFileCache(unittest.TestCase):
         self.assertTrue(self.cache.has_file(f4.file_id()))
 
         try:
-            self.cache.open_file(file_size=4096, mode='w')
+            self.cache.write_file(file_size=4096)
             self.fail('Expected insufficient space in cache error')
         except FileCacheError as e:
             self.assertEqual('Insufficient space in cache', str(e))
@@ -171,7 +174,7 @@ class TestFileCache(unittest.TestCase):
         self.cache.close_file(f)
 
         # File access order (LRU -> MRU) F2 -> F4 -> F3 -> F1
-        f = self.cache.open_file(file_size=2048, mode='w')
+        f = self.cache.write_file(file_size=2048)
         f.append_chunk(chunk)
         f.append_chunk(chunk)
         self.cache.close_file(f)

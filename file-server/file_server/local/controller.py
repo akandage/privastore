@@ -9,16 +9,21 @@ class Controller(object):
         Local file server controller.
 
         cache - file cache
-        conn_pool - database connection pool
-        sessions - session store
+        dao_factory - DAO factory
+        db_conn_mgr - database connection manager
+        session_mgr - session store
+        encode_chunk - file chunk encoder
+        decode_chunk - file chunk decoder
     '''
-    def __init__(self, cache, dao_factory, db_conn_mgr, session_mgr):
+    def __init__(self, cache, dao_factory, db_conn_mgr, session_mgr, encode_chunk, decode_chunk):
         super().__init__()
         self._cache = cache
         self._chunk_size = cache.file_chunk_size()
         self._dao_factory = dao_factory
         self._db_conn_mgr = db_conn_mgr
         self._session_mgr = session_mgr
+        self._encode_chunk = encode_chunk
+        self._decode_chunk = decode_chunk
         
     def login_user(self, username, password):
         logging.debug('User [{}] login attempt'.format(username))
@@ -75,7 +80,7 @@ class Controller(object):
                 # or evicted from the cache until it has been synced to the remote
                 # server.
                 #
-                upload_file = self._cache.open_file(file_size=file_size, mode='w')
+                upload_file = self._cache.write_file(file_size=file_size, encode_chunk=self._encode_chunk, decode_chunk=self._decode_chunk)
                 logging.debug('Opened file for writing in cache [{}]'.format(upload_file.file_id()))
 
                 #
@@ -144,18 +149,11 @@ class Controller(object):
             elif transfer_status == FileTransferStatus.RECEIVING_FAILED:
                 raise FileDownloadError('File upload failed!')
             
-            if api_callback is not None:
-                #
-                # Notify the API of the file-type, file-size etc. in case it
-                # needs to send headers before we transfer the actual file.
-                #
-                api_callback(file_id, file_type, file_size)
-            
             #
             # First, try reading the file from the cache if it is already
             # present there.
             #
-            download_file = self._cache.read_file(file_id)
+            download_file = self._cache.read_file(file_id, encode_chunk=self._encode_chunk, decode_chunk=self._decode_chunk)
 
             if download_file is None:
                 #
@@ -169,6 +167,13 @@ class Controller(object):
             logging.debug('Opened file [{}] for reading in cache'.format(download_file.file_id()))
 
             try:
+                if api_callback is not None:
+                    #
+                    # Notify the API of the file-type, file-size etc. in case it
+                    # needs to send headers before we transfer the actual file.
+                    #
+                    api_callback(file_id, file_type, file_size)
+
                 bytes_transferred = chunked_copy(download_file, file, file_size, self._chunk_size)
                 if bytes_transferred < file_size:
                     raise FileDownloadError('Could not download all file data! [{}/{}]'.format(str_mem_size(bytes_transferred), str_mem_size(file_size)))

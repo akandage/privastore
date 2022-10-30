@@ -1,4 +1,3 @@
-import logging
 import os
 import shutil
 import uuid
@@ -10,7 +9,7 @@ METADATA_FILE = '.metadata'
 
 class File(object):
 
-    def __init__(self, path, file_id=None, mode='r', encode_chunk=default_chunk_encoder, decode_chunk=default_chunk_decoder):
+    def __init__(self, path, file_id=None, mode='r', encode_chunk=default_chunk_encoder, decode_chunk=default_chunk_decoder, skip_metadata=False):
         self._file_id = file_id or self.generate_file_id()
         self._file_path = os.path.join(path, self._file_id)
         self._mode = mode
@@ -24,27 +23,28 @@ class File(object):
         self._decode_chunk = decode_chunk
 
         if mode == 'r' or mode == 'a':
-            metadata_file_path = self.metadata_file_path()
-            if not os.path.exists(metadata_file_path):
-                raise FileError('Metadata file not found')
-            with open(metadata_file_path, 'rb') as metadata_file:
-                checksum = metadata_file.read(32)
-                if len(checksum) < 32:
-                    raise FileError('Metadata file invalid checksum')
-                total_chunks = metadata_file.read(4)
-                if len(total_chunks) < 4:
-                    raise FileError('Metadata file invalid total chunks')
-                file_size = metadata_file.read(4)
-                if len(file_size) < 4:
-                    raise FileError('Metadata file invalid file size')
-                size_on_disk = metadata_file.read(4)
-                if len(size_on_disk) < 4:
-                    raise FileError('Metadata file invalid file size on disk')
-                if sha256(total_chunks + file_size + size_on_disk) != checksum:
-                    raise FileError('Metadata file checksum mismatch')
-                self._total_chunks = int.from_bytes(total_chunks, 'big', signed=False)
-                self._file_size = int.from_bytes(file_size, 'big', signed=False)
-                self._size_on_disk = int.from_bytes(size_on_disk, 'big', signed=False)
+            if not skip_metadata:
+                metadata_file_path = self.metadata_file_path()
+                if not os.path.exists(metadata_file_path):
+                    raise FileError('Metadata file not found')
+                with open(metadata_file_path, 'rb') as metadata_file:
+                    checksum = metadata_file.read(32)
+                    if len(checksum) < 32:
+                        raise FileError('Metadata file invalid checksum')
+                    total_chunks = metadata_file.read(4)
+                    if len(total_chunks) < 4:
+                        raise FileError('Metadata file invalid total chunks')
+                    file_size = metadata_file.read(4)
+                    if len(file_size) < 4:
+                        raise FileError('Metadata file invalid file size')
+                    size_on_disk = metadata_file.read(4)
+                    if len(size_on_disk) < 4:
+                        raise FileError('Metadata file invalid file size on disk')
+                    if sha256(total_chunks + file_size + size_on_disk) != checksum:
+                        raise FileError('Metadata file checksum mismatch')
+                    self._total_chunks = int.from_bytes(total_chunks, 'big', signed=False)
+                    self._file_size = int.from_bytes(file_size, 'big', signed=False)
+                    self._size_on_disk = int.from_bytes(size_on_disk, 'big', signed=False)
         elif mode == 'w':
             os.mkdir(self._file_path)
         else:
@@ -73,6 +73,12 @@ class File(object):
     def mode(self):
         return self._mode
 
+    def chunks_read(self):
+        return self._chunks_read
+    
+    def chunks_written(self):
+        return self._chunks_written
+
     def total_chunks(self):
         return self._total_chunks
 
@@ -85,6 +91,9 @@ class File(object):
     def closed(self):
         return self._closed
 
+    def set_closed(self):
+        self._closed = True
+
     def write(self, data):
         '''
             Implement this so it behaves like file-like object.
@@ -93,7 +102,7 @@ class File(object):
         return len(data)
 
     def append_chunk(self, chunk_bytes):
-        if self._closed:
+        if self.closed():
             raise FileError('File closed')
         if self._mode != 'w' and self._mode != 'a':
             raise FileError('File not opened for writing')
@@ -116,7 +125,7 @@ class File(object):
         return chunk
 
     def read_chunk(self):
-        if self._closed:
+        if self.closed():
             raise FileError('File closed')
         if self._mode != 'r':
             raise FileError('File not opened for reading')
@@ -139,7 +148,7 @@ class File(object):
         return
 
     def close(self):
-        if not self._closed and (self._mode == 'w' or self._mode == 'a'):
+        if not self.closed() and (self._mode == 'w' or self._mode == 'a'):
             metadata_file_path = self.metadata_file_path()
             total_chunks = self._total_chunks.to_bytes(4, 'big', signed=False)
             file_size = self._file_size.to_bytes(4, 'big', signed=False)
@@ -151,4 +160,4 @@ class File(object):
                 metadata_file.write(file_size)
                 metadata_file.write(size_on_disk)
                 metadata_file.flush()
-        self._closed = True
+        self.set_closed()
