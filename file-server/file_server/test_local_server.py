@@ -24,7 +24,7 @@ class TestLocalServer(unittest.TestCase):
     def setUp(self):
         self.cleanup()
         os.mkdir('test_local_server')
-        config = {
+        self.config = config = {
             'logging': {
               'log-level': 'DEBUG'  
             },
@@ -63,6 +63,13 @@ class TestLocalServer(unittest.TestCase):
         self.server.stop()
         self.server.join()
         self.cleanup()
+
+    def restart_server(self):
+        self.server.stop()
+        self.server.join()
+        self.server = LocalServer(self.config)
+        self.server.start()
+        self.server.wait_started()
 
     def send_request(self, url, headers={}, method=requests.get, data=None):
         r = method(url, headers=headers, data=data)
@@ -210,6 +217,43 @@ class TestLocalServer(unittest.TestCase):
         self.assertEqual(r.status_code, HTTPStatus.OK)
         r = self.send_request(URL.format('/1/upload/dir_1/dir_1a/file_3'), data=large_file, headers=req_headers, method=requests.post)
         self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = self.send_request(URL.format('/1/download/file_2'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        self.assertEqual(r.content, chunk_file)
+        r = self.send_request(URL.format('/1/download/file_3'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        self.assertEqual(r.content, large_file)
+        r = self.send_request(URL.format('/1/download/dir_1/file_1'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        self.assertEqual(r.content, small_file)
+        r = self.send_request(URL.format('/1/download/dir_1/file_2'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        self.assertEqual(r.content, chunk_file)
+        r = self.send_request(URL.format('/1/download/dir_1/file_3'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        self.assertEqual(r.content, large_file)
+        r = self.send_request(URL.format('/1/download/dir_1/dir_1a/file_1'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        self.assertEqual(r.content, small_file)
+        r = self.send_request(URL.format('/1/download/dir_1/dir_1a/file_2'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        self.assertEqual(r.content, chunk_file)
+        r = self.send_request(URL.format('/1/download/dir_1/dir_1a/file_3'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        self.assertEqual(r.content, large_file)
+
+        self.restart_server()
+
+        r = requests.post(URL.format('/1/login'), auth=('psadmin', 'psadmin'))
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        session_id = r.headers.get('x-privastore-session-id')
+        req_headers = {
+            'x-privastore-session-id': session_id
+        }
+
+        r = self.send_request(URL.format('/1/download/file_1'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        self.assertEqual(r.content, small_file)
         r = self.send_request(URL.format('/1/download/file_2'), headers=req_headers, method=requests.get)
         self.assertEqual(r.status_code, HTTPStatus.OK)
         self.assertEqual(r.content, chunk_file)
