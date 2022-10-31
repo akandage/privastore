@@ -94,11 +94,16 @@ class Controller(object):
                 self._cache.close_file(upload_file, removable=False)
                 logging.debug('File data uploaded [{}]'.format(str_mem_size(bytes_transferred)))
 
+                size_on_disk = upload_file.size_on_disk()
+                logging.debug('File size on disk [{}]'.format(size_on_disk))
+                total_chunks = upload_file.total_chunks()
+                logging.debug('File total chunks [{}]'.format(total_chunks))
+
                 #
                 # Update the status of the file in the database to received and
                 # record the local file id and file size.
                 #
-                file_dao.update_file_local(path, file_name, file_version, upload_file.file_id(), file_size)
+                file_dao.update_file_local(path, file_name, file_version, upload_file.file_id(), file_size, size_on_disk, total_chunks)
                 logging.debug('File metadata updated')
             except Exception as e:
                 logging.error('Could not upload file: {}'.format(str(e)))
@@ -139,10 +144,10 @@ class Controller(object):
             file_dao = self._dao_factory.file_dao(conn)
             file_metadata = file_dao.get_file_version_metadata(path, file_name, file_version)
             logging.debug('Retrieved file metadata')
-            file_type = file_metadata['file_type']
-            file_id = file_metadata['local_id']
-            file_size = file_metadata['size_bytes']
-            transfer_status = file_metadata['transfer_status']
+            file_type = file_metadata.file_type
+            file_id = file_metadata.local_id
+            file_size = file_metadata.file_size
+            transfer_status = file_metadata.transfer_status
 
             if transfer_status == FileTransferStatus.RECEIVING:
                 raise FileDownloadError('File upload not complete!')

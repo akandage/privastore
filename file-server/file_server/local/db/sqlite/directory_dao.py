@@ -60,8 +60,8 @@ class SqliteDirectoryDAO(DirectoryDAO):
                     raise FileError('File [{}] exists in path [{}]'.format(file_name, str_path(path)))
                 cur.execute('INSERT INTO ps_file (name, file_type, parent_id, is_hidden) VALUES (?, ?, ?, ?)', (file_name, file_type.value, directory_id, is_hidden))
                 created_file_id = cur.lastrowid
-                cur.execute('INSERT INTO ps_file_version (file_id, version, size_bytes, transfer_status) VALUES (?, ?, ?, ?)', 
-                    (created_file_id, 1, 0, FileTransferStatus.EMPTY.value))
+                cur.execute('INSERT INTO ps_file_version (file_id, version, transfer_status) VALUES (?, ?, ?)', 
+                    (created_file_id, 1, FileTransferStatus.EMPTY.value))
                 self._conn.commit()
                 return created_file_id
             except DirectoryError as e:
