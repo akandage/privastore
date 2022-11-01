@@ -33,11 +33,10 @@ class SessionManager(Daemon):
         self._started.set()
         logging.debug('Session manager started')
         now = last_cleanup_t = round(time.time())
-        while not self._stop:
-            time.sleep(0.1)
+        while not self._stop.wait(1):
             now = round(time.time())
             if now >= last_cleanup_t + self._session_cleanup_interval:
-                self.sessions.remove_expired_sessions()
+                self._sessions.remove_expired_sessions()
                 last_cleanup_t = now
         self._stopped.set()
         logging.debug('Session manager stopped')

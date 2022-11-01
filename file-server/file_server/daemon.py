@@ -8,7 +8,7 @@ class Daemon(object):
         super().__init__()
         self._name = name
         self._daemon = daemon
-        self._stop = False
+        self._stop = Event()
         self._started = Event()
         self._stopped = Event()
         self._thread = None
@@ -27,7 +27,9 @@ class Daemon(object):
             raise Exception('Timed out waiting for {} daemon to start!'.format(self._name))
 
     def stop(self):
-        self._stop = True
+        if self._stop.is_set():
+            return
+        self._stop.set()
         logging.debug('Requested {} daemon stop'.format(self._name))
     
     def join(self, timeout=None):

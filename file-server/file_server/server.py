@@ -10,7 +10,6 @@ class Server(Daemon):
     def __init__(self, name, config):
         super().__init__(name)
         self._config = config
-        self._stop = Event()
     
     def config(self, section=None):
         if section:
@@ -67,9 +66,7 @@ class Server(Daemon):
         logging.info('Server stopped')
     
     def stop(self):
-        if self._stop.is_set():
-            return
-        self._stop.set()
+        super().stop()
         logging.debug('Server stop requested')
 
     
