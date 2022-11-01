@@ -1,4 +1,5 @@
 import base64
+from ...error import AuthenticationError, SessionError
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 import logging
@@ -13,12 +14,69 @@ CONTENT_TYPE_JSON = 'application/json'
 CONTENT_LENGTH_HEADER = 'Content-Length'
 SESSION_ID_HEADER = 'x-privastore-session-id'
 
+HEARTBEAT_PATH = '/1/heartbeat'
+LOGIN_PATH = '/1/login'
+LOGOUT_PATH = '/1/logout'
+
 class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
 
-    def __init__(self, request, client_address, server):
+    def __init__(self, request, client_address, server, controller):
+        self._controller = controller
+        self.auth_username = None
+        self.auth_password = None
+        self.content_len = None
+        self.url_path = None
+        self.url_query = None
         super().__init__(request, client_address, server)
     
+    def controller(self):
+        return self._controller
+
+    def do_GET(self):
+        if not self.parse_path():
+            return
+
+        logging.error('Invalid path: [{}]'.format(self.url_path))
+        self.send_error_response(HTTPStatus.NOT_FOUND)
+        
+    def do_POST(self):
+        if not self.parse_path():
+            return
+
+        if self.url_path == LOGIN_PATH:
+            self.handle_login_user()
+        elif self.url_path == LOGOUT_PATH:
+            self.handle_logout_user()
+        else:
+            logging.error('Invalid path: [{}]'.format(self.url_path))
+            self.send_error_response(HTTPStatus.NOT_FOUND)
+
+    def do_PUT(self):
+        if not self.parse_path():
+            return
+
+        elif self.url_path == HEARTBEAT_PATH:
+            self.handle_heartbeat_session()
+        else:
+            logging.error('Invalid path: [{}]'.format(self.url_path))
+            self.send_error_response(HTTPStatus.NOT_FOUND)
+
+    def handle_internal_error(self, e):
+        logging.error('Internal error: {}'.format(str(e)))
+        self.send_error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
+
+    def handle_session_error(self, e):
+            logging.error('Session error: {}'.format(str(e)))
+            msg = str(e).lower()
+            if 'not found' in msg:
+                self.send_error_response(HTTPStatus.UNAUTHORIZED, str(e))
+            else:
+                self.send_error_response(HTTPStatus.BAD_REQUEST, str(e))
+
     def parse_path(self):
+        if self.url_path is not None and self.url_query is not None:
+            return True
+
         try:
             url_parsed = urllib.parse.urlparse(self.path)
 
@@ -42,6 +100,9 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
             return False
 
     def parse_content_length(self):
+        if self.content_len is not None:
+            return True
+
         content_len =  self.headers.get(CONTENT_LENGTH_HEADER)
 
         if content_len is None:
@@ -59,6 +120,9 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
             return False
 
     def parse_basic_auth(self):
+        if self.auth_username is not None and self.auth_password is not None:
+            return True
+
         auth_header = self.headers.get(AUTHORIZATION_HEADER)
 
         if auth_header is None or not auth_header.startswith('Basic '):
@@ -129,4 +193,86 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         if body:
             self.wfile.write(body)
-        # self.wfile.flush()
+    
+    def get_session_id(self):
+        session_id = self.headers.get(SESSION_ID_HEADER)
+
+        if session_id is None:
+            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Missing {} header'.format(SESSION_ID_HEADER))
+            return
+        
+        return session_id
+
+    def heartbeat_session(self, session_id):
+        try:
+            self.controller().heartbeat_session(session_id)
+            return True
+        except SessionError as e:
+            self.handle_session_error(e)
+            return False
+        except Exception as e:
+            self.handle_internal_error(e)
+            return False
+    
+    def handle_login_user(self):
+        logging.debug('Login request')
+        self.wrap_sockets()
+        self.read_body()
+
+        if not self.parse_basic_auth():
+            return
+
+        try:
+            session_id = self.controller().login_user(self.auth_username, self.auth_password)
+        except AuthenticationError as e:
+            self.send_error_response(HTTPStatus.UNAUTHORIZED, str(e))
+            return
+        except Exception as e:
+            self.handle_internal_error(e)
+            return
+
+        self.send_response(HTTPStatus.OK)
+        self.send_header(CONTENT_LENGTH_HEADER, '0')
+        self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
+        self.send_header(SESSION_ID_HEADER, session_id)
+        self.end_headers()
+    
+    def handle_heartbeat_session(self):
+        logging.debug('Heartbeat request')
+        self.wrap_sockets()
+        self.read_body()
+
+        session_id = self.get_session_id()
+        if session_id is None:
+            return
+        
+        if not self.heartbeat_session(session_id):
+            return
+
+        self.send_response(HTTPStatus.OK)
+        self.send_header(CONTENT_LENGTH_HEADER, '0')
+        self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
+        self.end_headers()
+    
+    def handle_logout_user(self):
+        logging.debug('Logout request')
+        self.wrap_sockets()
+        self.read_body()
+
+        session_id = self.get_session_id()
+        if session_id is None:
+            return
+
+        try:
+            self.controller().logout_user(session_id)
+        except SessionError as e:
+            self.handle_session_error(e)
+            return
+        except Exception as e:
+            self.handle_internal_error(e)
+            return
+
+        self.send_response(HTTPStatus.OK)
+        self.send_header(CONTENT_LENGTH_HEADER, '0')
+        self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
+        self.end_headers()
