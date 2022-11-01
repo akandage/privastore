@@ -3,7 +3,7 @@ import logging
 import os
 import signal
 
-from .local.controller import Controller
+from .local.controller import LocalServerController
 from .file import File
 from .file_cache import FileCache
 from .file_chunk import get_encrypted_chunk_encoder, get_encrypted_chunk_decoder
@@ -65,7 +65,7 @@ class LocalServer(Server):
         self._cache = FileCache(cache_config)
 
         logging.debug('Initializing controller')
-        self._controller = Controller(self._cache, self._dao_factory, 
+        self._controller = LocalServerController(self._cache, self._dao_factory, 
             self._db_conn_mgr, self._session_mgr, encode_chunk=encrypt_chunk,
             decode_chunk=decrypt_chunk)
 
