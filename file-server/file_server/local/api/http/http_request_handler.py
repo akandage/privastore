@@ -1,8 +1,7 @@
-import base64
 from ....error import AuthenticationError, DirectoryError, FileError, SessionError
 from http import HTTPStatus
 from ....api.http.http_request_handler import BaseHttpApiRequestHandler
-from ....api.http.http_request_handler import AUTHORIZATION_HEADER, CONNECTION_HEADER, CONNECTION_CLOSE, CONTENT_TYPE_HEADER, CONTENT_TYPE_JSON, CONTENT_LENGTH_HEADER
+from ....api.http.http_request_handler import CONNECTION_HEADER, CONNECTION_CLOSE, CONTENT_TYPE_HEADER, CONTENT_TYPE_JSON, CONTENT_LENGTH_HEADER
 import json
 import logging
 import urllib.parse
