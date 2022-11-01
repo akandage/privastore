@@ -1,7 +1,7 @@
 from ....error import AuthenticationError, DirectoryError, FileError, SessionError
 from http import HTTPStatus
 from ....api.http.http_request_handler import BaseHttpApiRequestHandler
-from ....api.http.http_request_handler import CONNECTION_HEADER, CONNECTION_CLOSE, CONTENT_TYPE_HEADER, CONTENT_TYPE_JSON, CONTENT_LENGTH_HEADER
+from ....api.http.http_request_handler import CONNECTION_HEADER, CONNECTION_CLOSE, CONTENT_TYPE_HEADER, CONTENT_TYPE_JSON, CONTENT_LENGTH_HEADER, SESSION_ID_HEADER
 import json
 import logging
 import urllib.parse
@@ -14,7 +14,6 @@ UPLOAD_PATH = '/1/upload'
 UPLOAD_PATH_LEN = len(UPLOAD_PATH)
 DOWNLOAD_PATH = '/1/download'
 DOWNLOAD_PATH_LEN = len(DOWNLOAD_PATH)
-SESSION_ID_HEADER = 'x-privastore-session-id'
 
 class HttpApiRequestHandler(BaseHttpApiRequestHandler):
 

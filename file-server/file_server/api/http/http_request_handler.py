@@ -11,6 +11,7 @@ CONNECTION_CLOSE = 'close'
 CONTENT_TYPE_HEADER = 'Content-Type'
 CONTENT_TYPE_JSON = 'application/json'
 CONTENT_LENGTH_HEADER = 'Content-Length'
+SESSION_ID_HEADER = 'x-privastore-session-id'
 
 class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
 
