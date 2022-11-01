@@ -1,3 +1,4 @@
+import base64
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 import logging
@@ -44,17 +45,34 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
 
         if content_len is None:
             self.send_error_response(HTTPStatus.BAD_REQUEST, 'Missing {} header'.format(CONTENT_LENGTH_HEADER))
-            return
+            return False
 
         try:
             content_len = int(content_len)
             if content_len < 0:
                 raise Exception()
+            self.content_len = content_len
+            return True
         except:
             self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid {} header value'.format(CONTENT_LENGTH_HEADER))
-            return
-        
-        return content_len
+            return False
+
+    def parse_basic_auth(self):
+        auth_header = self.headers.get(AUTHORIZATION_HEADER)
+
+        if auth_header is None or not auth_header.startswith('Basic '):
+            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Missing or invalid {} header'.format(AUTHORIZATION_HEADER))
+            return False
+            
+        try:
+            auth_header = base64.b64decode(auth_header[6:]).decode('utf-8')
+            username, password = auth_header.split(':')
+            self.auth_username = username
+            self.auth_password = password
+            return True
+        except:
+            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid {} header value'.format(AUTHORIZATION_HEADER))
+            return False
 
     def wrap_sockets(self):
         '''

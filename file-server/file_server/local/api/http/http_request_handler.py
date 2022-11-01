@@ -125,21 +125,12 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         logging.debug('Login request')
         self.wrap_sockets()
         self.read_body()
-        auth_header = self.headers.get(AUTHORIZATION_HEADER)
 
-        if auth_header is None or not auth_header.startswith('Basic '):
-            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Missing or invalid {} header'.format(AUTHORIZATION_HEADER))
-            return
-            
-        try:
-            auth_header = base64.b64decode(auth_header[6:]).decode('utf-8')
-            username, password = auth_header.split(':')
-        except:
-            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid {} header value'.format(AUTHORIZATION_HEADER))
+        if not self.parse_basic_auth():
             return
 
         try:
-            session_id = self._controller.login_user(username, password)
+            session_id = self._controller.login_user(self.auth_username, self.auth_password)
         except AuthenticationError as e:
             self.send_error_response(HTTPStatus.UNAUTHORIZED, str(e))
             return
@@ -254,15 +245,14 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid directory path or filename')
             return
         
-        file_size = self.parse_content_length()
-        if file_size is None:
+        if not self.parse_content_length():
             return
-        elif file_size == 0:
+        elif self.content_len == 0:
             self.send_error_response(HTTPStatus.BAD_REQUEST, 'Missing file data')
             return
 
         try:
-            self._controller.upload_file(path, file_name, self.rfile, file_size)
+            self._controller.upload_file(path, file_name, self.rfile, self.content_len)
         except DirectoryError as e:
             self.handle_directory_error(e)
             return
