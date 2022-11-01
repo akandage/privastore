@@ -29,6 +29,9 @@ class SessionManager(Daemon):
     def renew_session(self, session_id):
         self._sessions.renew_session(session_id, self._session_expiry_time)
 
+    def end_session(self, session_id):
+        self._sessions.end_session(session_id)
+
     def run(self):
         self._started.set()
         logging.debug('Session manager started')

@@ -100,6 +100,12 @@ class TestLocalServer(unittest.TestCase):
         self.assertEqual(r.status_code, HTTPStatus.UNAUTHORIZED)
         r = requests.put(URL.format('/1/heartbeat'), headers={'x-privastore-session-id':session_id})
         self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = requests.post(URL.format('/1/logout'), headers={'x-privastore-session-id':inv_session_id})
+        self.assertEqual(r.status_code, HTTPStatus.UNAUTHORIZED)
+        r = requests.post(URL.format('/1/logout'), headers={'x-privastore-session-id':session_id})
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = requests.put(URL.format('/1/heartbeat'), headers={'x-privastore-session-id':session_id})
+        self.assertEqual(r.status_code, HTTPStatus.UNAUTHORIZED)
     
     def test_directory_api(self):
         r = requests.post(URL.format('/1/login'), auth=('psadmin', 'psadmin'))

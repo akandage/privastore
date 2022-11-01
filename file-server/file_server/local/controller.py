@@ -1,9 +1,10 @@
+from ..controller import Controller
 from ..error import FileDownloadError, FileUploadError, SessionError
 from .file_transfer_status import FileTransferStatus
 from ..util.file import chunked_copy, str_mem_size, str_path
 import logging
 
-class Controller(object):
+class LocalServerController(Controller):
 
     '''
         Local file server controller.
@@ -16,12 +17,11 @@ class Controller(object):
         decode_chunk - file chunk decoder
     '''
     def __init__(self, cache, dao_factory, db_conn_mgr, session_mgr, encode_chunk, decode_chunk):
-        super().__init__()
+        super().__init__(session_mgr)
         self._cache = cache
         self._chunk_size = cache.file_chunk_size()
         self._dao_factory = dao_factory
         self._db_conn_mgr = db_conn_mgr
-        self._session_mgr = session_mgr
         self._encode_chunk = encode_chunk
         self._decode_chunk = decode_chunk
         
@@ -37,9 +37,6 @@ class Controller(object):
             return session_id
         finally:
             self._db_conn_mgr.db_close(conn)
-    
-    def heartbeat_session(self, session_id):
-        self._session_mgr.renew_session(session_id)
 
     def create_directory(self, path, directory_name, is_hidden=False):
         logging.debug('Create directory [{}]'.format(str_path(path + [directory_name])))

@@ -10,6 +10,7 @@ DIRECTORY_PATH = '/1/directory'
 DIRECTORY_PATH_LEN = len(DIRECTORY_PATH)
 HEARTBEAT_PATH = '/1/heartbeat'
 LOGIN_PATH = '/1/login'
+LOGOUT_PATH = '/1/logout'
 UPLOAD_PATH = '/1/upload'
 UPLOAD_PATH_LEN = len(UPLOAD_PATH)
 DOWNLOAD_PATH = '/1/download'
@@ -39,6 +40,8 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
 
         if self.url_path == LOGIN_PATH:
             self.handle_login_user()
+        elif self.url_path == LOGOUT_PATH:
+            self.handle_logout_user()
         elif self.url_path.startswith(UPLOAD_PATH):
             self.handle_upload_file()
         else:
@@ -71,12 +74,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             self._controller.heartbeat_session(session_id)
             return True
         except SessionError as e:
-            logging.error(str(e))
-            msg = str(e).lower()
-            if 'not found' in msg:
-                self.send_error_response(HTTPStatus.UNAUTHORIZED, str(e))
-            else:
-                self.send_error_response(HTTPStatus.BAD_REQUEST, str(e))
+            self.handle_session_error(e)
             return False
         except Exception as e:
             self.handle_internal_error(e)
@@ -119,6 +117,14 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         logging.error('Internal error: {}'.format(str(e)))
         self.send_error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
 
+    def handle_session_error(self, e):
+            logging.error('Session error: {}'.format(str(e)))
+            msg = str(e).lower()
+            if 'not found' in msg:
+                self.send_error_response(HTTPStatus.UNAUTHORIZED, str(e))
+            else:
+                self.send_error_response(HTTPStatus.BAD_REQUEST, str(e))
+
     def handle_login_user(self):
         logging.debug('Login request')
         self.wrap_sockets()
@@ -159,6 +165,29 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
         self.end_headers()
     
+    def handle_logout_user(self):
+        logging.debug('Logout request')
+        self.wrap_sockets()
+        self.read_body()
+
+        session_id = self.get_session_id()
+        if session_id is None:
+            return
+
+        try:
+            self._controller.logout_user(session_id)
+        except SessionError as e:
+            self.handle_session_error(e)
+            return
+        except Exception as e:
+            self.handle_internal_error(e)
+            return
+
+        self.send_response(HTTPStatus.OK)
+        self.send_header(CONTENT_LENGTH_HEADER, '0')
+        self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
+        self.end_headers()
+
     def handle_create_directory(self):
         logging.debug('Create directory request')
         self.wrap_sockets()
