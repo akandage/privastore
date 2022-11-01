@@ -23,7 +23,7 @@ class TestFileCache(unittest.TestCase):
     
     def test_write_file(self):
         cache_config = {
-            'cache-path': 'test_file_cache',
+            'store-path': 'test_file_cache',
         }
         self.cache = FileCache(cache_config)
 
@@ -66,7 +66,7 @@ class TestFileCache(unittest.TestCase):
 
     def test_append_file(self):
         cache_config = {
-            'cache-path': 'test_file_cache',
+            'store-path': 'test_file_cache',
         }
         self.cache = FileCache(cache_config)
 
@@ -96,7 +96,7 @@ class TestFileCache(unittest.TestCase):
     
     def test_remove_file(self):
         cache_config = {
-            'cache-path': 'test_file_cache',
+            'store-path': 'test_file_cache',
         }
         self.cache = FileCache(cache_config)
 
@@ -131,8 +131,8 @@ class TestFileCache(unittest.TestCase):
     
     def test_ensure_cache_space(self):
         cache_config = {
-            'cache-path': 'test_file_cache',
-            'cache-size': '4KB',
+            'store-path': 'test_file_cache',
+            'store-size': '4KB',
             'max-file-size': '4KB'
         }
         self.cache = FileCache(cache_config)

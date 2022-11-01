@@ -225,9 +225,9 @@ class FileCache(object):
 
 
     def __init__(self, cache_config):
-        self._cache_path = cache_config.get('cache-path', './cache')
+        self._cache_path = cache_config.get('store-path', './cache')
         self._cache_used = 0
-        self._cache_size = parse_mem_size(cache_config.get('cache-size', '1GB'))
+        self._cache_size = parse_mem_size(cache_config.get('store-size', '1GB'))
         self._chunk_size = parse_mem_size(cache_config.get('chunk-size', '1MB'))
         self._max_file_size = parse_mem_size(cache_config.get('max-file-size', '500MB'))
 

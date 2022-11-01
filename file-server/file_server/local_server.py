@@ -61,7 +61,7 @@ class LocalServer(Server):
             raise Exception('No encryption key!')
 
         logging.debug('Initializing cache')
-        cache_config = self.config('cache')
+        cache_config = self.config('store')
         self._cache = FileCache(cache_config)
 
         logging.debug('Initializing controller')

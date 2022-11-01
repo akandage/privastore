@@ -33,10 +33,10 @@ class TestLocalServer(unittest.TestCase):
                 'api-hostname': HOSTNAME,
                 'api-port': str(PORT)
             },
-            'cache': {
-                'cache-path': os.path.join('test_local_server', 'cache'),
+            'store': {
+                'store-path': os.path.join('test_local_server', 'cache'),
                 'max-file-size': '500MB',
-                'cache-size': '1GB',
+                'store-size': '1GB',
                 'chunk-size': '1MB'
             },
             'db': {
