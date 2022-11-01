@@ -70,29 +70,29 @@ class TestFileCache(unittest.TestCase):
         }
         self.cache = FileCache(cache_config)
 
-        #
-        # Append no longer supported.
-        #
-        # f1 = self.cache.open_file(mode='w')
-        # self.cache.close_file(f1, removable=False)
+        f1 = self.cache.write_file()
+        self.cache.close_file(f1, removable=False)
 
-        # self.assertEqual(f1.file_size(), 0)
-        # self.assertEqual(f1.size_on_disk(), 0)
+        self.assertEqual(f1.file_size(), 0)
+        self.assertEqual(f1.size_on_disk(), 0)
 
-        # f2 = self.cache.open_file(file_id=f1.file_id(), mode='a')
-        # self.assertTrue(f2 is not None)
-        # chunk1 = random.randbytes(100)
-        # chunk2 = random.randbytes(50)
-        # f2.append_chunk(chunk1)
-        # f2.append_chunk(chunk2)
-        # self.cache.close_file(f2)
+        f2 = self.cache.append_file(f1.file_id())
+        self.assertTrue(f2 is not None)
+        chunk1 = random.randbytes(100)
+        chunk2 = random.randbytes(50)
+        f2.append_chunk(chunk1)
+        f2.append_chunk(chunk2)
+        self.cache.close_file(f2)
 
-        # f3 = self.cache.read_file(f1.file_id())
-        # self.assertTrue(f3 is not None)
-        # self.assertEqual(f3.read_chunk(), chunk1)
-        # self.assertEqual(f3.read_chunk(), chunk2)
-        # self.assertTrue(f3.read_chunk() is None)
-        # self.cache.close_file(f3)
+        self.assertEqual(f2.file_size(), 150)
+        self.assertEqual(f2.size_on_disk(), 150)
+
+        f3 = self.cache.read_file(f1.file_id())
+        self.assertTrue(f3 is not None)
+        self.assertEqual(f3.read_chunk(), chunk1)
+        self.assertEqual(f3.read_chunk(), chunk2)
+        self.assertTrue(f3.read_chunk() is None)
+        self.cache.close_file(f3)
     
     def test_remove_file(self):
         cache_config = {

@@ -24,27 +24,7 @@ class File(object):
 
         if mode == 'r' or mode == 'a':
             if not skip_metadata:
-                metadata_file_path = self.metadata_file_path()
-                if not os.path.exists(metadata_file_path):
-                    raise FileError('Metadata file not found')
-                with open(metadata_file_path, 'rb') as metadata_file:
-                    checksum = metadata_file.read(32)
-                    if len(checksum) < 32:
-                        raise FileError('Metadata file invalid checksum')
-                    total_chunks = metadata_file.read(4)
-                    if len(total_chunks) < 4:
-                        raise FileError('Metadata file invalid total chunks')
-                    file_size = metadata_file.read(4)
-                    if len(file_size) < 4:
-                        raise FileError('Metadata file invalid file size')
-                    size_on_disk = metadata_file.read(4)
-                    if len(size_on_disk) < 4:
-                        raise FileError('Metadata file invalid file size on disk')
-                    if sha256(total_chunks + file_size + size_on_disk) != checksum:
-                        raise FileError('Metadata file checksum mismatch')
-                    self._total_chunks = int.from_bytes(total_chunks, 'big', signed=False)
-                    self._file_size = int.from_bytes(file_size, 'big', signed=False)
-                    self._size_on_disk = int.from_bytes(size_on_disk, 'big', signed=False)
+                self.read_metadata_file()
         elif mode == 'w':
             os.mkdir(self._file_path)
         else:
@@ -63,6 +43,29 @@ class File(object):
         except:
             return False
         return True
+
+    def read_metadata_file(self):
+        metadata_file_path = self.metadata_file_path()
+        if not os.path.exists(metadata_file_path):
+            raise FileError('Metadata file not found')
+        with open(metadata_file_path, 'rb') as metadata_file:
+            checksum = metadata_file.read(32)
+            if len(checksum) < 32:
+                raise FileError('Metadata file invalid checksum')
+            total_chunks = metadata_file.read(4)
+            if len(total_chunks) < 4:
+                raise FileError('Metadata file invalid total chunks')
+            file_size = metadata_file.read(4)
+            if len(file_size) < 4:
+                raise FileError('Metadata file invalid file size')
+            size_on_disk = metadata_file.read(4)
+            if len(size_on_disk) < 4:
+                raise FileError('Metadata file invalid file size on disk')
+            if sha256(total_chunks, file_size, size_on_disk) != checksum:
+                raise FileError('Metadata file checksum mismatch')
+            self._total_chunks = int.from_bytes(total_chunks, 'big', signed=False)
+            self._file_size = int.from_bytes(file_size, 'big', signed=False)
+            self._size_on_disk = int.from_bytes(size_on_disk, 'big', signed=False)
 
     def metadata_file_path(self):
         return os.path.join(self._file_path, METADATA_FILE)

@@ -1,4 +1,4 @@
-from .error import FileCacheError
+from .error import FileCacheError, FileError
 from .file import File
 from .file_chunk import default_chunk_encoder, default_chunk_decoder
 from .util.file import parse_mem_size, str_mem_size
@@ -71,14 +71,23 @@ class FileCache(object):
 
     class CacheFileWriter(File):
 
-        def __init__(self, cache_path, file_id, node, encode_chunk=default_chunk_encoder, decode_chunk=default_chunk_decoder,):
-            super().__init__(cache_path, file_id, mode='w', encode_chunk=encode_chunk, decode_chunk=decode_chunk)
+        def __init__(self, cache_path, file_id, node, mode='w', encode_chunk=default_chunk_encoder, decode_chunk=default_chunk_decoder,):
+            super().__init__(cache_path, file_id, mode=mode, encode_chunk=encode_chunk, decode_chunk=decode_chunk, skip_metadata=True)
             self._node = node
+
+            if mode != 'w' and mode != 'a':
+                raise FileError('Invalid mode!')
 
             with self._node.lock:
                 if self._node.num_writers != 0:
                     raise Exception('File [{}] already has writer!'.format(self.file_id()))
                 self._node.num_writers = 1
+            
+            #
+            # Read the metadata now that we have the lock on the file.
+            #
+            if mode == 'a':
+                self.read_metadata_file()
 
         def write(self, data):
             lock = self._node.lock
@@ -284,7 +293,7 @@ class FileCache(object):
     '''
         Open file in cache for reading.
         While file is opened, it will be locked preventing its removal from the cache.
-        Allow multipledreaders and single writer.
+        Allow multiple readers and single writer.
 
         If file is not found, return None.
         Otherwise, return a file like object for reading.
@@ -326,6 +335,28 @@ class FileCache(object):
             node.removable = False
 
             return FileCache.CacheFileWriter(self._cache_path, file_id, node, encode_chunk=encode_chunk, decode_chunk=decode_chunk)
+
+    '''
+        Open file in cache for appending.
+        File must already exist in the cache.
+        While file is opened, it will be locked preventing its removal from the cache.
+        Allow multiple readers and single writer.
+
+        Return a file like object for appending.
+    '''
+    def append_file(self, file_id, encode_chunk=default_chunk_encoder, decode_chunk=default_chunk_decoder):
+        with self._index_lock:
+            if not self._index.has_node(file_id):
+                raise FileCacheError('File [{}] not found in cache'.format(file_id))
+
+            node = self._index.get_node(file_id)
+            #
+            # Disallow removing the file from the cache while it is being
+            # written to.
+            #
+            node.removable = False
+
+            return FileCache.CacheFileWriter(self._cache_path, file_id, node, mode='a', encode_chunk=encode_chunk, decode_chunk=decode_chunk)
 
     '''
         Close file in cache.
