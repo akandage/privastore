@@ -15,35 +15,24 @@ class LocalServer(Server):
     def __init__(self, config):
         super().__init__('local_server', config)
         self._controller = None
-        self._dao_factory = None
     
     def controller(self):
         return self._controller
 
     def dao_factory(self):
-        return self._dao_factory
-
-    def init_api(self):
-        api_type = self.api_config().get('api-type', 'http')
-
-        if api_type == 'http':
-            logging.debug('Initializing HTTP API')
-            from .api.http.http_daemon import HttpDaemon
-            from .local.api.http.http_request_handler import HttpApiRequestHandler
-
-            def http_request_handler_factory(request, client_address, server):
-                return HttpApiRequestHandler(request, client_address, server, self.controller())
-
-            self._api_daemon = HttpDaemon(self.api_config(), http_request_handler_factory)
-        else:
-            raise Exception('Unsupported API type: {}'.format(api_type))
-
-    def init_db(self):
-        super().init_db()
         db_type = db_type = self.db_config().get('db-type')
         if db_type == 'sqlite':
             from .local.db.sqlite.dao_factory import SqliteDAOFactory
-            self._dao_factory = SqliteDAOFactory()
+            return SqliteDAOFactory()
+        raise Exception('Unsupported database: {}'.format(db_type))
+
+    def http_request_handler_factory(self):
+        from .local.api.http.http_request_handler import HttpApiRequestHandler
+
+        def factory(request, client_address, server):
+            return HttpApiRequestHandler(request, client_address, server, self.controller())
+
+        return factory
 
     def do_start(self):      
         logging.info('Starting PrivaStore local server ...')
@@ -73,16 +62,16 @@ class LocalServer(Server):
 
         self.init_api()
 
-        self._session_mgr.start()
-        self._session_mgr.wait_started()
-        self._api_daemon.start()
-        self._api_daemon.wait_started()
+        self.session_mgr().start()
+        self.session_mgr().wait_started()
+        self.api_daemon().start()
+        self.api_daemon().wait_started()
 
     def do_stop(self):
-        self._api_daemon.stop()
-        self._api_daemon.join()
-        self._session_mgr.stop()
-        self._session_mgr.join()
+        self.api_daemon().stop()
+        self.api_daemon().join()
+        self.session_mgr().stop()
+        self.session_mgr().join()
 
     def setup_db(self):
         db_config = self.db_config()

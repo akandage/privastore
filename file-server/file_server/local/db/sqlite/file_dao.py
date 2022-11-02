@@ -72,7 +72,7 @@ class SqliteFileDAO(FileDAO):
             except:
                 pass
     
-    def update_file_local(self, path, file_name, version, local_id, file_size, size_on_disk, total_chunks):
+    def update_file_local(self, path, file_name, version, local_id, file_size, size_on_disk, total_chunks, transfer_status=FileTransferStatus.RECEIVED):
         if len(file_name) == 0:
             raise FileError('File name can\'t be empty!')
         if not File.is_valid_file_id(local_id):
@@ -91,7 +91,7 @@ class SqliteFileDAO(FileDAO):
                         UPDATE ps_file_version 
                         SET local_id = ?, file_size = ?, size_on_disk = ?, total_chunks = ?, transfer_status = ? 
                         WHERE file_id = ? AND version = ?
-                    ''', (local_id, file_size, size_on_disk, total_chunks, FileTransferStatus.RECEIVED.value, file_id, version))
+                    ''', (local_id, file_size, size_on_disk, total_chunks, transfer_status.value, file_id, version))
                 if cur.rowcount != 1:
                     raise FileError('File [{}] version [{}] not found!'.format(str_path(path + [file_name]), version))
                 self._conn.commit()

@@ -1,5 +1,6 @@
 from ..controller import Controller
-from ..error import FileDownloadError, FileUploadError, SessionError
+from ..error import FileDownloadError, FileUploadError
+from ..file import File
 from .file_transfer_status import FileTransferStatus
 from ..util.file import chunked_copy, str_mem_size, str_path
 import logging
@@ -55,12 +56,10 @@ class LocalServerController(Controller):
             dir_dao = self._dao_factory.directory_dao(conn)
             file_dao = self._dao_factory.file_dao(conn)
 
-            #
-            # First, the new file is registered in the database with receiving
-            # status.
-            #
-
             if file_version == 1:
+                #
+                # Register a new file in the database with a single version.
+                #
                 dir_dao.create_file(path, file_name)
             else:
                 # TODO
@@ -70,11 +69,17 @@ class LocalServerController(Controller):
 
             try:
                 #
+                # Set a unique id (UUID) for the file and record its size.
+                #
+                local_file_id = File.generate_file_id()
+                file_dao.update_file_local(path, file_name, file_version, local_file_id, file_size, size_on_disk=0, total_chunks=0, transfer_status=FileTransferStatus.RECEIVING)
+
+                #
                 # Uploaded file data is stored in the cache and cannot be removed
                 # or evicted from the cache until it has been synced to the remote
                 # server.
                 #
-                upload_file = self.store().write_file(file_size=file_size, encode_chunk=self._encode_chunk, decode_chunk=self._decode_chunk)
+                upload_file = self.store().write_file(local_file_id, file_size=file_size, encode_chunk=self._encode_chunk, decode_chunk=self._decode_chunk)
                 logging.debug('Opened file for writing in cache [{}]'.format(upload_file.file_id()))
 
                 #
@@ -97,7 +102,7 @@ class LocalServerController(Controller):
                 # Update the status of the file in the database to received and
                 # record the local file id and file size.
                 #
-                file_dao.update_file_local(path, file_name, file_version, upload_file.file_id(), file_size, size_on_disk, total_chunks)
+                file_dao.update_file_local(path, file_name, file_version, upload_file.file_id(), file_size, size_on_disk, total_chunks, transfer_status=FileTransferStatus.RECEIVED)
                 logging.debug('File metadata updated')
             except Exception as e:
                 logging.error('Could not upload file: {}'.format(str(e)))

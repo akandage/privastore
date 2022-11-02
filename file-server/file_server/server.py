@@ -11,6 +11,7 @@ class Server(Daemon):
     def __init__(self, name, config):
         super().__init__(name)
         self._config = config
+        self._api_daemon = None
         self._db_conn_mgr = None
         self._session_mgr = None
         self._store = None
@@ -36,14 +37,31 @@ class Server(Daemon):
     def store_config(self):
         return self.config('store')
 
+    def api_daemon(self):
+        return self._api_daemon
+
     def db_conn_mgr(self):
         return self._db_conn_mgr
     
+    def http_request_handler_factory(self):
+        raise Exception('Not implemented!')
+
     def session_mgr(self):
         return self._session_mgr
 
     def store(self):
         return self._store
+
+    def init_api(self):
+        api_type = self.api_config().get('api-type', 'http')
+
+        if api_type == 'http':
+            logging.debug('Initializing HTTP API')
+            from .api.http.http_daemon import HttpDaemon
+
+            self._api_daemon = HttpDaemon(self.api_config(), self.http_request_handler_factory())
+        else:
+            raise Exception('Unsupported API type: {}'.format(api_type))
 
     def init_db(self):
         logging.debug('Initializing database')
