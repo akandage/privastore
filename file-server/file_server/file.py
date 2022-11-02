@@ -27,6 +27,7 @@ class File(object):
                 self.read_metadata_file()
         elif mode == 'w':
             os.mkdir(self._file_path)
+            self.write_metadata_file()
         else:
             raise FileError('Invalid mode')
     
@@ -66,6 +67,19 @@ class File(object):
             self._total_chunks = int.from_bytes(total_chunks, 'big', signed=False)
             self._file_size = int.from_bytes(file_size, 'big', signed=False)
             self._size_on_disk = int.from_bytes(size_on_disk, 'big', signed=False)
+
+    def write_metadata_file(self):
+        metadata_file_path = self.metadata_file_path()
+        total_chunks = self._total_chunks.to_bytes(4, 'big', signed=False)
+        file_size = self._file_size.to_bytes(4, 'big', signed=False)
+        size_on_disk = self._size_on_disk.to_bytes(4, 'big', signed=False)
+        checksum = sha256(total_chunks, file_size, size_on_disk)
+        with open(metadata_file_path, 'wb') as metadata_file:
+            metadata_file.write(checksum)
+            metadata_file.write(total_chunks)
+            metadata_file.write(file_size)
+            metadata_file.write(size_on_disk)
+            metadata_file.flush()
 
     def metadata_file_path(self):
         return os.path.join(self._file_path, METADATA_FILE)
@@ -152,15 +166,5 @@ class File(object):
 
     def close(self):
         if not self.closed() and (self._mode == 'w' or self._mode == 'a'):
-            metadata_file_path = self.metadata_file_path()
-            total_chunks = self._total_chunks.to_bytes(4, 'big', signed=False)
-            file_size = self._file_size.to_bytes(4, 'big', signed=False)
-            size_on_disk = self._size_on_disk.to_bytes(4, 'big', signed=False)
-            checksum = sha256(total_chunks + file_size + size_on_disk)
-            with open(metadata_file_path, 'wb') as metadata_file:
-                metadata_file.write(checksum)
-                metadata_file.write(total_chunks)
-                metadata_file.write(file_size)
-                metadata_file.write(size_on_disk)
-                metadata_file.flush()
+            self.write_metadata_file()
         self.set_closed()
