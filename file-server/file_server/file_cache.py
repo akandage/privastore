@@ -144,6 +144,7 @@ class FileCache(object):
             self.num_writers = 0
             self.error = False
             self.removable = False
+            self.writable = False
             self._prev = None
             self._next = None
             self.lock = Lock()
@@ -330,6 +331,7 @@ class FileCache(object):
                 file_id = File.generate_file_id()
 
             node = self.create_cache_entry(file_id, file_size)
+            node.writable = True
             #
             # Disallow removing the file from the cache while it is being
             # written to.
@@ -352,6 +354,10 @@ class FileCache(object):
                 raise FileCacheError('File [{}] not found in cache'.format(file_id))
 
             node = self._index.get_node(file_id)
+
+            if not node.writable:
+                raise FileCacheError('File [{}] is not writable'.format(file_id))
+
             #
             # Disallow removing the file from the cache while it is being
             # written to.
@@ -364,24 +370,25 @@ class FileCache(object):
         Close file in cache.
 
     '''
-    def close_file(self, file, removable=True):
+    def close_file(self, file, removable=True, writable=False):
         if file.closed():
             raise FileCacheError('Already closed!')
-        file.close()
+
         with self._index_lock:
+            file.close()
             file_id = file.file_id()
             mode = file.mode()
             if self._index.has_node(file_id):
                 node = self._index.get_node(file_id)
                 with node.lock:
-                    if mode == 'w':
+                    if mode == 'w' or mode == 'a':
+                        node.writable = writable
                         prev_size = node.file_size
                         curr_size = file.size_on_disk()
-                        node.file_size = curr_size
-                        if curr_size >= prev_size:
+                        if curr_size > prev_size:
+                            node.file_size = curr_size
                             self._cache_used += curr_size-prev_size
-                        else:
-                            self._cache_used -= prev_size-curr_size
+
                         if self._cache_used > self._cache_size:
                             raise FileCacheError('File cache is full!')
                     if node.num_readers == 0 and node.num_writers == 0:

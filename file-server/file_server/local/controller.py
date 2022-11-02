@@ -90,7 +90,7 @@ class LocalServerController(Controller):
                 if bytes_transferred < file_size:
                     raise FileUploadError('Could not upload all file data! [{}/{}]'.format(str_mem_size(bytes_transferred), str_mem_size(file_size)))
 
-                self.store().close_file(upload_file, removable=False)
+                self.store().close_file(upload_file, removable=False, writable=False)
                 logging.debug('File data uploaded [{}]'.format(str_mem_size(bytes_transferred)))
 
                 size_on_disk = upload_file.size_on_disk()

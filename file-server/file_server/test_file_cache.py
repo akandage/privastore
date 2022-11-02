@@ -71,7 +71,7 @@ class TestFileCache(unittest.TestCase):
         self.cache = FileCache(cache_config)
 
         f1 = self.cache.write_file()
-        self.cache.close_file(f1, removable=False)
+        self.cache.close_file(f1, removable=False, writable=True)
 
         self.assertEqual(f1.file_size(), 0)
         self.assertEqual(f1.size_on_disk(), 0)
