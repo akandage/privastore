@@ -1,7 +1,7 @@
 from collections import namedtuple
 from ..file_dao import FileDAO
 from ....error import DirectoryError, FileError
-from .directory_util import query_directory_id, query_file_id, traverse_path
+from .directory_util import query_file_id, traverse_path
 from ....file import File
 from ...file_type import FileType
 from ...file_transfer_status import FileTransferStatus
