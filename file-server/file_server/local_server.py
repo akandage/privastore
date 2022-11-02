@@ -4,8 +4,6 @@ import os
 import signal
 
 from .local.controller import LocalServerController
-from .file import File
-from .file_cache import FileCache
 from .file_chunk import get_encrypted_chunk_encoder, get_encrypted_chunk_decoder
 from .server import Server
 from .util.crypto import get_encryptor_factory, get_decryptor_factory
@@ -17,7 +15,14 @@ class LocalServer(Server):
     def __init__(self, config):
         super().__init__('local_server', config)
         self._controller = None
+        self._dao_factory = None
     
+    def controller(self):
+        return self._controller
+
+    def dao_factory(self):
+        return self._dao_factory
+
     def init_api(self):
         api_type = self.api_config().get('api-type', 'http')
 
@@ -27,7 +32,7 @@ class LocalServer(Server):
             from .local.api.http.http_request_handler import HttpApiRequestHandler
 
             def http_request_handler_factory(request, client_address, server):
-                return HttpApiRequestHandler(request, client_address, server, self._controller)
+                return HttpApiRequestHandler(request, client_address, server, self.controller())
 
             self._api_daemon = HttpDaemon(self.api_config(), http_request_handler_factory)
         else:
@@ -45,6 +50,7 @@ class LocalServer(Server):
 
         self.init_db()
         self.init_session()
+        self.init_store()
 
         encrypt_config = self.config('encryption')
         key_alg = encrypt_config.get('key-algorithm', 'aes-128-cbc')
@@ -60,14 +66,10 @@ class LocalServer(Server):
         else:
             raise Exception('No encryption key!')
 
-        logging.debug('Initializing cache')
-        cache_config = self.config('store')
-        self._cache = FileCache(cache_config)
-
         logging.debug('Initializing controller')
-        self._controller = LocalServerController(self._cache, self._dao_factory, 
-            self._db_conn_mgr, self._session_mgr, encode_chunk=encrypt_chunk,
-            decode_chunk=decrypt_chunk)
+        self._controller = LocalServerController(self.dao_factory(), 
+            self.db_conn_mgr(), self.session_mgr(), self.store(), 
+            encode_chunk=encrypt_chunk, decode_chunk=decrypt_chunk)
 
         self.init_api()
 
