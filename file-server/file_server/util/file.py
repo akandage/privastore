@@ -82,3 +82,15 @@ def read_config(config_path):
     config = configparser.ConfigParser()
     config.read(config_path)
     return config
+
+def config_bool(config_val):
+    try:
+        config_val = config_val.lower()
+        if config_val == 'true' or config_val == '1':
+            return True
+        elif config_val == 'false' or config_val == '0':
+            return False
+    except:
+        pass
+    raise Exception('Invalid boolean configuration value')
+    

@@ -1,7 +1,7 @@
 from .error import FileCacheError, FileError
 from .file import File
 from .file_chunk import default_chunk_encoder, default_chunk_decoder
-from .util.file import parse_mem_size, str_mem_size
+from .util.file import config_bool, parse_mem_size, str_mem_size
 import logging
 import os
 import shutil
@@ -230,6 +230,7 @@ class FileCache(object):
         self._cache_size = parse_mem_size(cache_config.get('store-size', '1GB'))
         self._chunk_size = parse_mem_size(cache_config.get('chunk-size', '1MB'))
         self._max_file_size = parse_mem_size(cache_config.get('max-file-size', '500MB'))
+        self._file_eviction = config_bool(cache_config.get('enable-file-eviction', '1'))
 
         self._index = FileCache.Index()
         self._index_lock = RLock()
@@ -247,10 +248,11 @@ class FileCache(object):
                 except Exception as e:
                     logging.error('Error initializing cache file [{}]: {}'.format(file_id, str(e)))
         
-        logging.debug('File cache used [{}]'.format(str_mem_size(self._cache_used)))
-        logging.debug('File cache size [{}]'.format(str_mem_size(self._cache_size)))
+        logging.debug('File store used [{}]'.format(str_mem_size(self._cache_used)))
+        logging.debug('File store size [{}]'.format(str_mem_size(self._cache_size)))
         logging.debug('File chunk size [{}]'.format(str_mem_size(self._chunk_size)))
         logging.debug('Max file size [{}]'.format(str_mem_size(self._max_file_size)))
+        logging.debug('File eviction enabled: [{}]'.format(self._file_eviction))
 
     def cache_path(self):
         return self._cache_path
@@ -442,6 +444,8 @@ class FileCache(object):
         with self._index_lock:
             if self.cache_free_space() >= size:
                 return
+            elif not self._file_eviction:
+                raise FileCacheError('Insufficient space in cache')
             
             #
             # First check if we can make enough space available before

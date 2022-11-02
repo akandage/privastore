@@ -9,49 +9,46 @@ class LocalServerController(Controller):
     '''
         Local file server controller.
 
-        cache - file cache
         dao_factory - DAO factory
         db_conn_mgr - database connection manager
         session_mgr - session store
+        store - file store
         encode_chunk - file chunk encoder
         decode_chunk - file chunk decoder
     '''
-    def __init__(self, cache, dao_factory, db_conn_mgr, session_mgr, encode_chunk, decode_chunk):
-        super().__init__(session_mgr)
-        self._cache = cache
-        self._chunk_size = cache.file_chunk_size()
+    def __init__(self, dao_factory, db_conn_mgr, session_mgr, store, encode_chunk, decode_chunk):
+        super().__init__(db_conn_mgr, session_mgr, store)
         self._dao_factory = dao_factory
-        self._db_conn_mgr = db_conn_mgr
         self._encode_chunk = encode_chunk
         self._decode_chunk = decode_chunk
         
     def login_user(self, username, password):
         logging.debug('User [{}] login attempt'.format(username))
-        conn = self._db_conn_mgr.db_connect()
+        conn = self.db_conn_mgr().db_connect()
         try:
             logging.debug('Acquired database connection')
             user_dao = self._dao_factory.user_dao(conn)
             user_dao.login_user(username, password)
             logging.debug('User [{}] logged in successfully'.format(username))
-            session_id = self._session_mgr.start_session(username)
+            session_id = self.session_mgr().start_session(username)
             return session_id
         finally:
-            self._db_conn_mgr.db_close(conn)
+            self.db_conn_mgr().db_close(conn)
 
     def create_directory(self, path, directory_name, is_hidden=False):
         logging.debug('Create directory [{}]'.format(str_path(path + [directory_name])))
-        conn = self._db_conn_mgr.db_connect()
+        conn = self.db_conn_mgr().db_connect()
         try:
             logging.debug('Acquired database connection')
             dir_dao = self._dao_factory.directory_dao(conn)
             dir_dao.create_directory(path, directory_name, is_hidden)
             logging.debug('Created directory [{}]'.format(str_path(path + [directory_name])))
         finally:
-            self._db_conn_mgr.db_close(conn)
+            self.db_conn_mgr().db_close(conn)
 
     def upload_file(self, path, file_name, file, file_size, file_version=1):
         logging.debug('Upload file [{}] version [{}] size [{}]'.format(str_path(path + [file_name]), file_version, file_size))
-        conn = self._db_conn_mgr.db_connect()
+        conn = self.db_conn_mgr().db_connect()
         try:
             logging.debug('Acquired database connection')
 
@@ -77,18 +74,18 @@ class LocalServerController(Controller):
                 # or evicted from the cache until it has been synced to the remote
                 # server.
                 #
-                upload_file = self._cache.write_file(file_size=file_size, encode_chunk=self._encode_chunk, decode_chunk=self._decode_chunk)
+                upload_file = self.store().write_file(file_size=file_size, encode_chunk=self._encode_chunk, decode_chunk=self._decode_chunk)
                 logging.debug('Opened file for writing in cache [{}]'.format(upload_file.file_id()))
 
                 #
                 # Read the file in chunks of the configured chunk size and append to
                 # the file in the cache.
                 #
-                bytes_transferred = chunked_copy(file, upload_file, file_size, self._chunk_size)
+                bytes_transferred = chunked_copy(file, upload_file, file_size, self.store().file_chunk_size())
                 if bytes_transferred < file_size:
                     raise FileUploadError('Could not upload all file data! [{}/{}]'.format(str_mem_size(bytes_transferred), str_mem_size(file_size)))
 
-                self._cache.close_file(upload_file, removable=False)
+                self.store().close_file(upload_file, removable=False)
                 logging.debug('File data uploaded [{}]'.format(str_mem_size(bytes_transferred)))
 
                 size_on_disk = upload_file.size_on_disk()
@@ -116,12 +113,12 @@ class LocalServerController(Controller):
 
                 if upload_file is not None:
                     try:
-                        self._cache.close_file(upload_file)
+                        self.store().close_file(upload_file)
                     except Exception as e:
                         logging.error('Could not close uploaded file in cache: {}'.format(str(e)))
 
                     try:
-                        self._cache.remove_file(upload_file)
+                        self.store().remove_file(upload_file)
                         logging.debug('Removed file from cache')
                     except Exception as e:
                         logging.error('Could not remove uploaded file from cache: {}'.format(str(e)))
@@ -130,11 +127,11 @@ class LocalServerController(Controller):
 
             logging.debug('Uploaded file [{}]'.format(str_path(path + [file_name])))
         finally:
-            self._db_conn_mgr.db_close(conn)
+            self.db_conn_mgr().db_close(conn)
 
     def download_file(self, path, file_name, file, file_version=None, timeout=None, api_callback=None):
         logging.debug('Download file [{}] version [{}] timeout [{}]'.format(str_path(path + [file_name]), file_version, timeout))
-        conn = self._db_conn_mgr.db_connect()
+        conn = self.db_conn_mgr().db_connect()
         try:
             logging.debug('Acquired database connection')
 
@@ -155,7 +152,7 @@ class LocalServerController(Controller):
             # First, try reading the file from the cache if it is already
             # present there.
             #
-            download_file = self._cache.read_file(file_id, encode_chunk=self._encode_chunk, decode_chunk=self._decode_chunk)
+            download_file = self.store().read_file(file_id, encode_chunk=self._encode_chunk, decode_chunk=self._decode_chunk)
 
             if download_file is None:
                 #
@@ -176,22 +173,22 @@ class LocalServerController(Controller):
                     #
                     api_callback(file_id, file_type, file_size)
 
-                bytes_transferred = chunked_copy(download_file, file, file_size, self._chunk_size)
+                bytes_transferred = chunked_copy(download_file, file, file_size, self.store().file_chunk_size())
                 if bytes_transferred < file_size:
                     raise FileDownloadError('Could not download all file data! [{}/{}]'.format(str_mem_size(bytes_transferred), str_mem_size(file_size)))
             finally:
                 try:
-                    self._cache.close_file(download_file)
+                    self.store().close_file(download_file)
                 except Exception as e:
                     logging.warn('Could not close download file in cache: {}'.format(str(e)))
             
             logging.debug('File data downloaded [{}]'.format(str_mem_size(bytes_transferred)))
         finally:
-            self._db_conn_mgr.db_close(conn)
+            self.db_conn_mgr().db_close(conn)
 
     def list_directory(self, path, show_hidden=False):
         logging.debug('List directory [{}]'.format(str_path(path)))
-        conn = self._db_conn_mgr.db_connect()
+        conn = self.db_conn_mgr().db_connect()
         try:
             logging.debug('Acquired database connection')
             dir_dao = self._dao_factory.directory_dao(conn)
@@ -199,4 +196,4 @@ class LocalServerController(Controller):
             logging.debug('Listed directory [{}]'.format(str_path(path)))
             return dir_entries
         finally:
-            self._db_conn_mgr.db_close(conn)
+            self.db_conn_mgr().db_close(conn)

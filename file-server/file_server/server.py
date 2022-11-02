@@ -1,5 +1,6 @@
 from .daemon import Daemon
 from .db.db_conn_mgr import DbConnectionManager
+from .file_cache import FileCache
 import logging
 import os
 from .session_mgr import SessionManager
@@ -10,6 +11,9 @@ class Server(Daemon):
     def __init__(self, name, config):
         super().__init__(name)
         self._config = config
+        self._db_conn_mgr = None
+        self._session_mgr = None
+        self._store = None
     
     def config(self, section=None):
         if section:
@@ -28,6 +32,18 @@ class Server(Daemon):
 
     def session_config(self):
         return self.config('session')
+
+    def store_config(self):
+        return self.config('store')
+
+    def db_conn_mgr(self):
+        return self._db_conn_mgr
+    
+    def session_mgr(self):
+        return self._session_mgr
+
+    def store(self):
+        return self._store
 
     def init_db(self):
         logging.debug('Initializing database')
@@ -48,6 +64,11 @@ class Server(Daemon):
     def init_session(self):
         logging.debug('Initializing session')
         self._session_mgr = SessionManager(self.session_config())
+
+    def init_store(self):
+        logging.debug('Initializing file store')
+        store_config = self.store_config()
+        self._store = FileCache(store_config)
 
     def do_start(self):
         pass

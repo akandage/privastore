@@ -94,8 +94,8 @@ def create_file_version_table(conn):
         CREATE TABLE ps_file_version (
             file_id INTEGER NOT NULL,
             version INTEGER NOT NULL,
-            local_id VARCHAR(39) UNIQUE NULL,
-            remote_id VARCHAR(39) UNIQUE NULL,
+            local_id VARCHAR(38) UNIQUE NULL,
+            remote_id VARCHAR(38) UNIQUE NULL,
             file_size INTEGER NOT NULL DEFAULT 0,
             size_on_disk INTEGER NOT NULL DEFAULT 0,
             total_chunks INTEGER NOT NULL DEFAULT 0,
