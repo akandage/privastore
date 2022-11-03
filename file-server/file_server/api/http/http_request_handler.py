@@ -12,6 +12,7 @@ CONNECTION_CLOSE = 'close'
 CONTENT_TYPE_HEADER = 'Content-Type'
 CONTENT_TYPE_JSON = 'application/json'
 CONTENT_LENGTH_HEADER = 'Content-Length'
+EPOCH_NO_HEADER = 'x-privastore-epoch-no'
 SESSION_ID_HEADER = 'x-privastore-session-id'
 
 HEARTBEAT_PATH = '/1/heartbeat'

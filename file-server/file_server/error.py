@@ -6,6 +6,10 @@ class DirectoryError(Exception):
     def __init__(self, msg):
         super().__init__(msg)
 
+class EpochError(Exception):
+    def __init__(self, msg):
+        super().__init__(msg)
+
 class FileCacheError(Exception):
     def __init__(self, msg):
         super().__init__(msg)
