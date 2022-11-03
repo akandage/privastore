@@ -2,29 +2,19 @@ from http import HTTPStatus
 import os
 import random
 import requests
-import shutil
 import urllib
 import uuid
-import unittest
-from .local_server import config_logging, LocalServer
+from .local_server import LocalServer
 from .session import Sessions
+from .test_server import TestServer, HOSTNAME, PORT, URL
 
-HOSTNAME = 'localhost'
-PORT = 8090
-URL = 'http://{}:{}{{}}'.format(HOSTNAME, PORT)
-
-class TestLocalServer(unittest.TestCase):
+class TestLocalServer(TestServer):
     
-    def cleanup(self):
-        try:
-            shutil.rmtree('test_local_server')
-        except:
-            pass
+    def get_test_dir(self):
+        return 'test_local_server'
 
-    def setUp(self):
-        self.cleanup()
-        os.mkdir('test_local_server')
-        self.config = config = {
+    def get_config(self):
+        return {
             'logging': {
               'log-level': 'DEBUG'  
             },
@@ -33,15 +23,18 @@ class TestLocalServer(unittest.TestCase):
                 'api-hostname': HOSTNAME,
                 'api-port': str(PORT)
             },
+            'auth': {
+                'auth-type': 'db'
+            },
             'store': {
-                'store-path': os.path.join('test_local_server', 'cache'),
+                'store-path': os.path.join(self.get_test_dir(), 'cache'),
                 'max-file-size': '500MB',
                 'store-size': '1GB',
                 'chunk-size': '1MB'
             },
             'db': {
                 'db-type': 'sqlite',
-                'sqlite-db-path': os.path.join('test_local_server', 'local_server.db'),
+                'sqlite-db-path': os.path.join(self.get_test_dir(), 'local_server.db'),
                 'connection-pool-size': '1'
             },
             'encryption': {
@@ -53,36 +46,13 @@ class TestLocalServer(unittest.TestCase):
                 'session-cleanup-interval': '60'
             }
         }
-        config_logging(config['logging']['log-level'])
-        self.server = LocalServer(config)
-        self.server.setup_db()
-        self.server.start()
-        self.server.wait_started()
 
-    def tearDown(self):
-        self.server.stop()
-        self.server.join()
-        self.cleanup()
-
-    def restart_server(self):
-        self.server.stop()
-        self.server.join()
-        self.server = LocalServer(self.config)
-        self.server.start()
-        self.server.wait_started()
-
-    def send_request(self, url, headers={}, method=requests.get, data=None):
-        r = method(url, headers=headers, data=data)
-        content_len = r.headers.get('Content-Length')
-        if content_len is not None:
-            content_len = int(content_len)
-            if content_len > 0:
-                content_type = r.headers.get('Content-Type')
-                if content_type is not None and content_type.startswith('application/json'):
-                    return r.json()
-        return r
+    def server_factory(self):
+        return LocalServer(self.get_config())
 
     def test_session_api(self):
+        self.start_server()
+
         r = requests.post(URL.format('/1/login'), auth=('psadmin', 'psadm1n'))
         self.assertEqual(r.status_code, HTTPStatus.UNAUTHORIZED)
         r = requests.post(URL.format('/1/login'), auth=('psadm1n', 'psadmin'))
@@ -108,6 +78,8 @@ class TestLocalServer(unittest.TestCase):
         self.assertEqual(r.status_code, HTTPStatus.UNAUTHORIZED)
     
     def test_directory_api(self):
+        self.start_server()
+
         r = requests.post(URL.format('/1/login'), auth=('psadmin', 'psadmin'))
         self.assertEqual(r.status_code, HTTPStatus.OK)
         session_id = r.headers.get('x-privastore-session-id')
@@ -164,6 +136,8 @@ class TestLocalServer(unittest.TestCase):
         self.assertEqual(r, [])
 
     def test_file_api(self):
+        self.start_server()
+
         r = requests.post(URL.format('/1/login'), auth=('psadmin', 'psadmin'))
         self.assertEqual(r.status_code, HTTPStatus.OK)
         session_id = r.headers.get('x-privastore-session-id')

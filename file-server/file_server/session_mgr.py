@@ -23,8 +23,8 @@ class SessionManager(Daemon):
     def session_expiry_time(self):
         return self._session_expiry_time
     
-    def start_session(self, session_id):
-        return self._sessions.start_session(session_id, self._session_expiry_time)
+    def start_session(self, username):
+        return self._sessions.start_session(username, self._session_expiry_time)
     
     def renew_session(self, session_id):
         self._sessions.renew_session(session_id, self._session_expiry_time)
@@ -39,7 +39,10 @@ class SessionManager(Daemon):
         while not self._stop.wait(1):
             now = round(time.time())
             if now >= last_cleanup_t + self._session_cleanup_interval:
-                self._sessions.remove_expired_sessions()
+                try:
+                    self._sessions.remove_expired_sessions()
+                except Exception as e:
+                    logging.error('Error removing expired sessions: {}'.format(str(e)))
                 last_cleanup_t = now
         self._stopped.set()
         logging.debug('Session manager stopped')

@@ -28,6 +28,9 @@ class Server(Daemon):
     def api_config(self):
         return self.config('api')
 
+    def auth_config(self):
+        return self.config('auth')
+
     def db_config(self):
         return self.config('db')
 
@@ -95,12 +98,24 @@ class Server(Daemon):
         pass
 
     def run(self):
-        self.do_start()
+        try:
+            self.do_start()
+        except Exception as e:
+            logging.error('Server failed to start: {}'.format(str(e)))
+            self._started.set()
+            self._stopped.set()
+            return
+
         self._started.set()
         logging.info('Server started')
         self._stop.wait()
         logging.info('Server stopping')
-        self.do_stop()
+
+        try:
+            self.do_stop()
+        except Exception as e:
+            logging.error('Server failed to stop: {}'.format(str(e)))
+
         self._stopped.set()
         logging.info('Server stopped')
     

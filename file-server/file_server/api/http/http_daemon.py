@@ -18,7 +18,10 @@ class HttpDaemon(Daemon):
         self._started.set()
         logging.debug('HTTP daemon started')
         while not self._stop.is_set():
-            self._server.handle_request()
+            try:
+                self._server.handle_request()
+            except Exception as e:
+                logging.error('Error handling HTTP request: {}'.format(str(e)))
         self._server.server_close()
         self._stopped.set()
         logging.debug('HTTP daemon stopped')

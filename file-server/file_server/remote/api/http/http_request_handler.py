@@ -9,5 +9,4 @@ import urllib.parse
 class HttpApiRequestHandler(BaseHttpApiRequestHandler):
 
     def __init__(self, request, client_address, server, controller):
-        self._controller = controller
-        super().__init__(request, client_address, server)
+        super().__init__(request, client_address, server, controller)

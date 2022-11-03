@@ -39,11 +39,10 @@ class RemoteServer(Server):
         self.init_session()
         self.init_store()
 
-        auth_config = self.config('auth')
-
         logging.debug('Initializing controller')
-        self._controller = RemoteServerController(auth_config, self.dao_factory(), 
+        self._controller = RemoteServerController(self.dao_factory(), 
             self.db_conn_mgr(), self.session_mgr(), self.store())
+        self._controller.init_auth(self.auth_config())
 
         self.init_api()
 
