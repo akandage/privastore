@@ -2,7 +2,8 @@ from collections import namedtuple
 from ....file import File
 from ..file_dao import FileDAO
 from ....error import EpochError, RemoteFileError
-from .epoch_util import get_current_epoch
+from .epoch_util import check_current_epoch
+from .file_util import is_file_committed
 import logging
 import time
 
@@ -12,14 +13,6 @@ class SqliteFileDAO(FileDAO):
 
     def __init__(self, conn):
         super().__init__(conn)
-    
-    def check_current_epoch(self, cur, epoch_no):
-        '''
-            Check that the provided epoch number is the current one.
-        '''
-        curr_epoch = get_current_epoch(cur)
-        if epoch_no != curr_epoch:
-            raise EpochError('Cannot modify file in previous epoch [{}]. Current epoch is [{}]'.format(epoch_no, curr_epoch))
 
     def create_file(self, epoch_no, remote_id, file_size):
         if not File.is_valid_file_id(remote_id):
@@ -28,7 +21,7 @@ class SqliteFileDAO(FileDAO):
         try:
             try:
                 file_timestamp = round(time.time())
-                self.check_current_epoch(cur)
+                check_current_epoch(cur, epoch_no)
                 cur.execute(
                     '''
                     INSERT INTO ps_remote_file (remote_id, file_size, created_timestamp, modified_timestamp, created_epoch) 
@@ -36,6 +29,10 @@ class SqliteFileDAO(FileDAO):
                     '''
                 , (remote_id, file_size, file_timestamp, file_timestamp, epoch_no))
                 self._conn.commit()
+            except EpochError as e:
+                logging.error('Epoch error {}'.format(str(e)))
+                self.rollback_nothrow()
+                raise e
             except Exception as e:
                 logging.error('Query error {}'.format(str(e)))
                 self.rollback_nothrow()
@@ -83,26 +80,13 @@ class SqliteFileDAO(FileDAO):
             except:
                 pass
 
-    def is_file_committed(self, cur, epoch_no, remote_id):
-        cur.execute(
-            '''
-            SELECT is_committed 
-            FROM ps_remote_file 
-            WHERE remote_id = ? AND created_epoch_no = ?
-            '''
-        , (remote_id, epoch_no))
-        res = cur.fetchone()
-        if res is None:
-            raise RemoteFileError('Remote file [{}] not found'.format(remote_id))
-        return bool(res[0])
-
     def file_modified(self, epoch_no, remote_id):
         cur = self._conn.cursor()
         try:
             try:
                 modified_timestamp = round(time.time())
-                self.check_current_epoch(cur)
-                if self.is_file_committed(cur, epoch_no, remote_id):
+                check_current_epoch(cur, epoch_no)
+                if is_file_committed(cur, remote_id, epoch_no=epoch_no):
                     raise RemoteFileError('Cannot modify committed remote file [{}]'.format(remote_id))
                 cur.execute(
                     '''
@@ -114,6 +98,10 @@ class SqliteFileDAO(FileDAO):
                 if cur.rowcount != 1:
                     raise RemoteFileError('Remote file [{}] not found'.format(remote_id))
                 self._conn.commit()
+            except EpochError as e:
+                logging.error('Query error {}'.format(str(e)))
+                self.rollback_nothrow()
+                raise e
             except RemoteFileError as e:
                 logging.error('Remote file error {}'.format(str(e)))
                 self.rollback_nothrow()
@@ -132,8 +120,8 @@ class SqliteFileDAO(FileDAO):
         cur = self._conn.cursor()
         try:
             try:
-                self.check_current_epoch(cur)
-                if self.is_file_committed(cur, epoch_no, remote_id):
+                check_current_epoch(cur, epoch_no)
+                if is_file_committed(cur, remote_id, epoch_no=epoch_no):
                     logging.debug('Remote file [{}] is already committed'.format(remote_id))
                     return
                 cur.execute(
@@ -158,6 +146,10 @@ class SqliteFileDAO(FileDAO):
                 if cur.rowcount != 1:
                     raise RemoteFileError('Remote file [{}] not found'.format(remote_id))
                 self._conn.commit()
+            except EpochError as e:
+                logging.error('Query error {}'.format(str(e)))
+                self.rollback_nothrow()
+                raise e
             except RemoteFileError as e:
                 logging.error('Remote file error {}'.format(str(e)))
                 self.rollback_nothrow()
@@ -176,7 +168,7 @@ class SqliteFileDAO(FileDAO):
         cur = self._conn.cursor()
         try:
             try:
-                self.check_current_epoch(cur)
+                check_current_epoch(cur, epoch_no)
                 cur.execute(
                     '''
                     UPDATE ps_remote_file
@@ -187,6 +179,10 @@ class SqliteFileDAO(FileDAO):
                 if cur.rowcount != 1:
                     raise RemoteFileError('Remote file [{}] not found'.format(remote_id))
                 self._conn.commit()
+            except EpochError as e:
+                logging.error('Query error {}'.format(str(e)))
+                self.rollback_nothrow()
+                raise e
             except RemoteFileError as e:
                 logging.error('Remote file error {}'.format(str(e)))
                 self.rollback_nothrow()
