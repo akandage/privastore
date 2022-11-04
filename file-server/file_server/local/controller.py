@@ -134,8 +134,8 @@ class LocalServerController(Controller):
         finally:
             self.db_conn_mgr().db_close(conn)
 
-    def download_file(self, path, file_name, file, file_version=None, timeout=None, api_callback=None):
-        logging.debug('Download file [{}] version [{}] timeout [{}]'.format(str_path(path + [file_name]), file_version, timeout))
+    def download_file(self, path, file_name, file, file_version=None, api_callback=None):
+        logging.debug('Download file [{}] version [{}]'.format(str_path(path + [file_name]), file_version))
         conn = self.db_conn_mgr().db_connect()
         try:
             logging.debug('Acquired database connection')

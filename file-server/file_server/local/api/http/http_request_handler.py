@@ -83,6 +83,24 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             self.send_error_response(HTTPStatus.BAD_REQUEST, e)
 
     def handle_create_directory(self):
+        '''
+        
+            Handle the create directory API.
+            Create directory under the path.
+            Parent directories must already exist.
+            
+            Method: PUT
+            Path: /1/directory/<path>/<directory-name>
+            Request Headers:
+                x-privastore-session-id: <session-id>
+            
+            Examples:
+                Create a directory "foo" under the root directory.
+                PUT /1/directory/foo
+
+                Create a directory "baz" under the path /foo/bar
+                PUT /1/directory/foo/bar/baz
+        '''
         logging.debug('Create directory request')
         self.wrap_sockets()
         self.read_body()
@@ -116,6 +134,30 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         self.end_headers()
     
     def handle_list_directory(self):
+        '''
+        
+            Handle the list directory API.
+            List the directory and file entries under the path.
+            Response body will be listing in JSON format.
+
+            Method: GET
+            Path: /1/directory/<path>
+            Request Headers:
+                x-privastore-session-id: <session-id>
+            
+            Examples:
+                List "/foo/bar" containing two directories "dir_1" and "dir_2"
+                and a file "README.txt".
+
+                GET /1/directory/foo/bar
+                Response Body:
+                    [
+                        ['d', 'dir_1'],
+                        ['d', 'dir_2'],
+                        ['f', 'README.txt']
+                    ]
+
+        '''
         logging.debug('List directory request')
         self.wrap_sockets()
         self.read_body()
@@ -150,6 +192,20 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         self.wfile.write(dir_entries)
     
     def handle_upload_file(self):
+        '''
+
+            Handle upload file API.
+
+            Method: POST
+            Path: /1/file/<file-id>
+            Request Headers:
+                Content-Length: <file-size (bytes)>
+                Content-Type: <mime-type>
+                x-privastore-session-id: <session-id>
+            Request Body:
+                <file bytes>
+            
+        '''
         logging.debug('Upload file')
         self.wrap_sockets()
         session_id = self.get_session_id()
@@ -190,6 +246,23 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         self.end_headers()
     
     def handle_download_file(self):
+        '''
+
+            Handle download file API.
+            Optionally provide a version of file to download in query-string.
+
+            Method: GET
+            Path: /1/file/<file-id>[?version=<v>]
+            Request Headers:
+                x-privastore-session-id: <session-id>
+            
+            Response Headers:
+                Content-Length: <file-size (in bytes)>
+                Content-Type: <mime-type>
+            Response Body:
+                <file-bytes>
+
+        '''
         logging.debug('Download file')
         self.wrap_sockets()
         session_id = self.get_session_id()
@@ -217,21 +290,9 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         except:
             self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid file version')
             return
-
-        try:
-            timeout = self.url_query.get('timeout')
-            if timeout is not None:
-                timeout = int(timeout)
-
-                if timeout <= 0:
-                    self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid timeout value')
-                    return
-        except:
-            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid timeout value')
-            return
         
         try:
-            self.controller().download_file(path, file_name, self.wfile, file_version, timeout=timeout, api_callback=self.send_download_file_headers)
+            self.controller().download_file(path, file_name, self.wfile, file_version, api_callback=self.send_download_file_headers)
         except DirectoryError as e:
             self.handle_directory_error(e)
         except FileError as e:

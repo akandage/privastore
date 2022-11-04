@@ -231,6 +231,20 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
             return False
     
     def handle_login_user(self):
+        '''
+
+            Handle the user login API.
+            Username and password provided via HTTP basic authentication.
+
+            Method: POST
+            Path: /1/login
+            Request Headers:
+                Authorization: Basic <base64-encoded "username:password">
+            
+            Response Headers:
+                x-privastore-session-id: <session-id>
+
+        '''
         logging.debug('Login request')
         self.wrap_sockets()
         self.read_body()
@@ -254,6 +268,17 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
     
     def handle_heartbeat_session(self):
+        '''
+
+            Handle the heartbeat session API.
+            Send a heartbeat to renew the session.
+
+            Method: PUT
+            Path: /1/heartbeat
+            Request Headers:
+                x-privastore-session-id: <session-id>
+
+        '''
         logging.debug('Heartbeat request')
         self.wrap_sockets()
         self.read_body()
@@ -271,6 +296,17 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
     
     def handle_logout_user(self):
+        '''
+
+            Handle logout user API.
+            End the user session.
+
+            Method: PUT
+            Path: /1/logout
+            Request Headers:
+                x-privastore-session-id: <session-id>
+            
+        '''
         logging.debug('Logout request')
         self.wrap_sockets()
         self.read_body()
