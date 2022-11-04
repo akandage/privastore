@@ -1,3 +1,4 @@
+from collections import namedtuple
 from .error import FileCacheError, FileError, FileServerErrorCode
 from .file import File
 from .file_chunk import default_chunk_encoder, default_chunk_decoder
@@ -162,6 +163,8 @@ class FileCache(object):
         
         def file_id(self):
             return self._file_id
+
+    IndexNodeMetadata = namedtuple('IndexNodeMetadata', ['file_size', 'file_chunks'])
 
     class Index(object):
 
@@ -370,6 +373,16 @@ class FileCache(object):
             node = self.create_cache_entry(file_id, file_size)
             node.writable = True
             node.removable = False
+
+    def file_metadata(self, file_id):
+        with self._index_lock:
+            if not self._index.has_node(file_id):
+                raise FileCacheError('File [{}] not found in cache'.format(file_id), FileServerErrorCode.FILE_NOT_FOUND)
+            
+            with node.lock:
+                node = self._index.get_node(file_id)
+
+                return FileCache.IndexNodeMetadata(node.file_size, node.file_chunks)
 
     '''
         Close file in cache.
