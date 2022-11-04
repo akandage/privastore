@@ -1,4 +1,4 @@
-from ....error import DirectoryError, FileError
+from ....error import DirectoryError, FileError, FileServerErrorCode
 from http import HTTPStatus
 from ....api.http.http_request_handler import BaseHttpApiRequestHandler
 from ....api.http.http_request_handler import CONNECTION_HEADER, CONNECTION_CLOSE, CONTENT_TYPE_HEADER, CONTENT_TYPE_JSON, CONTENT_LENGTH_HEADER
@@ -62,23 +62,25 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
 
     def handle_directory_error(self, e):
         logging.error('Directory error: {}'.format(str(e)))
-        msg = str(e).lower()
-        if 'invalid path' in msg:
-            self.send_error_response(HTTPStatus.NOT_FOUND, str(e))
-        elif 'exists in path' in msg:
-            self.send_error_response(HTTPStatus.CONFLICT, str(e))
+        if e.error_code() == FileServerErrorCode.DIRECTORY_NOT_FOUND:
+            self.send_error_response(HTTPStatus.NOT_FOUND, e)
+        elif e.error_code() == FileServerErrorCode.DIRECTORY_EXISTS:
+            self.send_error_response(HTTPStatus.CONFLICT, e)
+        elif e.error_code() == FileServerErrorCode.INVALID_PATH:
+            self.send_error_response(HTTPStatus.NOT_FOUND, e)
         else:
-            self.send_error_response(HTTPStatus.BAD_REQUEST, str(e))
+            self.send_error_response(HTTPStatus.BAD_REQUEST, e)
 
     def handle_file_error(self, e):
         logging.error('File error: {}'.format(str(e)))
-        msg = str(e).lower()
-        if 'not found' in msg:
-            self.send_error_response(HTTPStatus.NOT_FOUND, str(e))
-        elif 'exists in path' in msg or 'is a directory' in msg:
-            self.send_error_response(HTTPStatus.CONFLICT, str(e))
+        if e.error_code() == FileServerErrorCode.FILE_NOT_FOUND:
+            self.send_error_response(HTTPStatus.NOT_FOUND, e)
+        elif e.error_code() == FileServerErrorCode.FILE_EXISTS:
+            self.send_error_response(HTTPStatus.CONFLICT, e)
+        elif e.error_code() == FileServerErrorCode.FILE_IS_DIRECTORY:
+            self.send_error_response(HTTPStatus.CONFLICT, e)
         else:
-            self.send_error_response(HTTPStatus.BAD_REQUEST, str(e))
+            self.send_error_response(HTTPStatus.BAD_REQUEST, e)
 
     def handle_create_directory(self):
         logging.debug('Create directory request')

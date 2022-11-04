@@ -1,39 +1,79 @@
-class AuthenticationError(Exception):
-    def __init__(self, msg):
-        super().__init__(msg)
+from http import HTTPStatus
 
-class DirectoryError(Exception):
-    def __init__(self, msg):
-        super().__init__(msg)
+class FileServerErrorCode:
 
-class EpochError(Exception):
-    def __init__(self, msg):
-        super().__init__(msg)
+    '''
+        File server error codes.
+    '''
 
-class FileCacheError(Exception):
-    def __init__(self, msg):
-        super().__init__(msg)
+    USER_NOT_FOUND = "USER_NOT_FOUND"
+    INCORRECT_PASSWORD = "INCORRECT_PASSWORD"
+    DIRECTORY_NAME_EMPTY = "DIRECTORY_NAME_EMPTY"
+    DIRECTORY_EXISTS = "DIRECTORY_EXISTS"
+    DIRECTORY_NOT_FOUND = "DIRECTORY_NOT_FOUND"
+    FILE_EXISTS = "FILE_EXISTS"
+    FILE_NAME_EMPTY = "FILE_NAME_EMPTY"
+    FILE_NOT_FOUND = "FILE_NOT_FOUND"
+    FILE_NOT_WRITABLE = "FILE_NOT_WRITABLE"
+    FILE_NOT_REMOVABLE = "FILE_NOT_REMOVABLE"
+    FILE_VERSION_NOT_FOUND = "FILE_VERSION_NOT_FOUND"
+    FILE_IS_DIRECTORY = "FILE_IS_DIRECTORY"
+    FILE_STORE_FULL = "FILE_STORE_FULL"
+    FILE_TOO_LARGE = "FILE_TOO_LARGE"
+    INSUFFICIENT_SPACE = "INSUFFICIENT_SPACE"
+    IO_ERROR = "IO_ERROR"
+    IO_TIMEOUT = "IO_TIMEOUT"
+    SESSION_NOT_FOUND = "SESSION_NOT_FOUND"
+    INVALID_FILE_ID = "INVALID_FILE_ID"
+    INVALID_FILE_SIZE = "INVALID_FILE_SIZE"
+    INVALID_PATH = "INVALID_PATH"
+    INVALID_SESSION_ID = "INVALID_SESSION_ID"
+    INTERNAL_ERROR = "INTERNAL_ERROR"
 
-class FileError(Exception):
-    def __init__(self, msg):
+class FileServerError(Exception):
+    def __init__(self, msg, error_code=FileServerErrorCode.INTERNAL_ERROR):
         super().__init__(msg)
+        self._error_code = error_code
 
-class FileChunkError(Exception):
-    def __init__(self, msg):
-        super().__init__(msg)
+    def error_code(self):
+        return self._error_code
 
-class FileDownloadError(Exception):
-    def __init__(self, msg):
-        super().__init__(msg)
+class AuthenticationError(FileServerError):
+    def __init__(self, msg, error_code=FileServerErrorCode.INTERNAL_ERROR):
+        super().__init__(msg, error_code)
 
-class FileUploadError(Exception):
-    def __init__(self, msg):
-        super().__init__(msg)
+class DirectoryError(FileServerError):
+    def __init__(self, msg, error_code=FileServerErrorCode.INTERNAL_ERROR):
+        super().__init__(msg, error_code)
 
-class RemoteFileError(Exception):
-    def __init__(self, msg):
-        super().__init__(msg)
+class EpochError(FileServerError):
+    def __init__(self, msg, error_code=FileServerErrorCode.INTERNAL_ERROR):
+        super().__init__(msg, error_code)
 
-class SessionError(Exception):
-    def __init__(self, msg):
-        super().__init__(msg)
+class FileCacheError(FileServerError):
+    def __init__(self, msg, error_code=FileServerErrorCode.INTERNAL_ERROR):
+        super().__init__(msg, error_code)
+
+class FileError(FileServerError):
+    def __init__(self, msg, error_code=FileServerErrorCode.INTERNAL_ERROR):
+        super().__init__(msg, error_code)
+
+class FileChunkError(FileServerError):
+    def __init__(self, msg, error_code=FileServerErrorCode.INTERNAL_ERROR):
+        super().__init__(msg, error_code)
+
+class FileDownloadError(FileServerError):
+    def __init__(self, msg, error_code=FileServerErrorCode.INTERNAL_ERROR):
+        super().__init__(msg, error_code)
+
+class FileUploadError(FileServerError):
+    def __init__(self, msg, error_code=FileServerErrorCode.INTERNAL_ERROR):
+        super().__init__(msg, error_code)
+
+class RemoteFileError(FileServerError):
+    def __init__(self, msg, error_code=FileServerErrorCode.INTERNAL_ERROR):
+        super().__init__(msg, error_code)
+
+class SessionError(FileServerError):
+    def __init__(self, msg, error_code=FileServerErrorCode.INTERNAL_ERROR):
+        super().__init__(msg, error_code)

@@ -1,4 +1,4 @@
-from .error import SessionError
+from .error import SessionError, FileServerErrorCode
 import logging
 import time
 from threading import RLock
@@ -15,11 +15,11 @@ class Sessions(object):
     @staticmethod
     def validate_session(session_id):
         if not session_id.startswith('S-'):
-            raise SessionError('Invalid session id [{}]'.format(session_id))
+            raise SessionError('Invalid session id [{}]'.format(session_id), FileServerErrorCode.INVALID_SESSION_ID)
         try:
             uuid.UUID(session_id[2:])
         except:
-            raise SessionError('Invalid session id [{}]'.format(session_id))
+            raise SessionError('Invalid session id [{}]'.format(session_id), FileServerErrorCode.INVALID_SESSION_ID)
 
     def start_session(self, user_id, expiry_time=300):
         session_id = 'S-{}'.format(str(uuid.uuid4()))
@@ -40,14 +40,14 @@ class Sessions(object):
     def get_session_user(self, session_id):
         with self._mutex:
             if not self.is_valid_session(session_id):
-                raise SessionError('Session id [{}] not found!'.format(session_id))
+                raise SessionError('Session id [{}] not found!'.format(session_id), FileServerErrorCode.SESSION_NOT_FOUND)
             return self._sessions[session_id][0]
 
     def renew_session(self, session_id, expiry_time=300):
         self.validate_session(session_id)
         with self._mutex:
             if not self.is_valid_session(session_id):
-                raise SessionError('Session id [{}] not found!'.format(session_id))
+                raise SessionError('Session id [{}] not found!'.format(session_id), FileServerErrorCode.SESSION_NOT_FOUND)
             user_id, session_exp = self._sessions[session_id]
             session_exp = round(time.time() + expiry_time)
             self._sessions[session_id] = user_id, session_exp
@@ -57,7 +57,7 @@ class Sessions(object):
         self.validate_session(session_id)
         with self._mutex:
             if not self.is_valid_session(session_id):
-                raise SessionError('Session id [{}] not found!'.format(session_id))
+                raise SessionError('Session id [{}] not found!'.format(session_id), FileServerErrorCode.SESSION_NOT_FOUND)
             self._sessions.pop(session_id)
             logging.debug('Session [{}] ended'.format(session_id))
     

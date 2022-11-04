@@ -15,11 +15,11 @@ def get_current_epoch(cur):
     #
     return 1
 
-def check_current_epoch(cur, epoch_no):
+def check_valid_epoch(cur, epoch_no):
     '''
-        Check that the provided epoch number is the current one.
+        Check that the provided epoch number is not a previous one.
     '''
     curr_epoch = get_current_epoch(cur)
-    if epoch_no != curr_epoch:
+    if epoch_no < curr_epoch:
         raise EpochError('Cannot modify file in previous epoch [{}]. Current epoch is [{}]'.format(epoch_no, curr_epoch))
     return True

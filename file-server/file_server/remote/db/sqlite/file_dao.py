@@ -2,7 +2,7 @@ from collections import namedtuple
 from ....file import File
 from ..file_dao import FileDAO
 from ....error import EpochError, RemoteFileError
-from .epoch_util import check_current_epoch
+from .epoch_util import check_valid_epoch
 from .file_util import is_file_committed
 import logging
 import time
@@ -21,7 +21,7 @@ class SqliteFileDAO(FileDAO):
         try:
             try:
                 file_timestamp = round(time.time())
-                check_current_epoch(cur, epoch_no)
+                check_valid_epoch(cur, epoch_no)
                 cur.execute(
                     '''
                     INSERT INTO ps_remote_file (remote_id, file_size, created_timestamp, modified_timestamp, created_epoch) 
@@ -85,7 +85,7 @@ class SqliteFileDAO(FileDAO):
         try:
             try:
                 modified_timestamp = round(time.time())
-                check_current_epoch(cur, epoch_no)
+                check_valid_epoch(cur, epoch_no)
                 if is_file_committed(cur, remote_id, epoch_no=epoch_no):
                     raise RemoteFileError('Cannot modify committed remote file [{}]'.format(remote_id))
                 cur.execute(
@@ -120,7 +120,7 @@ class SqliteFileDAO(FileDAO):
         cur = self._conn.cursor()
         try:
             try:
-                check_current_epoch(cur, epoch_no)
+                check_valid_epoch(cur, epoch_no)
                 if is_file_committed(cur, remote_id, epoch_no=epoch_no):
                     logging.debug('Remote file [{}] is already committed'.format(remote_id))
                     return
@@ -168,7 +168,7 @@ class SqliteFileDAO(FileDAO):
         cur = self._conn.cursor()
         try:
             try:
-                check_current_epoch(cur, epoch_no)
+                check_valid_epoch(cur, epoch_no)
                 cur.execute(
                     '''
                     UPDATE ps_remote_file

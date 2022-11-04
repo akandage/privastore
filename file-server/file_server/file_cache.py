@@ -1,4 +1,4 @@
-from .error import FileCacheError, FileError
+from .error import FileCacheError, FileError, FileServerErrorCode
 from .file import File
 from .file_chunk import default_chunk_encoder, default_chunk_decoder
 from .util.file import config_bool, parse_mem_size, str_mem_size
@@ -41,10 +41,10 @@ class FileCache(object):
             while True:
                 now = time.time()
                 if now >= end_t:
-                    raise FileCacheError('Timed out reading file [{}]!'.format(self.file_id()))
+                    raise FileCacheError('Timed out reading file [{}]!'.format(self.file_id()), FileServerErrorCode.IO_TIMEOUT)
                 with self._node.lock:
                     if self._node.error:
-                        raise FileCacheError('File [{}] could not be read!'.format(self.file_id()))
+                        raise FileCacheError('File [{}] could not be read!'.format(self.file_id()), FileServerErrorCode.IO_ERROR)
 
                     self._total_chunks = self._node.file_chunks
 
@@ -64,7 +64,7 @@ class FileCache(object):
             if not self.closed():
                 with self._node.lock:
                     if self._node.num_readers <= 0:
-                        raise FileCacheError('Invalid file [{}] state!'.format(self.file_id()))
+                        raise FileCacheError('Invalid file [{}] state!'.format(self.file_id()), FileServerErrorCode.INTERNAL_ERROR)
                     self._node.num_readers -= 1
                 
                 super().close()
@@ -76,11 +76,11 @@ class FileCache(object):
             self._node = node
 
             if mode != 'w' and mode != 'a':
-                raise FileError('Invalid mode!')
+                raise FileError('Invalid mode!', FileServerErrorCode.INTERNAL_ERROR)
 
             with self._node.lock:
                 if self._node.num_writers != 0:
-                    raise Exception('File [{}] already has writer!'.format(self.file_id()))
+                    raise FileCacheError('File [{}] already has writer!'.format(self.file_id()), FileServerErrorCode.INTERNAL_ERROR)
                 self._node.num_writers = 1
             
             #
@@ -123,7 +123,7 @@ class FileCache(object):
                 super().close()
                 with lock:
                     if self._node.num_writers != 1:
-                        raise FileCacheError('Invalid file [{}] state!'.format(self.file_id()))
+                        raise FileCacheError('Invalid file [{}] state!'.format(self.file_id()), FileServerErrorCode.INTERNAL_ERROR)
                     self._node.num_writers = 0
                     self._node.reader_cv.notify_all()
             except Exception as e:
@@ -172,24 +172,24 @@ class FileCache(object):
 
         def has_node(self, file_id):
             if file_id is None or not File.is_valid_file_id(file_id):
-                raise FileCacheError('Invalid file id!')
+                raise FileError('Invalid file id!', FileServerErrorCode.INVALID_FILE_ID)
 
             return file_id in self._files
 
         def get_node(self, file_id):
             if file_id is None or not File.is_valid_file_id(file_id):
-                raise FileCacheError('Invalid file id!')
+                raise FileError('Invalid file id!', FileServerErrorCode.INVALID_FILE_ID)
 
             return self._files.get(file_id)
 
         def add_node(self, node):
             file_id = node.file_id()
             if file_id is None or not File.is_valid_file_id(file_id):
-                raise FileCacheError('Node missing or invalid file id!')
+                raise FileCacheError('Node missing or invalid file id!', FileServerErrorCode.INTERNAL_ERROR)
             if node._prev is not None or node._next is not None:
-                raise FileCacheError('Node prev or next pointers already set!')
+                raise FileCacheError('Node prev or next pointers already set!', FileServerErrorCode.INTERNAL_ERROR)
             if self.has_node(file_id):
-                raise FileCacheError('Node already in index!')
+                raise FileCacheError('Node already in index!', FileServerErrorCode.INTERNAL_ERROR)
             
             self._files[file_id] = node
             if self._tail is not None:
@@ -201,7 +201,7 @@ class FileCache(object):
 
         def pop_node(self, file_id):
             if not self.has_node(file_id):
-                raise FileCacheError('Node is not in index!')
+                raise FileCacheError('Node is not in index!', FileServerErrorCode.INTERNAL_ERROR)
             node = self.get_node(file_id)
             node_prev = node._prev
             node_next = node._next
@@ -286,7 +286,7 @@ class FileCache(object):
     def create_cache_entry(self, file_id, file_size, file_chunks=0):
         with self._index_lock:
             if self._index.has_node(file_id):
-                raise FileCacheError('File [{}] already exists in cache'.format(file_id))
+                raise FileCacheError('File [{}] already exists in cache'.format(file_id), FileServerErrorCode.FILE_EXISTS)
             self.ensure_cache_space(file_size)
             node = FileCache.IndexNode(file_id, file_size, file_chunks)
             self._index.add_node(node)
@@ -351,12 +351,12 @@ class FileCache(object):
     def append_file(self, file_id, encode_chunk=default_chunk_encoder, decode_chunk=default_chunk_decoder):
         with self._index_lock:
             if not self._index.has_node(file_id):
-                raise FileCacheError('File [{}] not found in cache'.format(file_id))
+                raise FileCacheError('File [{}] not found in cache'.format(file_id), FileServerErrorCode.FILE_NOT_FOUND)
 
             node = self._index.get_node(file_id)
 
             if not node.writable:
-                raise FileCacheError('File [{}] is not writable'.format(file_id))
+                raise FileCacheError('File [{}] is not writable'.format(file_id), FileServerErrorCode.FILE_NOT_WRITABLE)
 
             #
             # Disallow removing the file from the cache while it is being
@@ -372,7 +372,7 @@ class FileCache(object):
     '''
     def close_file(self, file, removable=True, writable=False):
         if file.closed():
-            raise FileCacheError('Already closed!')
+            raise FileCacheError('Already closed!', FileServerErrorCode.INTERNAL_ERROR)
 
         with self._index_lock:
             file.close()
@@ -390,7 +390,7 @@ class FileCache(object):
                             self._cache_used += curr_size-prev_size
 
                         if self._cache_used > self._cache_size:
-                            raise FileCacheError('File cache is full!')
+                            raise FileCacheError('File cache is full!', FileServerErrorCode.FILE_STORE_FULL)
                     if node.num_readers == 0 and node.num_writers == 0:
                         node.removable = removable
             else:
@@ -409,7 +409,7 @@ class FileCache(object):
             if self._index.has_node(file_id):
                 node = self._index.get_node(file_id)
                 if not node.removable:
-                    raise FileCacheError('File [{}] is not removable'.format(file_id))
+                    raise FileCacheError('File [{}] is not removable'.format(file_id), FileServerErrorCode.FILE_NOT_REMOVABLE)
                 self._index.pop_node(file_id)
                 if node.num_readers != 0:
                     # Notify any readers waiting.
@@ -420,7 +420,7 @@ class FileCache(object):
                     logging.warn('Could not remove file [{}] from cache: {}'.format(file_id, str(e)))
                 self._cache_used -= node.file_size
             else:
-                raise FileCacheError('File [{}] not found in cache'.format(file_id))
+                raise FileCacheError('File [{}] not found in cache'.format(file_id), FileServerErrorCode.FILE_NOT_FOUND)
 
     '''
         Remove the LRU (least recently used file) from the cache to free up space.
@@ -444,15 +444,15 @@ class FileCache(object):
         if size == 0:
             return
         if size < 0:
-            raise FileCacheError('Invalid size!')
+            raise FileCacheError('Invalid size!', FileServerErrorCode.INTERNAL_ERROR)
         if size > self._max_file_size:
-            raise FileCacheError('File size too large!')
+            raise FileCacheError('File size too large!', FileServerErrorCode.FILE_TOO_LARGE)
         
         with self._index_lock:
             if self.cache_free_space() >= size:
                 return
             elif not self._file_eviction:
-                raise FileCacheError('Insufficient space in cache')
+                raise FileCacheError('Insufficient space in cache', FileServerErrorCode.INSUFFICIENT_SPACE)
             
             #
             # First check if we can make enough space available before
@@ -468,7 +468,7 @@ class FileCache(object):
                 curr_node = curr_node._next
 
             if total_size < size:
-                raise FileCacheError('Insufficient space in cache')
+                raise FileCacheError('Insufficient space in cache', FileServerErrorCode.INSUFFICIENT_SPACE)
 
             total_size = 0
             curr_node = self._index.head()

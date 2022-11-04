@@ -1,4 +1,4 @@
-from .error import AuthenticationError
+from .error import AuthenticationError, FileServerError, FileServerErrorCode
 import logging
 from .util.crypto import hash_user_password
 
@@ -51,11 +51,11 @@ class Controller(object):
 
     def login_user(self, username, password):
         if self._auth_username is None or self._auth_password_hash is None:
-            raise Exception('Authentication username and/or password hash not configured!')
+            raise FileServerError('Authentication username and/or password hash not configured!')
         if username != self._auth_username:
-            raise AuthenticationError('User not found!')
+            raise AuthenticationError('User not found!', FileServerErrorCode.USER_NOT_FOUND)
         if hash_user_password(password) != self._auth_password_hash:
-            raise AuthenticationError('Incorrect username or password')
+            raise AuthenticationError('Incorrect username or password', FileServerErrorCode.INCORRECT_PASSWORD)
         session_id = self.session_mgr().start_session(username)
         return session_id
     

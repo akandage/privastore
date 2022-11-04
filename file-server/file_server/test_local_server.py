@@ -55,8 +55,10 @@ class TestLocalServer(TestServer):
 
         r = requests.post(URL.format('/1/login'), auth=('psadmin', 'psadm1n'))
         self.assertEqual(r.status_code, HTTPStatus.UNAUTHORIZED)
+        self.assertEqual(r.json()['error'], 'INCORRECT_PASSWORD')
         r = requests.post(URL.format('/1/login'), auth=('psadm1n', 'psadmin'))
         self.assertEqual(r.status_code, HTTPStatus.UNAUTHORIZED)
+        self.assertEqual(r.json()['error'], 'USER_NOT_FOUND')
         r = requests.post(URL.format('/1/login'), auth=('psadmin', 'psadmin'))
         self.assertEqual(r.status_code, HTTPStatus.OK)
         session_id = r.headers.get('x-privastore-session-id')
@@ -68,14 +70,17 @@ class TestLocalServer(TestServer):
         inv_session_id = 'S-{}'.format(str(uuid.uuid4()))
         r = requests.put(URL.format('/1/heartbeat'), headers={'x-privastore-session-id':inv_session_id})
         self.assertEqual(r.status_code, HTTPStatus.UNAUTHORIZED)
+        self.assertEqual(r.json()['error'], 'SESSION_NOT_FOUND')
         r = requests.put(URL.format('/1/heartbeat'), headers={'x-privastore-session-id':session_id})
         self.assertEqual(r.status_code, HTTPStatus.OK)
         r = requests.post(URL.format('/1/logout'), headers={'x-privastore-session-id':inv_session_id})
         self.assertEqual(r.status_code, HTTPStatus.UNAUTHORIZED)
+        self.assertEqual(r.json()['error'], 'SESSION_NOT_FOUND')
         r = requests.post(URL.format('/1/logout'), headers={'x-privastore-session-id':session_id})
         self.assertEqual(r.status_code, HTTPStatus.OK)
         r = requests.put(URL.format('/1/heartbeat'), headers={'x-privastore-session-id':session_id})
         self.assertEqual(r.status_code, HTTPStatus.UNAUTHORIZED)
+        self.assertEqual(r.json()['error'], 'SESSION_NOT_FOUND')
     
     def test_directory_api(self):
         self.start_server()

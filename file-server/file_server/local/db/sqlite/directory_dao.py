@@ -1,6 +1,6 @@
 from ..directory_dao import DirectoryDAO
 from .directory_util import query_directory_id, query_file_id, traverse_path
-from ....error import DirectoryError, FileError
+from ....error import DirectoryError, FileError, FileServerErrorCode
 from ...file_transfer_status import FileTransferStatus
 from ...file_type import FileType
 from ....util.file import str_path
@@ -13,16 +13,16 @@ class SqliteDirectoryDAO(DirectoryDAO):
     
     def create_directory(self, path, directory_name, is_hidden=False):
         if len(directory_name) == 0:
-            raise DirectoryError('Directory name can\'t be empty!')
+            raise DirectoryError('Directory name can\'t be empty!', FileServerErrorCode.DIRECTORY_NAME_EMPTY)
         cur = self._conn.cursor()
         try:
             try:
                 cur.execute('BEGIN')
                 directory_id = traverse_path(cur, path)
                 if query_directory_id(cur, directory_id, directory_name, is_hidden) is not None:
-                    raise DirectoryError('Directory [{}] exists in path [{}]'.format(directory_name, str_path(path)))
+                    raise DirectoryError('Directory [{}] exists in path [{}]'.format(directory_name, str_path(path)), FileServerErrorCode.DIRECTORY_EXISTS)
                 elif query_file_id(cur, directory_id, directory_name, is_hidden) is not None:
-                    raise FileError('File [{}] exists in path [{}]'.format(directory_name, str_path(path)))
+                    raise FileError('File [{}] exists in path [{}]'.format(directory_name, str_path(path)), FileServerErrorCode.FILE_EXISTS)
                 cur.execute('INSERT INTO ps_directory (name, is_hidden) VALUES (?, ?)', (directory_name, is_hidden))
                 created_directory_id = cur.lastrowid
                 cur.execute('INSERT INTO ps_link (parent_id, child_id) VALUES (?, ?)', (directory_id, created_directory_id))
@@ -48,16 +48,16 @@ class SqliteDirectoryDAO(DirectoryDAO):
     
     def create_file(self, path, file_name, file_type=FileType.BINARY_DATA, is_hidden=False):
         if len(file_name) == 0:
-            raise FileError('File name can\'t be empty!')
+            raise FileError('File name can\'t be empty!', FileServerErrorCode.FILE_NAME_EMPTY)
         cur = self._conn.cursor()
         try:
             try:
                 cur.execute('BEGIN')
                 directory_id = traverse_path(cur, path)
                 if query_directory_id(cur, directory_id, file_name, is_hidden) is not None:
-                    raise DirectoryError('Directory [{}] exists in path [{}]'.format(file_name, str_path(path)))
+                    raise DirectoryError('Directory [{}] exists in path [{}]'.format(file_name, str_path(path)), FileServerErrorCode.DIRECTORY_EXISTS)
                 elif query_file_id(cur, directory_id, file_name, is_hidden) is not None:
-                    raise FileError('File [{}] exists in path [{}]'.format(file_name, str_path(path)))
+                    raise FileError('File [{}] exists in path [{}]'.format(file_name, str_path(path)), FileServerErrorCode.FILE_EXISTS)
                 cur.execute('INSERT INTO ps_file (name, file_type, parent_id, is_hidden) VALUES (?, ?, ?, ?)', (file_name, file_type.value, directory_id, is_hidden))
                 created_file_id = cur.lastrowid
                 cur.execute('INSERT INTO ps_file_version (file_id, version, transfer_status) VALUES (?, ?, ?)', 
@@ -84,14 +84,14 @@ class SqliteDirectoryDAO(DirectoryDAO):
 
     def remove_file(self, path, file_name, delete=False, is_hidden=False):
         if len(file_name) == 0:
-            raise FileError('File name can\'t be empty!')
+            raise FileError('File name can\'t be empty!', FileServerErrorCode.FILE_NAME_EMPTY)
         cur = self._conn.cursor()
         try:
             try:
                 cur.execute('BEGIN')
                 directory_id = traverse_path(cur, path)
                 if query_directory_id(cur, directory_id, file_name, is_hidden) is not None:
-                    raise DirectoryError('[{}] in path [{}] is a directory'.format(file_name, str_path(path)))
+                    raise DirectoryError('[{}] in path [{}] is a directory'.format(file_name, str_path(path)), FileServerErrorCode.FILE_IS_DIRECTORY)
                 if delete:
                     cur.execute('''
                         DELETE FROM ps_file
@@ -99,7 +99,7 @@ class SqliteDirectoryDAO(DirectoryDAO):
                     ''', (file_name, directory_id))
                     logging.debug('Remove file [{}] affected {} rows'.format(str_path(path + [file_name]), cur.rowcount))
                     if cur.rowcount == 0:
-                        raise FileError('File [{}] not found!'.format(str_path(path + [file_name])))
+                        raise FileError('File [{}] not found!'.format(str_path(path + [file_name])), FileServerErrorCode.FILE_NOT_FOUND)
                 else:
                     cur.execute('''
                         UPDATE ps_file
@@ -107,7 +107,7 @@ class SqliteDirectoryDAO(DirectoryDAO):
                         WHERE name = ? AND parent_id = ?
                     ''', (file_name, directory_id))
                     if cur.rowcount != 1:
-                        raise FileError('File [{}] not found!'.format(str_path(path + [file_name])))
+                        raise FileError('File [{}] not found!'.format(str_path(path + [file_name])), FileServerErrorCode.FILE_NOT_FOUND)
                 self._conn.commit()
             except DirectoryError as e:
                 logging.error('Directory error: {}'.format(str(e)))

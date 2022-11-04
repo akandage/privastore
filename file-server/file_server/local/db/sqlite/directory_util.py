@@ -1,4 +1,4 @@
-from ....error import DirectoryError
+from ....error import DirectoryError, FileServerErrorCode
 from ...file_transfer_status import FileTransferStatus
 
 def query_directory_id(cur, parent_directory_id, directory_name, show_hidden=False):
@@ -30,5 +30,5 @@ def traverse_path(cur, path):
     for directory_name in path:
         directory_id = query_directory_id(cur, directory_id, directory_name)
         if directory_id is None:
-            raise DirectoryError('Invalid path to directory [{}]'.format('/' + '/'.join(path)))
+            raise DirectoryError('Invalid path to directory [{}]'.format('/' + '/'.join(path)), FileServerErrorCode.INVALID_PATH)
     return directory_id

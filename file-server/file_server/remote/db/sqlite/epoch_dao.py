@@ -1,5 +1,5 @@
 from ..epoch_dao import EpochDAO
-from .epoch_util import check_current_epoch
+from .epoch_util import check_valid_epoch
 from ....error import EpochError, RemoteFileError
 from ....file import File
 from .file_util import is_file_committed
@@ -17,7 +17,7 @@ class SqliteEpochDAO(EpochDAO):
         cur = self._conn.cursor()
         try:
             try:
-                check_current_epoch(cur)
+                check_valid_epoch(cur)
                 if not is_file_committed(cur, marker_id):
                     raise RemoteFileError('Epoch marker file must be committed remote file!')
                 cur.execute(

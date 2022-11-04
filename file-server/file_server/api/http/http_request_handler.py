@@ -1,5 +1,5 @@
 import base64
-from ...error import AuthenticationError, SessionError
+from ...error import AuthenticationError, FileServerError, FileServerErrorCode, SessionError
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 import logging
@@ -64,15 +64,14 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
 
     def handle_internal_error(self, e):
         logging.error('Internal error: {}'.format(str(e)))
-        self.send_error_response(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
+        self.send_error_response(HTTPStatus.INTERNAL_SERVER_ERROR, e)
 
     def handle_session_error(self, e):
             logging.error('Session error: {}'.format(str(e)))
-            msg = str(e).lower()
-            if 'not found' in msg:
-                self.send_error_response(HTTPStatus.UNAUTHORIZED, str(e))
+            if e.error_code() == FileServerErrorCode.SESSION_NOT_FOUND:
+                self.send_error_response(HTTPStatus.UNAUTHORIZED, e)
             else:
-                self.send_error_response(HTTPStatus.BAD_REQUEST, str(e))
+                self.send_error_response(HTTPStatus.BAD_REQUEST, e)
 
     def parse_path(self):
         if self.url_path is not None and self.url_query is not None:
@@ -178,13 +177,20 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 logging.warn('Could not read HTTP request body: {}'.format(str(e)))
 
-    def send_error_response(self, code, error_msg=''):
+    def send_error_response(self, code, error=None):
         # May not have read the complete body if provided.
         self.read_body()
 
-        if error_msg:
-            logging.error(error_msg)
-            body = '{{error:"{}"}}'.format(error_msg).encode('utf-8')
+        if error is not None:
+            error_msg = str(error)
+            if isinstance(error, FileServerError):
+                error_code = error.error_code()
+                logging.error('Error [{}] - {}'.format(error_code, error_msg))
+            else:
+                error_code = str(code)
+                logging.error('Error [HTTP {}] - {}'.format(error_code, error_msg))
+                
+            body = '{{"error":"{}", "msg":"{}"}}'.format(error_code, error_msg).encode('utf-8')
         else:
             body = b''
 
@@ -226,7 +232,7 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
         try:
             session_id = self.controller().login_user(self.auth_username, self.auth_password)
         except AuthenticationError as e:
-            self.send_error_response(HTTPStatus.UNAUTHORIZED, str(e))
+            self.send_error_response(HTTPStatus.UNAUTHORIZED, e)
             return
         except Exception as e:
             self.handle_internal_error(e)
