@@ -374,6 +374,13 @@ class FileCache(object):
             node.writable = True
             node.removable = False
 
+    '''
+        Retrieve file metadata:
+            - file_size - the allocated space for the file in the cache
+            - file_chunks - number of file chunks
+        
+        Throws error if file does not exist in cache.
+    '''
     def file_metadata(self, file_id):
         with self._index_lock:
             if not self._index.has_node(file_id):
