@@ -210,6 +210,15 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
         
         return session_id
 
+    def get_epoch_no(self):
+        epoch_no = self.headers.get(EPOCH_NO_HEADER)
+
+        if epoch_no is None:
+            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Missing {} header'.format(EPOCH_NO_HEADER))
+            return
+        
+        return epoch_no
+
     def heartbeat_session(self, session_id):
         try:
             self.controller().heartbeat_session(session_id)

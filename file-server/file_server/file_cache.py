@@ -19,6 +19,9 @@ class FileCache(object):
 
             with self._node.lock:
                 self._node.num_readers += 1
+                self._node.removable = False
+            
+            logging.debug('File [{}] opened for reading'.format(file_id))
 
         def file_size(self):
             #
@@ -48,8 +51,8 @@ class FileCache(object):
 
                     self._total_chunks = self._node.file_chunks
 
-                    if self._node.num_writers == 0:
-                        # Write end of the file closed.
+                    if not self._node.writable:
+                        # File cannot be appended to.
                         break
                     if self._chunks_read < self._total_chunks:
                         # We have chunks to read.
@@ -81,13 +84,19 @@ class FileCache(object):
             with self._node.lock:
                 if self._node.num_writers != 0:
                     raise FileCacheError('File [{}] already has writer!'.format(self.file_id()), FileServerErrorCode.INTERNAL_ERROR)
+                if not self._node.writable:
+                    raise FileCacheError('File [{}] is not writable!'.format(self.file_id()), FileServerErrorCode.INTERNAL_ERROR)
                 self._node.num_writers = 1
+                self._node.removable = False
             
             #
             # Read the metadata now that we have the lock on the file.
             #
             if mode == 'a':
                 self.read_metadata_file()
+                logging.debug('File [{}] opened for appending'.format(file_id))
+            else:
+                logging.debug('File [{}] opened for writing'.format(file_id))
 
         def write(self, data):
             lock = self._node.lock
@@ -307,11 +316,6 @@ class FileCache(object):
                 node = self._index.get_node(file_id)
 
                 #
-                # Disallow removing the file from the cache while it is being
-                # read.
-                #
-                node.removable = False
-                #
                 # This is now the MRU (most recently used) file.
                 #
                 self._index.move_to_back(file_id)
@@ -332,10 +336,6 @@ class FileCache(object):
 
             node = self.create_cache_entry(file_id, file_size)
             node.writable = True
-            #
-            # Disallow removing the file from the cache while it is being
-            # written to.
-            #
             node.removable = False
 
             return FileCache.CacheFileWriter(self._cache_path, file_id, node, encode_chunk=encode_chunk, decode_chunk=decode_chunk)
@@ -355,16 +355,21 @@ class FileCache(object):
 
             node = self._index.get_node(file_id)
 
-            if not node.writable:
-                raise FileCacheError('File [{}] is not writable'.format(file_id), FileServerErrorCode.FILE_NOT_WRITABLE)
-
-            #
-            # Disallow removing the file from the cache while it is being
-            # written to.
-            #
-            node.removable = False
-
             return FileCache.CacheFileWriter(self._cache_path, file_id, node, mode='a', encode_chunk=encode_chunk, decode_chunk=decode_chunk)
+
+    '''
+        Create empty file in the cache with file_size bytes reserved.
+        File will be writable and appendable until closed.
+
+        Throws error if file with given id already exists in cache or if there
+        is insufficient space in the cache.
+
+    '''
+    def touch_file(self, file_id, file_size):
+        with self._index_lock:
+            node = self.create_cache_entry(file_id, file_size)
+            node.writable = True
+            node.removable = False
 
     '''
         Close file in cache.
@@ -378,11 +383,23 @@ class FileCache(object):
             file.close()
             file_id = file.file_id()
             mode = file.mode()
+
+            if mode == 'r':
+                logging.debug('File [{}] reader closed'.format(file_id))
+            elif mode == 'w':
+                logging.debug('File [{}] writer closed'.format(file_id))
+            elif mode == 'a':
+                logging.debug('File [{}] appender closed'.format(file_id))
+
             if self._index.has_node(file_id):
                 node = self._index.get_node(file_id)
                 with node.lock:
                     if mode == 'w' or mode == 'a':
-                        node.writable = writable
+                        if not writable:
+                            node.writable = False
+                            node.reader_cv.notify_all()
+                            logging.debug('File [{}] no longer writable')
+
                         prev_size = node.file_size
                         curr_size = file.size_on_disk()
                         if curr_size > prev_size:
@@ -390,9 +407,13 @@ class FileCache(object):
                             self._cache_used += curr_size-prev_size
 
                         if self._cache_used > self._cache_size:
+                            node.error = True
+                            node.reader_cv.notify_all()
                             raise FileCacheError('File cache is full!', FileServerErrorCode.FILE_STORE_FULL)
-                    if node.num_readers == 0 and node.num_writers == 0:
+                    if node.num_readers == 0 and node.num_writers == 0 and not node.writable:
                         node.removable = removable
+                        if removable:
+                            logging.debug('File [{}] now removable')
             else:
                 raise FileCacheError('File [{}] not found in cache'.format(file_id))
 
