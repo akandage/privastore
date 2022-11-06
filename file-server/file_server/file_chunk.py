@@ -2,15 +2,27 @@ from .error import FileChunkError
 from .util.crypto import sha256
 from .util.file import write_all
 import os
+from typing import Callable, BinaryIO, Optional, Union
 
-def default_chunk_encoder(chunk_bytes, chunk_file=None):
+'''
+    Method which encodes a file chunk. Given a chunk (bytes), will either
+    return the encoded chunk (bytes) or, if an optional file-like object
+    is provided, write the encoded chunk to the file and return the length
+    of the encoded chunk.
+'''
+chunk_encoder = Callable[[bytes, Optional[BinaryIO]], Union[int, bytes]]
+'''
+'''
+chunk_decoder = Callable[[Union[bytes, BinaryIO]], bytes]
+
+def default_chunk_encoder(chunk_bytes: bytes, chunk_file: Optional[BinaryIO]=None) -> Union[int, bytes]:
     if chunk_file is not None:
         write_all(chunk_file, chunk_bytes)
         chunk_file.flush()
         return len(chunk_bytes)
     return chunk_bytes
 
-def default_chunk_decoder(chunk_bytes=None, chunk_file=None):
+def default_chunk_decoder(chunk_bytes: Optional[bytes]=None, chunk_file: Optional[bytes]=None) -> bytes:
     if chunk_file is not None:
         chunk_bytes = chunk_file.read()
         return chunk_bytes

@@ -14,22 +14,22 @@ class SessionManager(Daemon):
         logging.debug('Session expiry time: [{}s]'.format(self._session_expiry_time))
         logging.debug('Session cleanup interval: [{}s]'.format(self._session_cleanup_interval))
 
-    def sessions(self):
+    def sessions(self) -> Sessions:
         return self._sessions
     
-    def session_cleanup_interval(self):
+    def session_cleanup_interval(self) -> int:
         return self._session_cleanup_interval
     
-    def session_expiry_time(self):
+    def session_expiry_time(self) -> int:
         return self._session_expiry_time
     
-    def start_session(self, username):
+    def start_session(self, username: str) -> str:
         return self._sessions.start_session(username, self._session_expiry_time)
     
-    def renew_session(self, session_id):
+    def renew_session(self, session_id: str):
         self._sessions.renew_session(session_id, self._session_expiry_time)
 
-    def end_session(self, session_id):
+    def end_session(self, session_id: str):
         self._sessions.end_session(session_id)
 
     def run(self):

@@ -1,8 +1,9 @@
 import logging
+import sqlite3
 
 class DataAccessObject(object):
 
-    def __init__(self, conn):
+    def __init__(self, conn: sqlite3.Connection):
         super().__init__()
         self._conn = conn
     

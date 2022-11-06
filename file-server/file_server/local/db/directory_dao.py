@@ -16,7 +16,7 @@ class DirectoryDAO(DataAccessObject):
         exists.
         Throws FileError if a file with that name exists in the path.
     '''
-    def create_directory(self, path, directory_name, is_hidden=False):
+    def create_directory(self, path: list[str], directory_name: str, is_hidden: bool=False) -> None:
         raise Exception('Not implemented!')
     
     '''
@@ -30,7 +30,7 @@ class DirectoryDAO(DataAccessObject):
         that name exists in the path. 
         Throws FileError if file with that name exists in the path.
     '''
-    def create_file(self, path, file_name, is_hidden=False):
+    def create_file(self, path: list[str], file_name: str, is_hidden: bool=False) -> None:
         raise Exception('Not implemented')
     
     '''
@@ -46,7 +46,7 @@ class DirectoryDAO(DataAccessObject):
         Throws FileError if file is not found or file is hidden and is_hidden
         flag is not set.
     '''
-    def remove_file(self, path, file_name, delete=False, is_hidden=False):
+    def remove_file(self, path: list[str], file_name: str, delete: bool=False, is_hidden: bool=False) -> None:
         raise Exception('Not implemented')
 
     '''
@@ -59,5 +59,5 @@ class DirectoryDAO(DataAccessObject):
          or 'f' for file) and the entry name.
         Throws DirectoryError is path doesn't exist.
     '''
-    def list_directory(self, path, show_hidden=False):
+    def list_directory(self, path: list[str], show_hidden: bool=False) -> list[tuple]:
         raise Exception('Not implemented!')

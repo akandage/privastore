@@ -1,5 +1,4 @@
-from collections import namedtuple
-from ..file_dao import FileDAO
+from ..file_dao import FileDAO, FileVersionMetadata
 from ....error import DirectoryError, FileError, FileServerErrorCode
 from .directory_util import query_file_id, traverse_path
 from ....file import File
@@ -7,8 +6,6 @@ from ...file_type import FileType
 from ...file_transfer_status import FileTransferStatus
 from ....util.file import str_path
 import logging
-
-FileVersionMetadata = namedtuple('FileVersionMetadata', ['file_type', 'version', 'local_id', 'remote_id', 'file_size', 'size_on_disk', 'total_chunks', 'transfer_status'])
 
 class SqliteFileDAO(FileDAO):
 

@@ -1,13 +1,14 @@
 from collections import namedtuple
 from .error import FileCacheError, FileError, FileServerErrorCode
 from .file import File
-from .file_chunk import default_chunk_encoder, default_chunk_decoder
+from .file_chunk import chunk_encoder, chunk_decoder, default_chunk_encoder, default_chunk_decoder
 from .util.file import config_bool, parse_mem_size, str_mem_size
 import logging
 import os
 import shutil
 from threading import Condition, Lock, RLock
 import time
+from typing import Optional
 
 class FileCache(object):
 
@@ -238,7 +239,7 @@ class FileCache(object):
 
 
     def __init__(self, cache_config):
-        self._cache_path = cache_config.get('store-path', './cache')
+        self._cache_path: str = cache_config.get('store-path', './cache')
         self._cache_used = 0
         self._cache_size = parse_mem_size(cache_config.get('store-size', '1GB'))
         self._chunk_size = parse_mem_size(cache_config.get('chunk-size', '1MB'))
@@ -267,35 +268,35 @@ class FileCache(object):
         logging.debug('Max file size [{}]'.format(str_mem_size(self._max_file_size)))
         logging.debug('File eviction enabled: [{}]'.format(self._file_eviction))
 
-    def cache_path(self):
+    def cache_path(self) -> str:
         return self._cache_path
 
-    def cache_size(self):
+    def cache_size(self) -> int:
         return self._cache_size
     
-    def cache_used(self):
+    def cache_used(self) -> int:
         cache_used = 0
         with self._index_lock:
             cache_used = self._cache_used
         return cache_used
     
-    def cache_free_space(self):
+    def cache_free_space(self) -> int:
         free_space = 0
         with self._index_lock:
             free_space = max(0, self._cache_size - self._cache_used)
         return free_space
     
-    def file_chunk_size(self):
+    def file_chunk_size(self) -> int:
         return self._chunk_size
     
-    def max_file_size(self):
+    def max_file_size(self) -> int:
         return self._max_file_size
 
-    def has_file(self, file_id):
+    def has_file(self, file_id: str) -> bool:
         with self._index_lock:
             return self._index.has_node(file_id)
 
-    def create_cache_entry(self, file_id, file_size, file_chunks=0):
+    def create_cache_entry(self, file_id: str, file_size: int, file_chunks: int=0) -> IndexNode:
         with self._index_lock:
             if self._index.has_node(file_id):
                 raise FileCacheError('File [{}] already exists in cache'.format(file_id), FileServerErrorCode.FILE_EXISTS)
@@ -313,7 +314,7 @@ class FileCache(object):
         If file is not found, return None.
         Otherwise, return a file like object for reading.
     '''
-    def read_file(self, file_id, encode_chunk=default_chunk_encoder, decode_chunk=default_chunk_decoder):
+    def read_file(self, file_id: str, encode_chunk: chunk_encoder=default_chunk_encoder, decode_chunk: chunk_decoder=default_chunk_decoder) -> Optional[File]:
         with self._index_lock:
             if self._index.has_node(file_id):
                 node = self._index.get_node(file_id)
@@ -332,7 +333,7 @@ class FileCache(object):
 
         Return a file like object for writing.
     '''
-    def write_file(self, file_id=None, file_size=0, encode_chunk=default_chunk_encoder, decode_chunk=default_chunk_decoder):
+    def write_file(self, file_id: Optional[str]=None, file_size: int=0, encode_chunk: chunk_encoder=default_chunk_encoder, decode_chunk: chunk_decoder=default_chunk_decoder) -> File:
         with self._index_lock:
             if file_id is None:
                 file_id = File.generate_file_id()
@@ -351,7 +352,7 @@ class FileCache(object):
 
         Return a file like object for appending.
     '''
-    def append_file(self, file_id, encode_chunk=default_chunk_encoder, decode_chunk=default_chunk_decoder):
+    def append_file(self, file_id: str, encode_chunk: chunk_encoder=default_chunk_encoder, decode_chunk: chunk_decoder=default_chunk_decoder) -> File:
         with self._index_lock:
             if not self._index.has_node(file_id):
                 raise FileCacheError('File [{}] not found in cache'.format(file_id), FileServerErrorCode.FILE_NOT_FOUND)
@@ -368,7 +369,7 @@ class FileCache(object):
         is insufficient space in the cache.
 
     '''
-    def touch_file(self, file_id, file_size):
+    def touch_file(self, file_id: str, file_size: int) -> None:
         with self._index_lock:
             node = self.create_cache_entry(file_id, file_size)
             node.writable = True
@@ -381,7 +382,7 @@ class FileCache(object):
         
         Throws error if file does not exist in cache.
     '''
-    def file_metadata(self, file_id):
+    def file_metadata(self, file_id: str) -> tuple:
         with self._index_lock:
             if not self._index.has_node(file_id):
                 raise FileCacheError('File [{}] not found in cache'.format(file_id), FileServerErrorCode.FILE_NOT_FOUND)
@@ -395,7 +396,7 @@ class FileCache(object):
         Close file in cache.
 
     '''
-    def close_file(self, file, removable=True, writable=False):
+    def close_file(self, file: str, removable: bool=True, writable: bool=False) -> None:
         if file.closed():
             raise FileCacheError('Already closed!', FileServerErrorCode.INTERNAL_ERROR)
 
@@ -441,11 +442,11 @@ class FileCache(object):
         Remove file from cache.
 
     '''
-    def remove_file(self, file):
+    def remove_file(self, file: File) -> None:
         file_id = file.file_id()
         self.remove_file_by_id(file_id)
 
-    def remove_file_by_id(self, file_id):
+    def remove_file_by_id(self, file_id: str) -> None:
         with self._index_lock:
             if self._index.has_node(file_id):
                 node = self._index.get_node(file_id)
@@ -481,7 +482,7 @@ class FileCache(object):
 
         Throws FileCacheError if given amount of space is not available.
     '''
-    def ensure_cache_space(self, size):
+    def ensure_cache_space(self, size: int) -> None:
         if size == 0:
             return
         if size < 0:

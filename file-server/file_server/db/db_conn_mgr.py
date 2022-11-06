@@ -1,9 +1,12 @@
+from collections.abc import Callable
 import logging
 from ..pool import Pool
+import sqlite3
+from typing import Optional
 
 class DbConnectionManager(object):
 
-    def __init__(self, db_config, conn_factory=None):
+    def __init__(self, db_config, conn_factory: Callable[[], sqlite3.Connection]=None):
         self._conn_pool_size = conn_pool_size = int(db_config.get('connection-pool-size', 5))
         self._connection_pool_timeout = int(db_config.get('connection-pool-timeout', 30))
         self._conn_factory = conn_factory
@@ -14,13 +17,13 @@ class DbConnectionManager(object):
         else:
             self._conn_pool = None
         
-    def conn_factory(self):
+    def conn_factory(self) -> Callable[[], sqlite3.Connection]:
         return self._conn_factory
     
-    def conn_pool(self):
+    def conn_pool(self) -> Optional[Pool]:
         return self._conn_pool
 
-    def db_connect(self):
+    def db_connect(self) -> sqlite3.Connection:
         if self._conn_pool:
             conn = self._conn_pool.acquire(timeout=self._connection_pool_timeout)
             if conn is None:
@@ -29,7 +32,7 @@ class DbConnectionManager(object):
             conn = self._conn_factory()
         return conn
 
-    def db_close(self, conn):
+    def db_close(self, conn: sqlite3.Connection):
         if self._conn_pool:
             self._conn_pool.release(conn)
         else:

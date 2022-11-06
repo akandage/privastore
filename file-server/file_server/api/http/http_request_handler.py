@@ -1,10 +1,13 @@
 import base64
+from ...controller import Controller
 from ...error import AuthenticationError, FileServerError, FileServerErrorCode, SessionError
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 import logging
 import urllib
+import urllib.parse
 from ...util.sock import SocketWrapper
+from typing import Optional
 
 AUTHORIZATION_HEADER = 'Authorization'
 CONNECTION_HEADER = 'Connection'
@@ -21,16 +24,16 @@ LOGOUT_PATH = '/1/logout'
 
 class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
 
-    def __init__(self, request, client_address, server, controller):
+    def __init__(self, request, client_address, server, controller: Controller):
         self._controller = controller
-        self.auth_username = None
-        self.auth_password = None
-        self.content_len = None
-        self.url_path = None
-        self.url_query = None
+        self.auth_username: Optional[str] = None
+        self.auth_password: Optional[str] = None
+        self.content_len: Optional[int] = None
+        self.url_path: Optional[str] = None
+        self.url_query: Optional[dict[str, list[str]]] = None
         super().__init__(request, client_address, server)
     
-    def controller(self):
+    def controller(self) -> Controller:
         return self._controller
 
     def do_GET(self):
@@ -62,11 +65,11 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
             logging.error('Invalid path: [{}]'.format(self.url_path))
             self.send_error_response(HTTPStatus.NOT_FOUND)
 
-    def handle_internal_error(self, e):
+    def handle_internal_error(self, e: Exception):
         logging.error('Internal error: {}'.format(str(e)))
         self.send_error_response(HTTPStatus.INTERNAL_SERVER_ERROR, e)
 
-    def handle_session_error(self, e):
+    def handle_session_error(self, e: SessionError):
             logging.error('Session error: {}'.format(str(e)))
             if e.error_code() == FileServerErrorCode.SESSION_NOT_FOUND:
                 self.send_error_response(HTTPStatus.UNAUTHORIZED, e)
@@ -103,7 +106,7 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
         if self.content_len is not None:
             return True
 
-        content_len =  self.headers.get(CONTENT_LENGTH_HEADER)
+        content_len = self.headers.get(CONTENT_LENGTH_HEADER)
 
         if content_len is None:
             self.send_error_response(HTTPStatus.BAD_REQUEST, 'Missing {} header'.format(CONTENT_LENGTH_HEADER))
@@ -157,12 +160,10 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
             pass
 
         # Try not to read past the end of the request body.
-        try:
+        if isinstance(self.rfile, SocketWrapper):
             bytes_read = self.rfile.bytes_read()
             content_len = content_len - bytes_read
             logging.debug('Already read={}'.format(bytes_read))
-        except:
-            pass
 
         if content_len > 0:
             try:
@@ -177,7 +178,7 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 logging.warn('Could not read HTTP request body: {}'.format(str(e)))
 
-    def send_error_response(self, code, error=None):
+    def send_error_response(self, code: int, error: Exception=None):
         # May not have read the complete body if provided.
         self.read_body()
 
@@ -201,7 +202,7 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
         if body:
             self.wfile.write(body)
     
-    def get_session_id(self):
+    def get_session_id(self) -> str:
         session_id = self.headers.get(SESSION_ID_HEADER)
 
         if session_id is None:
@@ -210,13 +211,22 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
         
         return session_id
 
-    def get_epoch_no(self):
+    def get_epoch_no(self) -> int:
         epoch_no = self.headers.get(EPOCH_NO_HEADER)
 
         if epoch_no is None:
             self.send_error_response(HTTPStatus.BAD_REQUEST, 'Missing {} header'.format(EPOCH_NO_HEADER))
             return
         
+        try:
+            epoch_no = int(epoch_no)
+            if epoch_no < 1:
+                self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid {} header value. Must be >= 1'.format(EPOCH_NO_HEADER))
+                return
+        except:
+            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid {} header value'.format(EPOCH_NO_HEADER))
+            return
+
         return epoch_no
 
     def heartbeat_session(self, session_id):

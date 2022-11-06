@@ -1,7 +1,12 @@
 from ..controller import Controller
+from .db.dao_factory import DAOFactory
+from ..db.db_conn_mgr import DbConnectionManager
 from ..error import FileDownloadError, FileUploadError
 from ..file import File
+from ..file_cache import FileCache
+from ..file_chunk import chunk_encoder, chunk_decoder
 from .file_transfer_status import FileTransferStatus
+from ..session_mgr import SessionManager
 from ..util.file import chunked_copy, str_mem_size, str_path
 import logging
 
@@ -17,7 +22,7 @@ class LocalServerController(Controller):
         encode_chunk - file chunk encoder
         decode_chunk - file chunk decoder
     '''
-    def __init__(self, dao_factory, db_conn_mgr, session_mgr, store, encode_chunk, decode_chunk):
+    def __init__(self, dao_factory: DAOFactory, db_conn_mgr: DbConnectionManager, session_mgr: SessionManager, store: FileCache, encode_chunk: chunk_encoder, decode_chunk: chunk_decoder):
         super().__init__(db_conn_mgr, session_mgr, store)
         self._dao_factory = dao_factory
         self._encode_chunk = encode_chunk

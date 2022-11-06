@@ -32,11 +32,11 @@ class File(object):
             raise FileError('Invalid mode')
     
     @staticmethod
-    def generate_file_id():
+    def generate_file_id() -> str:
         return 'F-{}'.format(str(uuid.uuid4()))
 
     @staticmethod
-    def is_valid_file_id(file_id):
+    def is_valid_file_id(file_id: str) -> bool:
         if len(file_id) < 38 or not file_id.startswith('F-'):
             return False
         try:
@@ -81,44 +81,44 @@ class File(object):
             metadata_file.write(size_on_disk)
             metadata_file.flush()
 
-    def metadata_file_path(self):
+    def metadata_file_path(self) -> str:
         return os.path.join(self._file_path, METADATA_FILE)
     
-    def file_id(self):
+    def file_id(self) -> str:
         return self._file_id
     
-    def mode(self):
+    def mode(self) -> str:
         return self._mode
 
-    def chunks_read(self):
+    def chunks_read(self) -> int:
         return self._chunks_read
     
-    def chunks_written(self):
+    def chunks_written(self) -> int:
         return self._chunks_written
 
-    def total_chunks(self):
+    def total_chunks(self) -> int:
         return self._total_chunks
 
-    def file_size(self):
+    def file_size(self) -> int:
         return self._file_size
     
-    def size_on_disk(self):
+    def size_on_disk(self) -> int:
         return self._size_on_disk
 
-    def closed(self):
+    def closed(self) -> bool:
         return self._closed
 
-    def set_closed(self):
+    def set_closed(self) -> None:
         self._closed = True
 
-    def write(self, data):
+    def write(self, data: bytes) -> int:
         '''
             Implement this so it behaves like file-like object.
         '''
         self.append_chunk(data)
         return len(data)
 
-    def append_chunk(self, chunk_bytes):
+    def append_chunk(self, chunk_bytes: bytes) -> None:
         if self.closed():
             raise FileError('File closed')
         if self._mode != 'w' and self._mode != 'a':
@@ -132,7 +132,7 @@ class File(object):
         self._file_size += len(chunk_bytes)
         self._total_chunks += 1
     
-    def read(self, size):
+    def read(self, size: int) -> bytes:
         '''
             Implement this so it behaves like file-like object.
         '''
@@ -141,7 +141,7 @@ class File(object):
             return b''
         return chunk
 
-    def read_chunk(self):
+    def read_chunk(self) -> bytes:
         if self.closed():
             raise FileError('File closed')
         if self._mode != 'r':
@@ -155,16 +155,16 @@ class File(object):
             self._chunks_read += 1
             return chunk_bytes
 
-    def remove(self):
+    def remove(self) -> None:
         shutil.rmtree(self._file_path)
     
-    def flush(self):
+    def flush(self) -> None:
         '''
             Implement this so it behaves like file-like object (no-op).
         '''
         return
 
-    def close(self):
+    def close(self) -> None:
         if not self.closed() and (self._mode == 'w' or self._mode == 'a'):
             self.write_metadata_file()
         self.set_closed()

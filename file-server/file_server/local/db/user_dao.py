@@ -10,5 +10,5 @@ class UserDAO(DataAccessObject):
 
         Throws AuthenticationError if user is not found or password is incorrect.
     '''
-    def login_user(self, username, password):
+    def login_user(self, username: str, password: str) -> None:
         raise Exception('Not implemented!')
