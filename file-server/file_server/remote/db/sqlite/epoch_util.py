@@ -1,6 +1,7 @@
 from ....error import EpochError, FileServerErrorCode, RemoteFileError
+import sqlite3
 
-def get_current_epoch(cur):
+def get_current_epoch(cur: sqlite3.Cursor) -> int:
     cur.execute(
         '''
         SELECT max(epoch_no)
@@ -15,7 +16,7 @@ def get_current_epoch(cur):
     #
     return 1
 
-def check_valid_epoch(cur, epoch_no):
+def check_valid_epoch(cur: sqlite3.Cursor, epoch_no: int) -> bool:
     '''
         Check that the provided epoch number is not a previous one.
     '''
@@ -23,5 +24,5 @@ def check_valid_epoch(cur, epoch_no):
         raise RemoteFileError('Invalid epoch no!', FileServerErrorCode.INVALID_EPOCH_NO)
     curr_epoch = get_current_epoch(cur)
     if epoch_no < curr_epoch:
-        raise EpochError('Cannot modify file in previous epoch [{}]. Current epoch is [{}]'.format(epoch_no, curr_epoch))
+        raise EpochError('Cannot modify file in previous epoch [{}]. Current epoch is [{}]'.format(epoch_no, curr_epoch), FileServerErrorCode.EPOCH_IS_OVER)
     return True

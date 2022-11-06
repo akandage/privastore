@@ -6,6 +6,7 @@ from .file_chunk import default_chunk_encoder, default_chunk_decoder
 from .util.crypto import sha256
 
 METADATA_FILE = '.metadata'
+FILE_ID_LENGTH = 38
 
 class File(object):
 

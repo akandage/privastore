@@ -1,3 +1,4 @@
+from ...controller import LocalServerController
 from ....error import DirectoryError, FileError, FileServerErrorCode
 from http import HTTPStatus
 from ....api.http.http_request_handler import BaseHttpApiRequestHandler
@@ -15,9 +16,12 @@ DOWNLOAD_PATH_LEN = len(DOWNLOAD_PATH)
 
 class HttpApiRequestHandler(BaseHttpApiRequestHandler):
 
-    def __init__(self, request, client_address, server, controller):
+    def __init__(self, request, client_address, server, controller: LocalServerController):
         super().__init__(request, client_address, server, controller)
-        
+
+    def controller(self) -> LocalServerController:
+        return self._controller
+
     def do_GET(self):
         if not self.parse_path():
             return
@@ -47,7 +51,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         else:
             super().do_PUT()
 
-    def parse_directory_path(self, path):
+    def parse_directory_path(self, path: str) -> list[str]:
         if len(path) == 0:
             raise Exception('Path is empty')
         if path[0] != '/':
@@ -60,7 +64,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             return list(map(urllib.parse.unquote, path))
         return []
 
-    def handle_directory_error(self, e):
+    def handle_directory_error(self, e: DirectoryError):
         logging.error('Directory error: {}'.format(str(e)))
         if e.error_code() == FileServerErrorCode.DIRECTORY_NOT_FOUND:
             self.send_error_response(HTTPStatus.NOT_FOUND, e)
@@ -68,17 +72,6 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             self.send_error_response(HTTPStatus.CONFLICT, e)
         elif e.error_code() == FileServerErrorCode.INVALID_PATH:
             self.send_error_response(HTTPStatus.NOT_FOUND, e)
-        else:
-            self.send_error_response(HTTPStatus.BAD_REQUEST, e)
-
-    def handle_file_error(self, e):
-        logging.error('File error: {}'.format(str(e)))
-        if e.error_code() == FileServerErrorCode.FILE_NOT_FOUND:
-            self.send_error_response(HTTPStatus.NOT_FOUND, e)
-        elif e.error_code() == FileServerErrorCode.FILE_EXISTS:
-            self.send_error_response(HTTPStatus.CONFLICT, e)
-        elif e.error_code() == FileServerErrorCode.FILE_IS_DIRECTORY:
-            self.send_error_response(HTTPStatus.CONFLICT, e)
         else:
             self.send_error_response(HTTPStatus.BAD_REQUEST, e)
 

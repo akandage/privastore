@@ -1,6 +1,6 @@
 import base64
 from ...controller import Controller
-from ...error import AuthenticationError, FileServerError, FileServerErrorCode, SessionError
+from ...error import AuthenticationError, FileError, FileServerError, FileServerErrorCode, SessionError
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler
 import logging
@@ -15,7 +15,6 @@ CONNECTION_CLOSE = 'close'
 CONTENT_TYPE_HEADER = 'Content-Type'
 CONTENT_TYPE_JSON = 'application/json'
 CONTENT_LENGTH_HEADER = 'Content-Length'
-EPOCH_NO_HEADER = 'x-privastore-epoch-no'
 SESSION_ID_HEADER = 'x-privastore-session-id'
 
 HEARTBEAT_PATH = '/1/heartbeat'
@@ -64,6 +63,17 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
         else:
             logging.error('Invalid path: [{}]'.format(self.url_path))
             self.send_error_response(HTTPStatus.NOT_FOUND)
+
+    def handle_file_error(self, e: FileError):
+        logging.error('File error: {}'.format(str(e)))
+        if e.error_code() == FileServerErrorCode.FILE_NOT_FOUND:
+            self.send_error_response(HTTPStatus.NOT_FOUND, e)
+        elif e.error_code() == FileServerErrorCode.FILE_EXISTS:
+            self.send_error_response(HTTPStatus.CONFLICT, e)
+        elif e.error_code() == FileServerErrorCode.FILE_IS_DIRECTORY:
+            self.send_error_response(HTTPStatus.CONFLICT, e)
+        else:
+            self.send_error_response(HTTPStatus.BAD_REQUEST, e)
 
     def handle_internal_error(self, e: Exception):
         logging.error('Internal error: {}'.format(str(e)))
@@ -210,24 +220,6 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
             return
         
         return session_id
-
-    def get_epoch_no(self) -> int:
-        epoch_no = self.headers.get(EPOCH_NO_HEADER)
-
-        if epoch_no is None:
-            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Missing {} header'.format(EPOCH_NO_HEADER))
-            return
-        
-        try:
-            epoch_no = int(epoch_no)
-            if epoch_no < 1:
-                self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid {} header value. Must be >= 1'.format(EPOCH_NO_HEADER))
-                return
-        except:
-            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid {} header value'.format(EPOCH_NO_HEADER))
-            return
-
-        return epoch_no
 
     def heartbeat_session(self, session_id):
         try:

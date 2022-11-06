@@ -1,6 +1,8 @@
 from ....error import RemoteFileError
+import sqlite3
+from typing import Optional
 
-def is_file_committed(cur, remote_id, epoch_no=None):
+def is_file_committed(cur: sqlite3.Cursor, remote_id: str, epoch_no: Optional[int]=None) -> bool:
     if epoch_no is not None:
         cur.execute(
             '''
