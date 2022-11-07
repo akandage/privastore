@@ -1,6 +1,7 @@
 from ..controller import Controller
 from .db.dao_factory import DAOFactory
 from ..db.db_conn_mgr import DbConnectionManager
+from ..error import FileServerErrorCode, RemoteFileError
 from ..file_cache import FileCache
 import logging
 from ..session_mgr import SessionManager
@@ -30,6 +31,35 @@ class RemoteServerController(Controller):
         finally:
             self.db_conn_mgr().db_close(conn)
     
+    def append_to_file(self, epoch_no: int, remote_id: str, chunk_num: int, chunk: bytes) -> None:
+        logging.debug('Append to remote file [{}] epoch [{}] chunk-size [{}]'.format(remote_id, epoch_no, str_mem_size(len(chunk))))
+        conn = self.db_conn_mgr().db_connect()
+        
+        try:
+            logging.debug('Acquired database connection')
+
+            file_dao = self.dao_factory().file_dao(conn)
+            file = self.store().append_file(remote_id)
+
+            try:
+                file_metadata = file_dao.get_file_metadata()
+                if file_metadata.is_committed:
+                    raise RemoteFileError('Cannot append chunk to committed remote file [{}]'.format(remote_id), FileServerErrorCode.FILE_IS_COMMITTED)
+
+                next_chunk_num = file.total_chunks()+1
+                if chunk_num != next_chunk_num:
+                    raise RemoteFileError('Cannot write file [{}] chunk [{}]. Next chunk is [{}]'.format(remote_id, chunk_num, next_chunk_num), FileServerErrorCode.INVALID_CHUNK_NUM)
+
+                file.append_chunk(chunk)
+                file_dao.file_modified(epoch_no, remote_id)
+            finally:
+                self.store().close_file(file)
+
+            
+            logging.debug('Appended to remote file [{}]'.format(remote_id))
+        finally:
+            self.db_conn_mgr().db_close(conn)
+
     def commit_file(self, epoch_no: int, remote_id: str) -> None:
         logging.debug('Commit remote file [{}] epoch [{}]'.format(remote_id, epoch_no))
         conn = self.db_conn_mgr().db_connect()

@@ -11,15 +11,17 @@ class SqliteEpochDAO(EpochDAO):
     def __init__(self, conn):
         super().__init__(conn)
     
-    def end_epoch(self, epoch_no, marker_id):
-        if not File.is_valid_file_id(marker_id):
-            raise RemoteFileError('Invalid remote file id!', FileServerErrorCode.INVALID_FILE_ID)
+    def end_epoch(self, epoch_no, marker_id=None):
+        if marker_id is not None:
+            if not File.is_valid_file_id(marker_id):
+                raise RemoteFileError('Invalid remote file id!', FileServerErrorCode.INVALID_FILE_ID)
         cur = self._conn.cursor()
         try:
             try:
                 check_valid_epoch(cur)
-                if not is_file_committed(cur, marker_id):
-                    raise RemoteFileError('Epoch marker file must be committed remote file!', FileServerErrorCode.FILE_IS_COMMITTED)
+                if marker_id is not None:
+                    if not is_file_committed(cur, marker_id):
+                        raise RemoteFileError('Epoch marker file must be committed remote file!', FileServerErrorCode.FILE_IS_COMMITTED)
                 cur.execute(
                     '''
                     INSERT INTO ps_epoch (epoch_no, marker_id) 

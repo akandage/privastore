@@ -1,5 +1,5 @@
 from ...controller import RemoteServerController
-from ....error import EpochError, FileServerErrorCode, RemoteFileError
+from ....error import EpochError, FileError, FileServerErrorCode, RemoteFileError
 from ....file import File, FILE_ID_LENGTH
 from http import HTTPStatus
 from ....api.http.http_request_handler import BaseHttpApiRequestHandler
@@ -10,7 +10,6 @@ import urllib.parse
 
 EPOCH_NO_HEADER = 'x-privastore-epoch-no'
 FILE_ID_HEADER = 'x-privastore-remote-file-id'
-FILE_ID_HEADER_VALUE = '/1/file/{}'
 
 EPOCH_PATH = '/1/epoch/'
 EPOCH_PATH_LEN = len(EPOCH_PATH)
@@ -58,9 +57,27 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             if self.url_path.endswith(COMMIT_PATH_SUFFIX):
                 self.handle_commit_remote_file()
             else:
-                self.handle_remote_file_append()
+                self.handle_remote_file_write()
         else:
             super().do_PUT()
+
+    def get_chunk_num(self) -> int:
+        chunk_num = self.headers.get('chunk')
+
+        if chunk_num is not None:
+            try:
+                chunk_num = int(chunk_num)
+                if chunk_num < 1:
+                    self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid chunk number. Must be >= 1')
+                    return
+            except:
+                self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid chunk number')
+                return
+        else:
+            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Missing chunk number')
+            return
+
+        return chunk_num
 
     def get_epoch_no_from_path(self) -> int:
         return self.parse_epoch_no(self.url_path[EPOCH_PATH_LEN:])
@@ -119,7 +136,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
                 x-privastore-epoch-no: <epoch-no>
             
             Response Headers:
-                Location: /1/file/<file-id>
+                x-privastore-remote-file-id: <file-id>
 
         '''
         logging.debug('Create remote file request')
@@ -167,7 +184,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         self.send_response(HTTPStatus.OK)
         self.send_header(CONTENT_LENGTH_HEADER, '0')
         self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
-        self.send_header(FILE_ID_HEADER, FILE_ID_HEADER_VALUE.format(remote_id))
+        self.send_header(FILE_ID_HEADER, remote_id)
         self.end_headers()
 
     def handle_commit_remote_file(self):
@@ -215,7 +232,6 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         self.send_response(HTTPStatus.OK)
         self.send_header(CONTENT_LENGTH_HEADER, '0')
         self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
-        self.send_header(FILE_ID_HEADER, FILE_ID_HEADER_VALUE.format(remote_id))
         self.end_headers()
 
     def handle_get_remote_file_metadata(self):
@@ -268,11 +284,117 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         self.end_headers()
         self.wfile.write(file_metadata)
 
-    def handle_remote_file_append(self):
-        pass
+    def handle_remote_file_write(self):
+        '''
+            Handle the remote file write API.
+            Append a chunk to the file i.e. chunk-number must be == next chunk number.
+            Method: PUT
+            Path: /1/file/<file-id>?chunk=<chunk-number>
+            Request Headers:
+                x-privastore-session-id: <session-id>
+
+        '''
+        logging.debug('Get remote file metadata request')
+        self.wrap_sockets()
+
+        session_id = self.get_session_id()
+        if session_id is None:
+            return
+        
+        if not self.heartbeat_session(session_id):
+            return
+        
+        epoch_no = self.get_epoch_no_from_header()
+        if epoch_no is None:
+            return
+
+        remote_id = self.get_remote_file_id()
+        if remote_id is None:
+            return
+        
+        chunk_num = self.get_chunk_num()
+        if chunk_num is None:
+            return
+        
+        content_len = self.parse_content_length()
+        if content_len is None:
+            return
+
+        chunk_size = self.controller().store().file_chunk_size()
+        if content_len == 0:
+            self.send_error_response(HTTPStatus.BAD_REQUEST, 'File chunk cannot be empty')
+            return
+        if content_len > chunk_size:
+            self.send_error_response(HTTPStatus.BAD_REQUEST, FileError('File chunk too large', FileServerErrorCode.FILE_CHUNK_TOO_LARGE))
+            return
+        
+        chunk = self.rfile.read(chunk_size)
+        if len(chunk) < chunk_size:
+            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Not all chunk bytes could be read!')
+            return
+        
+        try:
+            self.controller().append_to_file(epoch_no, remote_id, chunk)
+        except EpochError as e:
+            self.handle_epoch_error(e)
+            return
+        except RemoteFileError as e:
+            self.handle_file_error(e)
+            return
+        except Exception as e:
+            self.handle_internal_error(e)
+            return
+        
+        self.send_response(HTTPStatus.OK)
+        self.send_header(CONTENT_LENGTH_HEADER, '0')
+        self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
+        self.end_headers()
 
     def handle_remote_file_read(self):
         pass
 
     def handle_end_epoch(self):
-        pass
+        '''
+
+            Handle the end epoch API.
+            End the given epoch and place a marker file by attaching a remote
+            file id.
+            Method: PUT
+            Path: /1/epoch/<epoch-no>[?marker-id=<file-id>]
+            Request Headers:
+                x-privastore-session-id: <session-id>
+
+        '''
+        logging.debug('Commit remote file request')
+        self.wrap_sockets()
+        self.read_body()
+
+        session_id = self.get_session_id()
+        if session_id is None:
+            return
+        
+        if not self.heartbeat_session(session_id):
+            return
+
+        epoch_no = self.get_epoch_no_from_path()
+        if epoch_no is None:
+            return
+        
+        marker_id = self.headers.get('marker-id')
+
+        try:
+            self.controller().end_epoch(epoch_no, marker_id)
+        except EpochError as e:
+            self.handle_epoch_error(e)
+            return
+        except RemoteFileError as e:
+            self.handle_file_error(e)
+            return
+        except Exception as e:
+            self.handle_internal_error(e)
+            return
+        
+        self.send_response(HTTPStatus.OK)
+        self.send_header(CONTENT_LENGTH_HEADER, '0')
+        self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
+        self.end_headers()
