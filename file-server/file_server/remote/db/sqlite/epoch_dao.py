@@ -11,7 +11,7 @@ class SqliteEpochDAO(EpochDAO):
     def __init__(self, conn):
         super().__init__(conn)
     
-    def create_epoch(self, epoch_no, marker_id):
+    def end_epoch(self, epoch_no, marker_id):
         if not File.is_valid_file_id(marker_id):
             raise RemoteFileError('Invalid remote file id!', FileServerErrorCode.INVALID_FILE_ID)
         cur = self._conn.cursor()

@@ -181,7 +181,7 @@ class SqliteFileDAO(FileDAO):
                     '''
                     UPDATE ps_remote_file
                     SET removed_epoch_no = ?
-                    WHERE remote_id = ?
+                    WHERE remote_id = ? AND removed_epoch_no IS NULL
                     '''
                 , (epoch_no, remote_id))
                 if cur.rowcount != 1:

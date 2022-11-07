@@ -16,6 +16,8 @@ EPOCH_PATH = '/1/epoch/'
 EPOCH_PATH_LEN = len(EPOCH_PATH)
 REMOTE_FILE_PATH = '/1/file/'
 REMOTE_FILE_PATH_LEN = len(REMOTE_FILE_PATH)
+COMMIT_PATH_SUFFIX = '/commit'
+METADATA_PATH_SUFFIX = '/metadata'
 
 class HttpApiRequestHandler(BaseHttpApiRequestHandler):
 
@@ -30,7 +32,10 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             return
         
         if self.url_path.startswith(REMOTE_FILE_PATH):
-            self.handle_remote_file_read()
+            if self.url_path.endswith(METADATA_PATH_SUFFIX):
+                self.handle_get_remote_file_metadata()
+            else:
+                self.handle_remote_file_read()
         else:
             super().do_GET()
 
@@ -47,10 +52,18 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         if not self.parse_path():
             return
 
+        if self.url_path.startswith(EPOCH_PATH):
+            self.handle_end_epoch()
         if self.url_path.startswith(REMOTE_FILE_PATH):
-            self.handle_remote_file_append()
+            if self.url_path.endswith(COMMIT_PATH_SUFFIX):
+                self.handle_commit_remote_file()
+            else:
+                self.handle_remote_file_append()
         else:
             super().do_PUT()
+
+    def get_epoch_no_from_path(self) -> int:
+        return self.parse_epoch_no(self.url_path[EPOCH_PATH_LEN:])
 
     def get_epoch_no_from_header(self) -> int:
         epoch_no = self.headers.get(EPOCH_NO_HEADER)
@@ -59,18 +72,21 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             self.send_error_response(HTTPStatus.BAD_REQUEST, 'Missing {} header'.format(EPOCH_NO_HEADER))
             return
         
+        return self.parse_epoch_no(epoch_no)
+
+    def parse_epoch_no(self, val) -> int:
         try:
-            epoch_no = int(epoch_no)
+            epoch_no = int(val)
             if epoch_no < 1:
-                self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid {} header value. Must be >= 1'.format(EPOCH_NO_HEADER))
+                self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid epoch value. Must be >= 1')
                 return
         except:
-            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid {} header value'.format(EPOCH_NO_HEADER))
+            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid epoch value')
             return
 
         return epoch_no
 
-    def get_remote_file_id(self):
+    def get_remote_file_id(self) -> str:
         try:
             end = REMOTE_FILE_PATH_LEN + FILE_ID_LENGTH
             file_id = self.url_path[REMOTE_FILE_PATH_LEN:end]
@@ -104,6 +120,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             
             Response Headers:
                 Location: /1/file/<file-id>
+
         '''
         logging.debug('Create remote file request')
         self.wrap_sockets()
@@ -139,10 +156,13 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             self.controller().create_file(epoch_no, remote_id, file_size)
         except EpochError as e:
             self.handle_epoch_error(e)
+            return
         except RemoteFileError as e:
             self.handle_file_error(e)
+            return
         except Exception as e:
             self.handle_internal_error(e)
+            return
         
         self.send_response(HTTPStatus.OK)
         self.send_header(CONTENT_LENGTH_HEADER, '0')
@@ -151,10 +171,108 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         self.end_headers()
 
     def handle_commit_remote_file(self):
-        pass
+        '''
+
+            Handle the commit remote file API.
+            Method: PUT
+            Path: /1/file/<file-id>/commit
+            Request Headers:
+                x-privastore-session-id: <session-id>
+                x-privastore-epoch-no: <epoch-no>
+
+        '''
+        logging.debug('Commit remote file request')
+        self.wrap_sockets()
+        self.read_body()
+
+        session_id = self.get_session_id()
+        if session_id is None:
+            return
+        
+        if not self.heartbeat_session(session_id):
+            return
+
+        epoch_no = self.get_epoch_no_from_header()
+        if epoch_no is None:
+            return
+
+        remote_id = self.get_remote_file_id()
+        if remote_id is None:
+            return
+
+        try:
+            self.controller().commit_file(epoch_no, remote_id)
+        except EpochError as e:
+            self.handle_epoch_error(e)
+            return
+        except RemoteFileError as e:
+            self.handle_file_error(e)
+            return
+        except Exception as e:
+            self.handle_internal_error(e)
+            return
+        
+        self.send_response(HTTPStatus.OK)
+        self.send_header(CONTENT_LENGTH_HEADER, '0')
+        self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
+        self.send_header(FILE_ID_HEADER, FILE_ID_HEADER_VALUE.format(remote_id))
+        self.end_headers()
+
+    def handle_get_remote_file_metadata(self):
+        '''
+            Handle the get remote file metadata API.
+            Method: GET
+            Path: /1/file/<file-id>/metadata
+            Request Headers:
+                x-privastore-session-id: <session-id>
+            
+            Response Body:
+                {
+                    "remote-file-id": <file-id>,
+                    "file-size": <allocated size (in bytes)>,
+                    "file-chunks": <current number of file chunks>,
+                    "is-committed": <committed flag>,
+                    "created-epoch-no": <created epoch no>,
+                    "removed-epoch-no": <removed epoch no (if deleted)>
+                }
+
+        '''
+        logging.debug('Get remote file metadata request')
+        self.wrap_sockets()
+        self.read_body()
+
+        session_id = self.get_session_id()
+        if session_id is None:
+            return
+        
+        if not self.heartbeat_session(session_id):
+            return
+        
+        remote_id = self.get_remote_file_id()
+        if remote_id is None:
+            return
+
+        try:
+            file_metadata = self.controller().get_file_metadata(remote_id)
+            file_metadata = json.dumps(file_metadata).encode('utf-8')
+        except RemoteFileError as e:
+            self.handle_file_error(e)
+            return
+        except Exception as e:
+            self.handle_internal_error(e)
+            return
+        
+        self.send_response(HTTPStatus.OK)
+        self.send_header(CONTENT_LENGTH_HEADER, str(len(file_metadata)))
+        self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
+        self.end_headers()
+        self.wfile.write(file_metadata)
 
     def handle_remote_file_append(self):
         pass
 
     def handle_remote_file_read(self):
+        pass
+
+    def handle_end_epoch(self):
         pass
