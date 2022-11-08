@@ -288,13 +288,15 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         '''
             Handle the remote file write API.
             Append a chunk to the file i.e. chunk-number must be == next chunk number.
+            File chunk numbers use 1-based indexing.
             Method: PUT
             Path: /1/file/<file-id>?chunk=<chunk-number>
             Request Headers:
                 x-privastore-session-id: <session-id>
+                x-privastore-epoch-no: <epoch-no>
 
         '''
-        logging.debug('Get remote file metadata request')
+        logging.debug('Append remote file chunk request')
         self.wrap_sockets()
 
         session_id = self.get_session_id()
@@ -351,7 +353,59 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         self.end_headers()
 
     def handle_remote_file_read(self):
-        pass
+        '''
+            Handle the remote file read API.
+            Read a chunk from a (committed) remote file.
+            Method: GET
+            Path: /1/file/<file-id>?chunk=<chunk-number>
+            Request Headers:
+                x-privastore-session-id: <session-id>
+                x-privastore-epoch-no: <epoch-no>
+
+            Response Body:
+                <chunk bytes>
+            
+        '''
+        logging.debug('Read remote file chunk request')
+        self.wrap_sockets()
+        self.read_body()
+
+        session_id = self.get_session_id()
+        if session_id is None:
+            return
+        
+        if not self.heartbeat_session(session_id):
+            return
+        
+        epoch_no = self.get_epoch_no_from_header()
+        if epoch_no is None:
+            return
+
+        remote_id = self.get_remote_file_id()
+        if remote_id is None:
+            return
+        
+        chunk_num = self.get_chunk_num()
+        if chunk_num is None:
+            return
+        
+        try:
+            chunk = self.controller().read_from_file(remote_id, chunk_num)
+        except EpochError as e:
+            self.handle_epoch_error(e)
+            return
+        except RemoteFileError as e:
+            self.handle_file_error(e)
+            return
+        except Exception as e:
+            self.handle_internal_error(e)
+            return
+        
+        self.send_response(HTTPStatus.OK)
+        self.send_header(CONTENT_LENGTH_HEADER, len(chunk))
+        self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
+        self.end_headers()
+        self.wfile.write(chunk)
 
     def handle_end_epoch(self):
         '''

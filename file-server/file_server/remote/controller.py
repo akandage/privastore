@@ -51,12 +51,40 @@ class RemoteServerController(Controller):
                     raise RemoteFileError('Cannot write file [{}] chunk [{}]. Next chunk is [{}]'.format(remote_id, chunk_num, next_chunk_num), FileServerErrorCode.INVALID_CHUNK_NUM)
 
                 file.append_chunk(chunk)
+                logging.debug('Appended chunk')
                 file_dao.file_modified(epoch_no, remote_id)
+                logging.debug('Updated file modified timestamp')
             finally:
                 self.store().close_file(file)
 
             
             logging.debug('Appended to remote file [{}]'.format(remote_id))
+        finally:
+            self.db_conn_mgr().db_close(conn)
+
+    def read_from_file(self, remote_id: str, chunk_num: int) -> bytes:
+        logging.debug('Read chunk [{}] from remote file [{}]'.format(chunk_num, remote_id))
+        conn = self.db_conn_mgr().db_connect()
+        
+        try:
+            logging.debug('Acquired database connection')
+
+            file_dao = self.dao_factory().file_dao(conn)
+            file = self.store().read_file(remote_id)
+
+            try:
+                file_metadata = file_dao.get_file_metadata()
+                if not file_metadata.is_committed:
+                    raise RemoteFileError('Cannot read from uncommitted remote file [{}]'.format(remote_id), FileServerErrorCode.FILE_IS_UNCOMMITTED)
+
+                # Seek just before the chunk to read.
+                file.seek_chunk(chunk_num-1)
+                chunk = file.read_chunk()
+                logging.debug('Read chunk size [{}]'.format(len(chunk)))
+
+                return chunk
+            finally:
+                self.store().close_file(file)
         finally:
             self.db_conn_mgr().db_close(conn)
 

@@ -1,7 +1,7 @@
 import os
 import shutil
 import uuid
-from .error import FileError
+from .error import FileError, FileServerErrorCode
 from .file_chunk import default_chunk_encoder, default_chunk_decoder
 from .util.crypto import sha256
 
@@ -49,22 +49,22 @@ class File(object):
     def read_metadata_file(self):
         metadata_file_path = self.metadata_file_path()
         if not os.path.exists(metadata_file_path):
-            raise FileError('Metadata file not found')
+            raise FileError('Metadata file not found', FileServerErrorCode.FILE_IS_CORRUPT)
         with open(metadata_file_path, 'rb') as metadata_file:
             checksum = metadata_file.read(32)
             if len(checksum) < 32:
-                raise FileError('Metadata file invalid checksum')
+                raise FileError('Metadata file invalid checksum', FileServerErrorCode.FILE_IS_CORRUPT)
             total_chunks = metadata_file.read(4)
             if len(total_chunks) < 4:
-                raise FileError('Metadata file invalid total chunks')
+                raise FileError('Metadata file invalid total chunks', FileServerErrorCode.FILE_IS_CORRUPT)
             file_size = metadata_file.read(4)
             if len(file_size) < 4:
-                raise FileError('Metadata file invalid file size')
+                raise FileError('Metadata file invalid file size', FileServerErrorCode.FILE_IS_CORRUPT)
             size_on_disk = metadata_file.read(4)
             if len(size_on_disk) < 4:
-                raise FileError('Metadata file invalid file size on disk')
+                raise FileError('Metadata file invalid file size on disk', FileServerErrorCode.FILE_IS_CORRUPT)
             if sha256(total_chunks, file_size, size_on_disk) != checksum:
-                raise FileError('Metadata file checksum mismatch')
+                raise FileError('Metadata file checksum mismatch', FileServerErrorCode.FILE_IS_CORRUPT)
             self._total_chunks = int.from_bytes(total_chunks, 'big', signed=False)
             self._file_size = int.from_bytes(file_size, 'big', signed=False)
             self._size_on_disk = int.from_bytes(size_on_disk, 'big', signed=False)
@@ -112,6 +112,11 @@ class File(object):
     def set_closed(self) -> None:
         self._closed = True
 
+    def seek_chunk(self, offset: int) -> None:
+        if offset >= self._total_chunks:
+            raise FileError('Cannot seek to chunk [{}]'.format(offset), FileServerErrorCode.INVALID_CHUNK_NUM)
+        self._chunks_read = offset
+
     def write(self, data: bytes) -> int:
         '''
             Implement this so it behaves like file-like object.
@@ -126,7 +131,7 @@ class File(object):
             raise FileError('File not opened for writing')
         file_path = os.path.join(self._file_path, str(self._total_chunks+1))
         if os.path.exists(file_path):
-            raise FileError('File chunk exists')
+            raise FileError('File chunk exists', FileServerErrorCode.FILE_IS_CORRUPT)
         with open(file_path, 'wb') as chunk_file:
             self._size_on_disk += self._encode_chunk(chunk_bytes, chunk_file)
         self._chunks_written += 1
@@ -150,7 +155,7 @@ class File(object):
         if self._chunks_read < self._total_chunks:
             file_path = os.path.join(self._file_path, str(self._chunks_read+1))
             if not os.path.exists(file_path):
-                raise FileError('File chunk not found')
+                raise FileError('File chunk not found', FileServerErrorCode.FILE_IS_CORRUPT)
             with open(file_path, 'rb') as chunk_file:
                 chunk_bytes = self._decode_chunk(chunk_file=chunk_file)
             self._chunks_read += 1
