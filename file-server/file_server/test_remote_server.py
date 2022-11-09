@@ -14,7 +14,10 @@ class TestRemoteServer(TestServer):
         return 'test_remote_server'
 
     def get_config(self):
-        return {
+        if self.config:
+            return self.config
+
+        self.config = {
             'logging': {
               'log-level': 'DEBUG'  
             },
@@ -45,6 +48,7 @@ class TestRemoteServer(TestServer):
                 'session-cleanup-interval': '60'
             }
         }
+        return self.config
 
     def server_factory(self):
         return RemoteServer(self.get_config())
@@ -106,11 +110,13 @@ class TestRemoteServer(TestServer):
         self.assertTrue(file_1_metadata is not None)
         self.assertEqual(file_1_metadata.get('remote-file-id'), file_1_id)
         self.assertEqual(file_1_metadata.get('file-size'), 0)
+        self.assertEqual(file_1_metadata.get('file-chunks'), 0)
         self.assertEqual(file_1_metadata.get('is-committed'), False)
         file_2_metadata = self.send_request(URL.format('/1/file/{}/metadata'.format(file_2_id)), headers=req_headers)
         self.assertTrue(file_2_metadata is not None)
         self.assertEqual(file_2_metadata.get('remote-file-id'), file_2_id)
         self.assertEqual(file_2_metadata.get('file-size'), 1000)
+        self.assertEqual(file_1_metadata.get('file-chunks'), 0)
         self.assertEqual(file_2_metadata.get('is-committed'), False)
 
     def test_commit_file(self):
@@ -138,6 +144,7 @@ class TestRemoteServer(TestServer):
         self.assertTrue(file_1_metadata is not None)
         self.assertEqual(file_1_metadata.get('remote-file-id'), file_1_id)
         self.assertEqual(file_1_metadata.get('file-size'), 1000)
+        self.assertEqual(file_1_metadata.get('file-chunks'), 1)
         self.assertEqual(file_1_metadata.get('is-committed'), True)
         r = self.send_request(URL.format('/1/file/{}/commit'.format(file_1_id)), data=chunk_1, method=requests.put, headers=req_headers)
         self.assertEqual(r.status_code, HTTPStatus.OK)
@@ -158,12 +165,57 @@ class TestRemoteServer(TestServer):
         self.assertEqual(r.status_code, HTTPStatus.OK)
         r = self.send_request(URL.format('/1/file/{}/commit'.format(file_2_id)), method=requests.put, headers=req_headers)
         self.assertEqual(r.status_code, HTTPStatus.OK)
+        file_2_metadata = self.send_request(URL.format('/1/file/{}/metadata'.format(file_2_id)), headers=req_headers)
+        self.assertTrue(file_2_metadata is not None)
+        self.assertEqual(file_2_metadata.get('remote-file-id'), file_2_id)
+        self.assertEqual(file_2_metadata.get('file-size'), 2000)
+        self.assertEqual(file_2_metadata.get('file-chunks'), 3)
+        self.assertEqual(file_2_metadata.get('is-committed'), True)
 
-    # def test_write_remote_file(self):
-    #     self.start_server()
+    def test_write_remote_file(self):
+        self.config['store']['chunk-size'] = '1000B'
+        self.start_server()
+        r = requests.post(URL.format('/1/login'), auth=('psadmin', 'psadmin'))
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        session_id = r.headers.get('x-privastore-session-id')
+        req_headers = {
+            'x-privastore-session-id': session_id,
+            'x-privastore-epoch-no': '1'
+        }
+        r = self.send_request(URL.format('/1/file?size=1500'), method=requests.post, headers=req_headers)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        file_1_id = r.headers.get('x-privastore-remote-file-id')
+        chunk_1 = random.randbytes(1000)
+        chunk_2 = random.randbytes(1500)
+        chunk_3 = random.randbytes(500)
+        r = self.send_request(URL.format('/1/file/{}?chunk=1'.format(file_1_id)), data=chunk_1, method=requests.put, headers=req_headers)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = self.send_request(URL.format('/1/file/{}?chunk=2'.format(file_1_id)), data=chunk_2, method=requests.put, headers=req_headers)
+        self.assertEqual(r.status_code, HTTPStatus.BAD_REQUEST)
+        self.assertEqual(r.json()['error'], 'FILE_CHUNK_TOO_LARGE')
+        r = self.send_request(URL.format('/1/file/{}?chunk=2'.format(file_1_id)), data=chunk_3, method=requests.put, headers=req_headers)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = self.send_request(URL.format('/1/file/{}?chunk=3'.format(file_1_id)), data=chunk_3, method=requests.put, headers=req_headers)
+        self.assertEqual(r.status_code, HTTPStatus.CONFLICT)
+        self.assertEqual(r.json()['error'], 'FILE_TOO_LARGE')
+        r = self.send_request(URL.format('/1/file/{}/commit'.format(file_1_id)), method=requests.put, headers=req_headers)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        file_1_metadata = self.send_request(URL.format('/1/file/{}/metadata'.format(file_1_id)), headers=req_headers)
+        self.assertTrue(file_1_metadata is not None)
+        self.assertEqual(file_1_metadata.get('remote-file-id'), file_1_id)
+        self.assertEqual(file_1_metadata.get('file-size'), 1500)
+        self.assertEqual(file_1_metadata.get('file-chunks'), 2)
+        self.assertEqual(file_1_metadata.get('is-committed'), True)
 
-    # def test_read_remote_file(self):
-    #     self.start_server()
+    def test_read_remote_file(self):
+        self.start_server()
+        r = requests.post(URL.format('/1/login'), auth=('psadmin', 'psadmin'))
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        session_id = r.headers.get('x-privastore-session-id')
+        req_headers = {
+            'x-privastore-session-id': session_id,
+            'x-privastore-epoch-no': '1'
+        }
 
     # def test_end_epoch(self):
     #     self.start_server()

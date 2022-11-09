@@ -29,6 +29,7 @@ class TestServer(unittest.TestCase):
     def setUp(self):
         self.cleanup()
         os.mkdir(self.get_test_dir())
+        self.config = None
         config = self.get_config()
         config_logging(config['logging']['log-level'])
 

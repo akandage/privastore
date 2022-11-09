@@ -14,7 +14,10 @@ class TestLocalServer(TestServer):
         return 'test_local_server'
 
     def get_config(self):
-        return {
+        if self.config:
+            return self.config
+
+        self.config = {
             'logging': {
               'log-level': 'DEBUG'  
             },
@@ -46,6 +49,7 @@ class TestLocalServer(TestServer):
                 'session-cleanup-interval': '60'
             }
         }
+        return self.config
 
     def server_factory(self):
         return LocalServer(self.get_config())
