@@ -14,6 +14,7 @@ class File(object):
         self._file_id = file_id or self.generate_file_id()
         self._file_path = os.path.join(path, self._file_id)
         self._mode = mode
+        self._modified = False
         self._closed = False
         self._chunks_read = 0
         self._chunks_written = 0
@@ -45,6 +46,10 @@ class File(object):
         except:
             return False
         return True
+
+    @staticmethod
+    def touch_file(file_path: str, file_id: str):
+        File(file_path, file_id, mode='w').close()
 
     def read_metadata_file(self):
         metadata_file_path = self.metadata_file_path()
@@ -106,6 +111,9 @@ class File(object):
     def size_on_disk(self) -> int:
         return self._size_on_disk
 
+    def modified(self) -> bool:
+        return self._modified
+
     def closed(self) -> bool:
         return self._closed
 
@@ -137,6 +145,7 @@ class File(object):
         self._chunks_written += 1
         self._file_size += len(chunk_bytes)
         self._total_chunks += 1
+        self._modified = True
     
     def read(self, size: int) -> bytes:
         '''
@@ -171,6 +180,6 @@ class File(object):
         return
 
     def close(self) -> None:
-        if not self.closed() and (self._mode == 'w' or self._mode == 'a'):
+        if not self.closed() and self.modified() and (self._mode == 'w' or self._mode == 'a'):
             self.write_metadata_file()
         self.set_closed()

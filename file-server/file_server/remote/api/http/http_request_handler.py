@@ -11,9 +11,9 @@ import urllib.parse
 EPOCH_NO_HEADER = 'x-privastore-epoch-no'
 FILE_ID_HEADER = 'x-privastore-remote-file-id'
 
-EPOCH_PATH = '/1/epoch/'
+EPOCH_PATH = '/1/epoch'
 EPOCH_PATH_LEN = len(EPOCH_PATH)
-REMOTE_FILE_PATH = '/1/file/'
+REMOTE_FILE_PATH = '/1/file'
 REMOTE_FILE_PATH_LEN = len(REMOTE_FILE_PATH)
 COMMIT_PATH_SUFFIX = '/commit'
 METADATA_PATH_SUFFIX = '/metadata'
@@ -62,11 +62,11 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             super().do_PUT()
 
     def get_chunk_num(self) -> int:
-        chunk_num = self.headers.get('chunk')
+        chunk_num = self.url_query.get('chunk')
 
         if chunk_num is not None:
             try:
-                chunk_num = int(chunk_num)
+                chunk_num = int(chunk_num[-1])
                 if chunk_num < 1:
                     self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid chunk number. Must be >= 1')
                     return
@@ -80,7 +80,12 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         return chunk_num
 
     def get_epoch_no_from_path(self) -> int:
-        return self.parse_epoch_no(self.url_path[EPOCH_PATH_LEN:])
+        try:
+            prefix_len = EPOCH_PATH_LEN+1
+            return self.parse_epoch_no(self.url_path[prefix_len:])
+        except:
+            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid path')
+            return
 
     def get_epoch_no_from_header(self) -> int:
         epoch_no = self.headers.get(EPOCH_NO_HEADER)
@@ -105,8 +110,9 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
 
     def get_remote_file_id(self) -> str:
         try:
-            end = REMOTE_FILE_PATH_LEN + FILE_ID_LENGTH
-            file_id = self.url_path[REMOTE_FILE_PATH_LEN:end]
+            prefix_len = REMOTE_FILE_PATH_LEN+1
+            end = prefix_len + FILE_ID_LENGTH
+            file_id = self.url_path[prefix_len:end]
             if not File.is_valid_file_id(file_id):
                 self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid remote file id!')
                 return
@@ -174,6 +180,9 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         except EpochError as e:
             self.handle_epoch_error(e)
             return
+        except FileError as e:
+            self.handle_file_error(e)
+            return
         except RemoteFileError as e:
             self.handle_file_error(e)
             return
@@ -221,6 +230,9 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             self.controller().commit_file(epoch_no, remote_id)
         except EpochError as e:
             self.handle_epoch_error(e)
+            return
+        except FileError as e:
+            self.handle_file_error(e)
             return
         except RemoteFileError as e:
             self.handle_file_error(e)
@@ -279,6 +291,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             return
         
         self.send_response(HTTPStatus.OK)
+        self.send_header(CONTENT_TYPE_HEADER, CONTENT_TYPE_JSON)
         self.send_header(CONTENT_LENGTH_HEADER, str(len(file_metadata)))
         self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
         self.end_headers()
@@ -318,27 +331,29 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         if chunk_num is None:
             return
         
-        content_len = self.parse_content_length()
-        if content_len is None:
+        if not self.parse_content_length():
             return
 
-        chunk_size = self.controller().store().file_chunk_size()
-        if content_len == 0:
+        max_chunk_size = self.controller().store().file_chunk_size()
+        if self.content_len == 0:
             self.send_error_response(HTTPStatus.BAD_REQUEST, 'File chunk cannot be empty')
             return
-        if content_len > chunk_size:
+        if self.content_len > max_chunk_size:
             self.send_error_response(HTTPStatus.BAD_REQUEST, FileError('File chunk too large', FileServerErrorCode.FILE_CHUNK_TOO_LARGE))
             return
         
-        chunk = self.rfile.read(chunk_size)
-        if len(chunk) < chunk_size:
+        chunk = self.rfile.read(self.content_len)
+        if len(chunk) < self.content_len:
             self.send_error_response(HTTPStatus.BAD_REQUEST, 'Not all chunk bytes could be read!')
             return
         
         try:
-            self.controller().append_to_file(epoch_no, remote_id, chunk)
+            self.controller().append_to_file(epoch_no, remote_id, chunk_num, chunk)
         except EpochError as e:
             self.handle_epoch_error(e)
+            return
+        except FileError as e:
+            self.handle_file_error(e)
             return
         except RemoteFileError as e:
             self.handle_file_error(e)
@@ -393,6 +408,9 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             chunk = self.controller().read_from_file(remote_id, chunk_num)
         except EpochError as e:
             self.handle_epoch_error(e)
+            return
+        except FileError as e:
+            self.handle_file_error(e)
             return
         except RemoteFileError as e:
             self.handle_file_error(e)

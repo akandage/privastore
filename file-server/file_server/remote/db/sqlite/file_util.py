@@ -8,7 +8,7 @@ def is_file_committed(cur: sqlite3.Cursor, remote_id: str, epoch_no: Optional[in
             '''
             SELECT is_committed 
             FROM ps_remote_file 
-            WHERE remote_id = ? AND created_epoch_no = ?
+            WHERE remote_id = ? AND created_epoch = ?
             '''
         , (remote_id, epoch_no))
     else:

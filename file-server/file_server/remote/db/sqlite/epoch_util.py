@@ -10,7 +10,8 @@ def get_current_epoch(cur: sqlite3.Cursor) -> int:
     )
     res = cur.fetchone()
     if res is not None:
-        return int(res[0]) + 1
+        if res[0] is not None:
+            return int(res[0]) + 1
     #
     # Default to first epoch.
     #

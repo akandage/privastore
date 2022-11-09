@@ -374,6 +374,7 @@ class FileCache(object):
             node = self.create_cache_entry(file_id, file_size)
             node.writable = True
             node.removable = False
+            File.touch_file(self._cache_path, file_id)
 
     '''
         Retrieve file metadata:
@@ -387,9 +388,8 @@ class FileCache(object):
             if not self._index.has_node(file_id):
                 raise FileCacheError('File [{}] not found in cache'.format(file_id), FileServerErrorCode.FILE_NOT_FOUND)
             
+            node = self._index.get_node(file_id)
             with node.lock:
-                node = self._index.get_node(file_id)
-
                 return FileCache.IndexNodeMetadata(node.file_size, node.file_chunks)
 
     '''
@@ -419,7 +419,7 @@ class FileCache(object):
                         if not writable:
                             node.writable = False
                             node.reader_cv.notify_all()
-                            logging.debug('File [{}] no longer writable')
+                            logging.debug('File [{}] no longer writable'.format(file_id))
 
                         prev_size = node.file_size
                         curr_size = file.size_on_disk()
@@ -434,7 +434,7 @@ class FileCache(object):
                     if node.num_readers == 0 and node.num_writers == 0 and not node.writable:
                         node.removable = removable
                         if removable:
-                            logging.debug('File [{}] now removable')
+                            logging.debug('File [{}] now removable'.format(file_id))
             else:
                 raise FileCacheError('File [{}] not found in cache'.format(file_id))
 

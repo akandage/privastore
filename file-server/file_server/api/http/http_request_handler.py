@@ -70,7 +70,19 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
             self.send_error_response(HTTPStatus.NOT_FOUND, e)
         elif e.error_code() == FileServerErrorCode.FILE_EXISTS:
             self.send_error_response(HTTPStatus.CONFLICT, e)
+        elif e.error_code() == FileServerErrorCode.FILE_IS_COMMITTED:
+            self.send_error_response(HTTPStatus.CONFLICT, e)
+        elif e.error_code() == FileServerErrorCode.FILE_IS_UNCOMMITTED:
+            self.send_error_response(HTTPStatus.CONFLICT, e)
         elif e.error_code() == FileServerErrorCode.FILE_IS_DIRECTORY:
+            self.send_error_response(HTTPStatus.CONFLICT, e)
+        elif e.error_code() == FileServerErrorCode.FILE_NOT_WRITABLE:
+            self.send_error_response(HTTPStatus.CONFLICT, e)
+        elif e.error_code() == FileServerErrorCode.FILE_NOT_REMOVABLE:
+            self.send_error_response(HTTPStatus.CONFLICT, e)
+        elif e.error_code() == FileServerErrorCode.FILE_TOO_SMALL:
+            self.send_error_response(HTTPStatus.CONFLICT, e)
+        elif e.error_code() == FileServerErrorCode.FILE_TOO_LARGE:
             self.send_error_response(HTTPStatus.CONFLICT, e)
         else:
             self.send_error_response(HTTPStatus.BAD_REQUEST, e)
@@ -205,8 +217,12 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
         else:
             body = b''
 
+        body_len = len(body)
+
         self.send_response(code)
-        self.send_header(CONTENT_LENGTH_HEADER, len(body))
+        if body_len > 0:
+            self.send_header(CONTENT_TYPE_HEADER, CONTENT_TYPE_JSON)
+        self.send_header(CONTENT_LENGTH_HEADER, body_len)
         self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
         self.end_headers()
         if body:

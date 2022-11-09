@@ -132,18 +132,6 @@ class SqliteFileDAO(FileDAO):
                     return
                 cur.execute(
                     '''
-                    SELECT is_committed 
-                    FROM ps_remote_file 
-                    WHERE remote_id = ? AND created_epoch_no = ?
-                    '''
-                , (remote_id, epoch_no))
-                res = cur.fetchone()
-                if res is None:
-                    raise RemoteFileError('Remote file [{}] not found'.format(remote_id), FileServerErrorCode.FILE_NOT_FOUND)
-                if bool(res[0]):
-                    raise RemoteFileError('Cannot modify committed file [{}]'.format(remote_id), FileServerErrorCode.FILE_IS_COMMITTED)
-                cur.execute(
-                    '''
                     UPDATE ps_remote_file 
                     SET is_committed = ? 
                     WHERE remote_id = ?
