@@ -39,6 +39,11 @@ class FileCache(object):
             #
             raise Exception('Not implemented!')
 
+        def seek_chunk(self, offset):
+            with self._node.lock:
+                self._total_chunks = self._node.file_chunks
+            return super().seek_chunk(offset)
+
         def read_chunk(self):
             start_t = time.time()
             end_t = start_t + self._read_timeout

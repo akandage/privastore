@@ -210,7 +210,7 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
                 error_code = error.error_code()
                 logging.error('Error [{}] - {}'.format(error_code, error_msg))
             else:
-                error_code = str(code)
+                error_code = str(int(code))
                 logging.error('Error [HTTP {}] - {}'.format(error_code, error_msg))
                 
             body = '{{"error":"{}", "msg":"{}"}}'.format(error_code, error_msg).encode('utf-8')

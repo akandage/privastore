@@ -78,7 +78,7 @@ class RemoteServerController(Controller):
             file = self.store().read_file(remote_id)
 
             try:
-                file_metadata = file_dao.get_file_metadata()
+                file_metadata = file_dao.get_file_metadata(remote_id)
                 if not file_metadata.is_committed:
                     raise RemoteFileError('Cannot read from uncommitted remote file [{}]'.format(remote_id), FileServerErrorCode.FILE_IS_UNCOMMITTED)
 
