@@ -58,7 +58,7 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
         if not self.parse_path():
             return
 
-        elif self.url_path == HEARTBEAT_PATH:
+        if self.url_path == HEARTBEAT_PATH:
             self.handle_heartbeat_session()
         else:
             logging.error('Invalid path: [{}]'.format(self.url_path))
@@ -68,6 +68,10 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
         logging.error('File error: {}'.format(str(e)))
         if e.error_code() == FileServerErrorCode.FILE_NOT_FOUND:
             self.send_error_response(HTTPStatus.NOT_FOUND, e)
+        elif e.error_code() == FileServerErrorCode.FILE_NOT_REMOVABLE:
+            self.send_error_response(HTTPStatus.CONFLICT, e)
+        elif e.error_code() == FileServerErrorCode.FILE_NOT_WRITABLE:
+            self.send_error_response(HTTPStatus.CONFLICT, e)
         elif e.error_code() == FileServerErrorCode.FILE_EXISTS:
             self.send_error_response(HTTPStatus.CONFLICT, e)
         elif e.error_code() == FileServerErrorCode.FILE_IS_COMMITTED:

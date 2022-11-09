@@ -90,9 +90,9 @@ class FileCache(object):
 
             with self._node.lock:
                 if self._node.num_writers != 0:
-                    raise FileCacheError('File [{}] already has writer!'.format(self.file_id()), FileServerErrorCode.INTERNAL_ERROR)
+                    raise FileCacheError('File [{}] already has writer!'.format(self.file_id()), FileServerErrorCode.FILE_NOT_WRITABLE)
                 if not self._node.writable:
-                    raise FileCacheError('File [{}] is not writable!'.format(self.file_id()), FileServerErrorCode.INTERNAL_ERROR)
+                    raise FileCacheError('File [{}] is not writable!'.format(self.file_id()), FileServerErrorCode.FILE_NOT_WRITABLE)
                 self._node.num_writers = 1
                 self._node.removable = False
             

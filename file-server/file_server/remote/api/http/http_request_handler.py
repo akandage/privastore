@@ -1,5 +1,5 @@
 from ...controller import RemoteServerController
-from ....error import EpochError, FileError, FileServerErrorCode, RemoteFileError
+from ....error import EpochError, FileError, FileCacheError, FileServerErrorCode, RemoteFileError
 from ....file import File, FILE_ID_LENGTH
 from http import HTTPStatus
 from ....api.http.http_request_handler import BaseHttpApiRequestHandler
@@ -53,7 +53,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
 
         if self.url_path.startswith(EPOCH_PATH):
             self.handle_end_epoch()
-        if self.url_path.startswith(REMOTE_FILE_PATH):
+        elif self.url_path.startswith(REMOTE_FILE_PATH):
             if self.url_path.endswith(COMMIT_PATH_SUFFIX):
                 self.handle_commit_remote_file()
             else:
@@ -180,10 +180,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         except EpochError as e:
             self.handle_epoch_error(e)
             return
-        except FileError as e:
-            self.handle_file_error(e)
-            return
-        except RemoteFileError as e:
+        except (FileError, FileCacheError, RemoteFileError) as e:
             self.handle_file_error(e)
             return
         except Exception as e:
@@ -231,10 +228,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         except EpochError as e:
             self.handle_epoch_error(e)
             return
-        except FileError as e:
-            self.handle_file_error(e)
-            return
-        except RemoteFileError as e:
+        except (FileError, FileCacheError, RemoteFileError) as e:
             self.handle_file_error(e)
             return
         except Exception as e:
@@ -352,10 +346,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         except EpochError as e:
             self.handle_epoch_error(e)
             return
-        except FileError as e:
-            self.handle_file_error(e)
-            return
-        except RemoteFileError as e:
+        except (FileError, FileCacheError, RemoteFileError) as e:
             self.handle_file_error(e)
             return
         except Exception as e:
@@ -409,10 +400,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         except EpochError as e:
             self.handle_epoch_error(e)
             return
-        except FileError as e:
-            self.handle_file_error(e)
-            return
-        except RemoteFileError as e:
+        except (FileError, FileCacheError, RemoteFileError) as e:
             self.handle_file_error(e)
             return
         except Exception as e:
@@ -437,7 +425,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
                 x-privastore-session-id: <session-id>
 
         '''
-        logging.debug('Commit remote file request')
+        logging.debug('End epoch request')
         self.wrap_sockets()
         self.read_body()
 
@@ -452,7 +440,9 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         if epoch_no is None:
             return
         
-        marker_id = self.headers.get('marker-id')
+        marker_id = self.url_query.get('marker-id')
+        if marker_id is not None:
+            marker_id = marker_id[-1]
 
         try:
             self.controller().end_epoch(epoch_no, marker_id)

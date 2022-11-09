@@ -6,6 +6,7 @@ from ..file_cache import FileCache
 import logging
 from ..session_mgr import SessionManager
 from ..util.file import str_mem_size
+from typing import Optional
 
 class RemoteServerController(Controller):
 
@@ -38,6 +39,7 @@ class RemoteServerController(Controller):
         try:
             logging.debug('Acquired database connection')
 
+            epoch_dao = self.dao_factory().epoch_dao(conn)
             file_dao = self.dao_factory().file_dao(conn)
 
             file_metadata = file_dao.get_file_metadata(remote_id)
@@ -47,6 +49,11 @@ class RemoteServerController(Controller):
             file = self.store().append_file(remote_id)
 
             try:
+                epoch_dao.check_valid_epoch(epoch_no)
+
+                if file_metadata.created_epoch < epoch_no:
+                    raise RemoteFileError('Cannot append chunk remote file [{}] in previous epoch [{}]'.format(remote_id, file_metadata.created_epoch), FileServerErrorCode.FILE_IS_COMMITTED)
+                
                 next_chunk_num = file.total_chunks()+1
                 if chunk_num != next_chunk_num:
                     raise RemoteFileError('Cannot write file [{}] chunk [{}]. Next chunk is [{}]'.format(remote_id, chunk_num, next_chunk_num), FileServerErrorCode.INVALID_CHUNK_NUM)
@@ -75,13 +82,13 @@ class RemoteServerController(Controller):
             logging.debug('Acquired database connection')
 
             file_dao = self.dao_factory().file_dao(conn)
+            file_metadata = file_dao.get_file_metadata(remote_id)
+            if not file_metadata.is_committed:
+                raise RemoteFileError('Cannot read from uncommitted remote file [{}]'.format(remote_id), FileServerErrorCode.FILE_IS_UNCOMMITTED)
+
             file = self.store().read_file(remote_id)
 
             try:
-                file_metadata = file_dao.get_file_metadata(remote_id)
-                if not file_metadata.is_committed:
-                    raise RemoteFileError('Cannot read from uncommitted remote file [{}]'.format(remote_id), FileServerErrorCode.FILE_IS_UNCOMMITTED)
-
                 # Seek just before the chunk to read.
                 file.seek_chunk(chunk_num-1)
                 chunk = file.read_chunk()
@@ -100,9 +107,10 @@ class RemoteServerController(Controller):
         try:
             logging.debug('Acquired database connection')
 
+            epoch_dao = self.dao_factory().epoch_dao(conn)
             file_dao = self.dao_factory().file_dao(conn)
-            file_metadata = file_dao.get_file_metadata(remote_id)
 
+            file_metadata = file_dao.get_file_metadata(remote_id)
             if file_metadata.is_committed:
                 logging.debug('File [{}] already committed'.format(remote_id))
                 return
@@ -111,6 +119,11 @@ class RemoteServerController(Controller):
             committed = False
 
             try:
+                epoch_dao.check_valid_epoch(epoch_no)
+
+                if file_metadata.created_epoch < epoch_no:
+                    raise RemoteFileError('Cannot commit remote file [{}] in previous epoch [{}]'.format(remote_id, file_metadata.created_epoch), FileServerErrorCode.FILE_IS_COMMITTED)
+                
                 file_alloc_size = file_metadata.file_size
                 file_size = file.size_on_disk()
                 if file_size < file_alloc_size:
@@ -151,8 +164,8 @@ class RemoteServerController(Controller):
         finally:
             self.db_conn_mgr().db_close(conn)
     
-    def end_epoch(self, epoch_no: int, marker_id: str) -> None:
-        logging.debug('End epoch [{}]'.format(epoch_no))
+    def end_epoch(self, epoch_no: int, marker_id: Optional[str] = None) -> None:
+        logging.debug('End epoch [{}] marker file id [{}]'.format(epoch_no, marker_id))
         conn = self.db_conn_mgr().db_connect()
         
         try:
