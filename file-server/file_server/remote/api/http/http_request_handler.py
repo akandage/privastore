@@ -148,7 +148,6 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             Path: /1/file[?size=<file-size (in bytes)>]
             Request Headers:
                 x-privastore-session-id: <session-id>
-                x-privastore-epoch-no: <epoch-no>
             
             Response Headers:
                 x-privastore-remote-file-id: <file-id>
@@ -163,10 +162,6 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             return
         
         if not self.heartbeat_session(session_id):
-            return
-
-        epoch_no = self.get_epoch_no_from_header()
-        if epoch_no is None:
             return
 
         remote_id = File.generate_file_id()
@@ -185,7 +180,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             file_size = 0
 
         try:
-            self.controller().create_file(epoch_no, remote_id, file_size)
+            self.controller().create_file(remote_id, file_size)
         except EpochError as e:
             self.handle_epoch_error(e)
             return
@@ -311,7 +306,6 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             Path: /1/file/<file-id>?chunk=<chunk-number>
             Request Headers:
                 x-privastore-session-id: <session-id>
-                x-privastore-epoch-no: <epoch-no>
 
         '''
         logging.debug('Append remote file chunk request')
@@ -322,10 +316,6 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             return
         
         if not self.heartbeat_session(session_id):
-            return
-        
-        epoch_no = self.get_epoch_no_from_header()
-        if epoch_no is None:
             return
 
         remote_id = self.get_remote_file_id()
@@ -353,7 +343,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             return
         
         try:
-            self.controller().append_to_file(epoch_no, remote_id, chunk_num, chunk)
+            self.controller().append_to_file(remote_id, chunk_num, chunk)
         except EpochError as e:
             self.handle_epoch_error(e)
             return

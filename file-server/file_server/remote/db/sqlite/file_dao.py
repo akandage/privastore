@@ -14,20 +14,19 @@ class SqliteFileDAO(FileDAO):
     def __init__(self, conn):
         super().__init__(conn)
 
-    def create_file(self, epoch_no, remote_id, file_size):
+    def create_file(self, remote_id, file_size):
         if not File.is_valid_file_id(remote_id):
             raise RemoteFileError('Invalid remote file id!', FileServerErrorCode.INVALID_FILE_ID)
         cur = self._conn.cursor()
         try:
             try:
                 file_timestamp = round(time.time())
-                check_valid_epoch(cur, epoch_no)
                 cur.execute(
                     '''
-                    INSERT INTO ps_remote_file (remote_id, file_size, created_timestamp, modified_timestamp, created_epoch) 
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO ps_remote_file (remote_id, file_size, created_timestamp, modified_timestamp) 
+                    VALUES (?, ?, ?, ?)
                     '''
-                , (remote_id, file_size, file_timestamp, file_timestamp, epoch_no))
+                , (remote_id, file_size, file_timestamp, file_timestamp))
                 self._conn.commit()
             except EpochError as e:
                 logging.error('Epoch error {}'.format(str(e)))
@@ -51,7 +50,7 @@ class SqliteFileDAO(FileDAO):
             try:
                 cur.execute(
                     '''
-                    SELECT file_size, is_committed, created_timestamp, modified_timestamp, created_epoch, removed_epoch 
+                    SELECT file_size, created_timestamp, modified_timestamp, created_epoch, removed_epoch 
                     FROM ps_remote_file 
                     WHERE remote_id = ? AND removed_epoch IS NULL
                     '''
@@ -62,11 +61,11 @@ class SqliteFileDAO(FileDAO):
                 self._conn.commit()
                 return RemoteFileMetadata(
                     res[0],
-                    bool(res[1]),
+                    bool(res[3] is not None),
+                    time.gmtime(res[1]),
                     time.gmtime(res[2]),
-                    time.gmtime(res[3]),
-                    res[4],
-                    res[5]
+                    res[3],
+                    res[4]
                 )
             except RemoteFileError as e:
                 logging.error('Remote file error {}'.format(str(e)))
@@ -82,16 +81,16 @@ class SqliteFileDAO(FileDAO):
             except:
                 pass
 
-    def file_modified(self, epoch_no, remote_id):
+    def file_modified(self, remote_id):
         if not File.is_valid_file_id(remote_id):
             raise RemoteFileError('Invalid remote file id!', FileServerErrorCode.INVALID_FILE_ID)
         cur = self._conn.cursor()
         try:
             try:
-                modified_timestamp = round(time.time())
-                check_valid_epoch(cur, epoch_no)
-                if is_file_committed(cur, remote_id, epoch_no=epoch_no):
+                cur.execute('BEGIN')
+                if is_file_committed(cur, remote_id):
                     raise RemoteFileError('Cannot modify committed remote file [{}]'.format(remote_id), FileServerErrorCode.FILE_IS_COMMITTED)
+                modified_timestamp = round(time.time())
                 cur.execute(
                     '''
                     UPDATE ps_remote_file 
@@ -99,8 +98,6 @@ class SqliteFileDAO(FileDAO):
                     WHERE remote_id = ? AND removed_epoch IS NULL
                     '''
                 , (modified_timestamp, remote_id))
-                if cur.rowcount != 1:
-                    raise RemoteFileError('Remote file [{}] not found'.format(remote_id), FileServerErrorCode.FILE_NOT_FOUND)
                 self._conn.commit()
             except EpochError as e:
                 logging.error('Query error {}'.format(str(e)))
@@ -126,19 +123,18 @@ class SqliteFileDAO(FileDAO):
         cur = self._conn.cursor()
         try:
             try:
+                cur.execute('BEGIN')
                 check_valid_epoch(cur, epoch_no)
-                if is_file_committed(cur, remote_id, epoch_no=epoch_no):
+                if is_file_committed(cur, remote_id):
                     logging.debug('Remote file [{}] is already committed'.format(remote_id))
                     return
                 cur.execute(
                     '''
                     UPDATE ps_remote_file 
-                    SET is_committed = ? 
+                    SET created_epoch = ? 
                     WHERE remote_id = ? AND removed_epoch IS NULL
                     '''
-                , (1, remote_id))
-                if cur.rowcount != 1:
-                    raise RemoteFileError('Remote file [{}] not found'.format(remote_id), FileServerErrorCode.FILE_NOT_FOUND)
+                , (epoch_no, remote_id))
                 self._conn.commit()
             except EpochError as e:
                 logging.error('Query error {}'.format(str(e)))
@@ -158,22 +154,36 @@ class SqliteFileDAO(FileDAO):
             except:
                 pass
 
-    def remove_file(self, epoch_no, remote_id):
+    def remove_file(self, epoch_no, remote_id, remove_file_cb=None):
         if not File.is_valid_file_id(remote_id):
             raise RemoteFileError('Invalid remote file id!', FileServerErrorCode.INVALID_FILE_ID)
         cur = self._conn.cursor()
         try:
             try:
+                cur.execute('BEGIN')
                 check_valid_epoch(cur, epoch_no)
-                cur.execute(
-                    '''
-                    UPDATE ps_remote_file
-                    SET removed_epoch = ?
-                    WHERE remote_id = ? AND removed_epoch IS NULL
-                    '''
-                , (epoch_no, remote_id))
-                if cur.rowcount != 1:
-                    raise RemoteFileError('Remote file [{}] not found'.format(remote_id), FileServerErrorCode.FILE_NOT_FOUND)
+                if is_file_committed(cur, remote_id):
+                    cur.execute(
+                        '''
+                        UPDATE ps_remote_file
+                        SET removed_epoch = ?
+                        WHERE remote_id = ? AND removed_epoch IS NULL
+                        '''
+                    , (epoch_no, remote_id))
+                else:
+                    cur.execute(
+                        '''
+                        DELETE 
+                        FROM ps_remote_file 
+                        WHERE remote_id = ?
+                        '''
+                        , (remote_id,)
+                    )
+                    
+                    if remove_file_cb is not None:
+                        logging.debug('Remove uncommitted file [{}]'.format(remote_id))
+                        remove_file_cb(remote_id)
+
                 self._conn.commit()
             except EpochError as e:
                 logging.error('Query error {}'.format(str(e)))

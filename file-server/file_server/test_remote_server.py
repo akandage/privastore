@@ -92,7 +92,6 @@ class TestRemoteServer(TestServer):
         session_id = r.headers.get('x-privastore-session-id')
         req_headers = {
             'x-privastore-session-id': session_id,
-            'x-privastore-epoch-no': '1'
         }
         inv_session_id = 'S-{}'.format(str(uuid.uuid4()))
         r = self.send_request(URL.format('/1/file'), method=requests.post, headers=req_headers)
@@ -257,17 +256,12 @@ class TestRemoteServer(TestServer):
         session_id = r.headers.get('x-privastore-session-id')
         req_headers = {
             'x-privastore-session-id': session_id,
-            'x-privastore-epoch-no': '1'
         }
         r = self.send_request(URL.format('/1/epoch/1'), method=requests.put, headers=req_headers)
         self.assertEqual(r.status_code, HTTPStatus.OK)
         r = self.send_request(URL.format('/1/epoch/1'), method=requests.put, headers=req_headers)
         self.assertEqual(r.status_code, HTTPStatus.CONFLICT)
         self.assertEqual(r.json()['error'], 'EPOCH_IS_OVER')
-        r = self.send_request(URL.format('/1/file?size=2000'), method=requests.post, headers=req_headers)
-        self.assertEqual(r.status_code, HTTPStatus.CONFLICT)
-        self.assertEqual(r.json()['error'], 'EPOCH_IS_OVER')
-        req_headers['x-privastore-epoch-no'] = '2'
         r = self.send_request(URL.format('/1/file?size=1000'), method=requests.post, headers=req_headers)
         self.assertEqual(r.status_code, HTTPStatus.OK)
         file_1_id = r.headers.get('x-privastore-remote-file-id')
@@ -278,19 +272,15 @@ class TestRemoteServer(TestServer):
         r = self.send_request(URL.format('/1/epoch/2?marker-id={}'.format(file_1_id)), method=requests.put, headers=req_headers)
         self.assertEqual(r.status_code, HTTPStatus.CONFLICT)
         self.assertEqual(r.json()['error'], 'FILE_IS_UNCOMMITTED')
+        req_headers['x-privastore-epoch-no'] = '2'
         r = self.send_request(URL.format('/1/file/{}/commit'.format(file_1_id)), method=requests.put, headers=req_headers)
-        self.assertEqual(r.status_code, HTTPStatus.OK)
-        r = self.send_request(URL.format('/1/file?size=2000'), method=requests.post, headers=req_headers)
-        self.assertEqual(r.status_code, HTTPStatus.OK)
-        file_2_id = r.headers.get('x-privastore-remote-file-id')
-        r = self.send_request(URL.format('/1/file/{}?chunk=1'.format(file_2_id)), data=chunk_1, method=requests.put, headers=req_headers)
-        self.assertEqual(r.status_code, HTTPStatus.OK)
-        r = self.send_request(URL.format('/1/file/{}?chunk=2'.format(file_2_id)), data=chunk_2, method=requests.put, headers=req_headers)
         self.assertEqual(r.status_code, HTTPStatus.OK)
         r = self.send_request(URL.format('/1/epoch/2?marker-id={}'.format(file_1_id)), method=requests.put, headers=req_headers)
         self.assertEqual(r.status_code, HTTPStatus.OK)
-        r = self.send_request(URL.format('/1/file/{}/metadata'.format(file_1_id)), method=requests.get, headers=req_headers)
-        self.assertTrue(r.get('error') is None)
-        r = self.send_request(URL.format('/1/file/{}/metadata'.format(file_2_id)), method=requests.get, headers=req_headers)
-        self.assertEqual(r.json()['error'], 'FILE_NOT_FOUND')
+        file_1_metadata = self.send_request(URL.format('/1/file/{}/metadata'.format(file_1_id)), method=requests.get, headers=req_headers)
+        self.assertTrue(file_1_metadata is not None)
+        self.assertEqual(file_1_metadata.get('remote-file-id'), file_1_id)
+        self.assertEqual(file_1_metadata.get('file-size'), 1000)
+        self.assertEqual(file_1_metadata.get('file-chunks'), 1)
+        self.assertEqual(file_1_metadata.get('is-committed'), True)
         

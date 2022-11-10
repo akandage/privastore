@@ -1,21 +1,22 @@
 from ...db.dao import DataAccessObject
+from typing import Callable, Optional
 
 class FileDAO(DataAccessObject):
 
     def __init__(self, conn):
         super().__init__(conn)
     
-    def create_file(self, epoch_no: int, remote_id: str, file_size: int) -> None:
+    def create_file(self, remote_id: str, file_size: int) -> None:
         raise Exception('Not implemented!')
     
     def get_file_metadata(self, remote_id: str) -> None:
         raise Exception('Not implemented!')
 
-    def file_modified(self, epoch_no: int, remote_id: str) -> None:
+    def file_modified(self, remote_id: str) -> None:
         raise Exception('Not implemented!')
 
     def commit_file(self, epoch_no: int, remote_id: str) -> None:
         raise Exception('Not implemented!')
 
-    def remove_file(self, epoch_no: int, remote_id: str) -> None:
+    def remove_file(self, epoch_no: int, remote_id: str, remove_file_cb: Optional[Callable[[str], None]] = None) -> None:
         raise Exception('Not implemented!')

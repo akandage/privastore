@@ -39,10 +39,9 @@ def create_file_table(conn):
             id INTEGER PRIMARY KEY NOT NULL, 
             remote_id VARCHAR(38) UNIQUE NOT NULL, 
             file_size INTEGER NOT NULL DEFAULT 0, 
-            is_committed BOOLEAN NOT NULL DEFAULT 0, 
             created_timestamp INTEGER NOT NULL DEFAULT 0, 
             modified_timestamp INTEGER NOT NULL DEFAULT 0, 
-            created_epoch INTEGER NOT NULL DEFAULT 1, 
+            created_epoch INTEGER NULL, 
             removed_epoch INTEGER NULL 
         )
         '''
