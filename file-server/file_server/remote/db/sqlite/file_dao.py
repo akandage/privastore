@@ -98,6 +98,8 @@ class SqliteFileDAO(FileDAO):
                     WHERE remote_id = ? AND removed_epoch IS NULL
                     '''
                 , (modified_timestamp, remote_id))
+                if cur.rowcount != 1:
+                    raise RemoteFileError('No rows updated!')
                 self._conn.commit()
             except EpochError as e:
                 logging.error('Query error {}'.format(str(e)))
@@ -135,6 +137,8 @@ class SqliteFileDAO(FileDAO):
                     WHERE remote_id = ? AND removed_epoch IS NULL
                     '''
                 , (epoch_no, remote_id))
+                if cur.rowcount != 1:
+                    raise RemoteFileError('No rows updated!')
                 self._conn.commit()
             except EpochError as e:
                 logging.error('Query error {}'.format(str(e)))
@@ -183,7 +187,8 @@ class SqliteFileDAO(FileDAO):
                     if remove_file_cb is not None:
                         logging.debug('Remove uncommitted file [{}]'.format(remote_id))
                         remove_file_cb(remote_id)
-
+                if cur.rowcount != 1:
+                    raise RemoteFileError('No rows updated or removed!')
                 self._conn.commit()
             except EpochError as e:
                 logging.error('Query error {}'.format(str(e)))

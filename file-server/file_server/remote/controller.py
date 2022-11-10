@@ -161,7 +161,7 @@ class RemoteServerController(Controller):
             logging.debug('Acquired database connection')
 
             file_dao = self.dao_factory().file_dao(conn)
-            file_dao.remove_file(epoch_no, remote_id)
+            file_dao.remove_file(epoch_no, remote_id, remove_file_cb=lambda remote_id: self.store().remove_file_by_id(remote_id, ignore_removable=True))
 
             logging.debug('Removed remote file [{}]'.format(remote_id))
         finally:

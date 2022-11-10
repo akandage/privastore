@@ -38,6 +38,7 @@ class SqliteEpochDAO(EpochDAO):
         cur = self._conn.cursor()
         try:
             try:
+                cur.execute('BEGIN')
                 check_valid_epoch(cur, epoch_no)
                 if marker_id is not None:
                     if not is_file_committed(cur, marker_id):

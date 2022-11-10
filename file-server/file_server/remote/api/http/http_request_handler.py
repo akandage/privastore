@@ -435,7 +435,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         if not self.heartbeat_session(session_id):
             return
 
-        epoch_no = self.get_epoch_no_from_path()
+        epoch_no = self.get_epoch_no_from_header()
         if epoch_no is None:
             return
         
