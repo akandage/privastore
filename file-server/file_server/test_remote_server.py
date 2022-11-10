@@ -190,6 +190,8 @@ class TestRemoteServer(TestServer):
         chunk_3 = random.randbytes(500)
         r = self.send_request(URL.format('/1/file/{}?chunk=1'.format(file_1_id)), data=chunk_1, method=requests.put, headers=req_headers)
         self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = self.send_request(URL.format('/1/file/{}?chunk=1'.format(file_1_id)), data=chunk_3, method=requests.put, headers=req_headers)
+        self.assertEqual(r.json()['error'], 'INVALID_CHUNK_NUM')
         r = self.send_request(URL.format('/1/file/{}?chunk=2'.format(file_1_id)), data=chunk_2, method=requests.put, headers=req_headers)
         self.assertEqual(r.status_code, HTTPStatus.BAD_REQUEST)
         self.assertEqual(r.json()['error'], 'FILE_CHUNK_TOO_LARGE')
