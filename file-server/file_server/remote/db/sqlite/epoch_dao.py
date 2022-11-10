@@ -31,7 +31,7 @@ class SqliteEpochDAO(EpochDAO):
             except:
                 pass
 
-    def end_epoch(self, epoch_no, marker_id=None):
+    def end_epoch(self, epoch_no, marker_id=None, remove_file_cb=None):
         if marker_id is not None:
             if not File.is_valid_file_id(marker_id):
                 raise RemoteFileError('Invalid remote file id!', FileServerErrorCode.INVALID_FILE_ID)
@@ -48,6 +48,38 @@ class SqliteEpochDAO(EpochDAO):
                     VALUES (?, ?)
                     '''
                 , (epoch_no, marker_id))
+
+                #
+                # Remove un-committed or removed files from previous epochs.
+                #
+                if remove_file_cb is not None:
+                    cur.execute(
+                        '''
+                        SELECT remote_id, created_epoch, removed_epoch 
+                        FROM ps_remote_file 
+                        WHERE (created_epoch <= ? AND NOT is_committed) OR (removed_epoch IS NOT NULL AND ifnull(removed_epoch, 0) <= ?)
+                        '''
+                        , (epoch_no, epoch_no)
+                    )
+                    for remote_file in cur.fetchall():
+                        remote_id, created_epoch, removed_epoch = remote_file
+
+                        if removed_epoch is not None:
+                            logging.debug('Removing file [{}] marked for removal in epoch [{}]'.format(remote_id, removed_epoch))
+                            remove_file_cb(remote_id)
+                        else:
+                            logging.debug('Removing uncommitted file [{}] created in epoch [{}]'.format(remote_id, created_epoch))
+                            remove_file_cb(remote_id)
+
+                cur.execute(
+                    '''
+                    DELETE 
+                    FROM ps_remote_file 
+                    WHERE (created_epoch <= ? AND NOT is_committed) OR (removed_epoch IS NOT NULL AND ifnull(removed_epoch, 0) <= ?)
+                    '''
+                    , (epoch_no, epoch_no)
+                )
+
                 self._conn.commit()
             except EpochError as e:
                 logging.error('Query error {}'.format(str(e)))

@@ -1,6 +1,6 @@
 from ...db.dao import DataAccessObject
 import sqlite3
-from typing import Optional
+from typing import Callable, Optional
 
 class EpochDAO(DataAccessObject):
 
@@ -13,5 +13,5 @@ class EpochDAO(DataAccessObject):
     def current_epoch(self) -> int:
         raise Exception('Not implemented!')
 
-    def end_epoch(self, epoch_no: int, marker_id: Optional[str] = None) -> None:
+    def end_epoch(self, epoch_no: int, marker_id: Optional[str] = None, remove_file_cb: Optional[Callable[[str], None]] = None) -> None:
         raise Exception('Not implemented!')
