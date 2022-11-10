@@ -61,6 +61,15 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         else:
             super().do_PUT()
 
+    def do_DELETE(self):
+        if not self.parse_path():
+            return
+        
+        if self.url_path.startswith(REMOTE_FILE_PATH):
+            self.handle_remove_file()
+        else:
+            super().do_DELETE()
+
     def get_chunk_num(self) -> int:
         chunk_num = self.url_query.get('chunk')
 
@@ -242,6 +251,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
 
     def handle_get_remote_file_metadata(self):
         '''
+
             Handle the get remote file metadata API.
             Method: GET
             Path: /1/file/<file-id>/metadata
@@ -293,6 +303,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
 
     def handle_remote_file_write(self):
         '''
+
             Handle the remote file write API.
             Append a chunk to the file i.e. chunk-number must be == next chunk number.
             File chunk numbers use 1-based indexing.
@@ -412,6 +423,52 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
         self.end_headers()
         self.wfile.write(chunk)
+
+    def handle_remove_file(self):
+        '''
+
+            Handle the remove remote file API.
+            Method: DELETE
+            Path: /1/file/<file-id>
+            Request Headers:
+                x-privastore-session-id: <session-id>
+
+        '''
+        logging.debug('Remove remote file request')
+        self.wrap_sockets()
+        self.read_body()
+
+        session_id = self.get_session_id()
+        if session_id is None:
+            return
+        
+        if not self.heartbeat_session(session_id):
+            return
+
+        epoch_no = self.get_epoch_no_from_path()
+        if epoch_no is None:
+            return
+        
+        remote_id = self.get_remote_file_id()
+        if remote_id is None:
+            return
+
+        try:
+            self.controller().remove_file(epoch_no, remote_id)
+        except EpochError as e:
+            self.handle_epoch_error(e)
+            return
+        except RemoteFileError as e:
+            self.handle_file_error(e)
+            return
+        except Exception as e:
+            self.handle_internal_error(e)
+            return
+        
+        self.send_response(HTTPStatus.OK)
+        self.send_header(CONTENT_LENGTH_HEADER, '0')
+        self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
+        self.end_headers()
 
     def handle_end_epoch(self):
         '''

@@ -64,6 +64,12 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
             logging.error('Invalid path: [{}]'.format(self.url_path))
             self.send_error_response(HTTPStatus.NOT_FOUND)
 
+    def do_DELETE(self):
+        if not self.parse_path():
+            return
+
+        self.send_error_response(HTTPStatus.NOT_FOUND)
+
     def handle_file_error(self, e: FileError):
         logging.error('File error: {}'.format(str(e)))
         if e.error_code() == FileServerErrorCode.FILE_NOT_FOUND:

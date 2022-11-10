@@ -164,6 +164,20 @@ class RemoteServerController(Controller):
         finally:
             self.db_conn_mgr().db_close(conn)
     
+    def remove_file(self, epoch_no: int, remote_id: str) -> None:
+        logging.debug('Remove remote file [{}] epoch [{}]'.format(remote_id, epoch_no))
+        conn = self.db_conn_mgr().db_connect()
+        
+        try:
+            logging.debug('Acquired database connection')
+
+            file_dao = self.dao_factory().file_dao(conn)
+            file_dao.remove_file(epoch_no, remote_id)
+
+            logging.debug('Removed remote file [{}]'.format(remote_id))
+        finally:
+            self.db_conn_mgr().db_close(conn)
+
     def end_epoch(self, epoch_no: int, marker_id: Optional[str] = None) -> None:
         logging.debug('End epoch [{}] marker file id [{}]'.format(epoch_no, marker_id))
         conn = self.db_conn_mgr().db_connect()

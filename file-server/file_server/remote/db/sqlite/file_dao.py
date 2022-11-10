@@ -53,7 +53,7 @@ class SqliteFileDAO(FileDAO):
                     '''
                     SELECT file_size, is_committed, created_timestamp, modified_timestamp, created_epoch, removed_epoch 
                     FROM ps_remote_file 
-                    WHERE remote_id = ?
+                    WHERE remote_id = ? AND removed_epoch IS NULL
                     '''
                 , (remote_id,))
                 res = cur.fetchone()
@@ -96,7 +96,7 @@ class SqliteFileDAO(FileDAO):
                     '''
                     UPDATE ps_remote_file 
                     SET modified_timestamp = ? 
-                    WHERE remote_id = ?
+                    WHERE remote_id = ? AND removed_epoch IS NULL
                     '''
                 , (modified_timestamp, remote_id))
                 if cur.rowcount != 1:
@@ -134,7 +134,7 @@ class SqliteFileDAO(FileDAO):
                     '''
                     UPDATE ps_remote_file 
                     SET is_committed = ? 
-                    WHERE remote_id = ?
+                    WHERE remote_id = ? AND removed_epoch IS NULL
                     '''
                 , (1, remote_id))
                 if cur.rowcount != 1:
@@ -168,8 +168,8 @@ class SqliteFileDAO(FileDAO):
                 cur.execute(
                     '''
                     UPDATE ps_remote_file
-                    SET removed_epoch_no = ?
-                    WHERE remote_id = ? AND removed_epoch_no IS NULL
+                    SET removed_epoch = ?
+                    WHERE remote_id = ? AND removed_epoch IS NULL
                     '''
                 , (epoch_no, remote_id))
                 if cur.rowcount != 1:
