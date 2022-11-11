@@ -116,11 +116,6 @@ class LocalServerController(Controller):
                 # Cleanup if any error occurs during the upload process.
                 #
 
-                try:
-                    dir_dao.remove_file(path, file_name, delete=True)
-                except Exception as e:
-                    logging.error('Could not cleanup uploaded file in db: {}'.format(str(e)))
-
                 if upload_file is not None:
                     try:
                         self.store().close_file(upload_file)
@@ -132,6 +127,11 @@ class LocalServerController(Controller):
                         logging.debug('Removed file from cache')
                     except Exception as e:
                         logging.error('Could not remove uploaded file from cache: {}'.format(str(e)))
+
+                try:
+                    dir_dao.remove_file(path, file_name, delete=True)
+                except Exception as e:
+                    logging.error('Could not cleanup uploaded file in db: {}'.format(str(e)))
 
                 raise e
 

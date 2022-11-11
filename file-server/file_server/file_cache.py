@@ -178,9 +178,6 @@ class FileCache(object):
 
         def close(self):
             lock = self._node.lock
-            with lock:
-                if self._node.error:
-                    raise FileCacheError('File [{}] in error state'.format(self.file_id()))
             try:
                 super().close()
                 with lock:
@@ -448,11 +445,6 @@ class FileCache(object):
                 with node.lock:
                     if mode == 'w' or mode == 'a':
                         if not writable:
-                            if file.file_size() < node.file_size():
-                                node.error = True
-                                node.reader_cv.notify_all()
-                                raise FileCacheError('Not all allocated space for file [{}] used'.format(file.file_id()))
-
                             node.writable = False
                             node.reader_cv.notify_all()
                             logging.debug('File [{}] no longer writable'.format(file_id))
@@ -461,16 +453,25 @@ class FileCache(object):
                         curr_size = file.size_on_disk()
                         if curr_size > prev_size:
                             node.size_on_disk = curr_size
+
+                            try:
+                                self.ensure_cache_space(curr_size-prev_size)
+                            except FileCacheError as e:
+                                node.error = True
+                                node.reader_cv.notify_all()
+                                raise e
+                            
                             self._cache_used += curr_size-prev_size
 
-                        if self._cache_used > self._cache_size:
-                            node.error = True
-                            node.reader_cv.notify_all()
-                            raise FileCacheError('File cache is full!', FileServerErrorCode.FILE_STORE_FULL)
                     if node.num_readers == 0 and node.num_writers == 0 and not node.writable:
                         node.removable = removable
                         if removable:
                             logging.debug('File [{}] now removable'.format(file_id))
+                    
+                    if not writable and file.file_size() < node.file_size():
+                        node.error = True
+                        node.reader_cv.notify_all()
+                        raise FileCacheError('Not all allocated space for file [{}] used'.format(file.file_id()))
             else:
                 raise FileCacheError('File [{}] not found in cache'.format(file_id))
 
@@ -478,9 +479,9 @@ class FileCache(object):
         Remove file from cache.
 
     '''
-    def remove_file(self, file: File) -> None:
+    def remove_file(self, file: File, ignore_removable: bool = False) -> None:
         file_id = file.file_id()
-        self.remove_file_by_id(file_id)
+        self.remove_file_by_id(file_id, ignore_removable)
 
     def remove_file_by_id(self, file_id: str, ignore_removable: bool = False) -> None:
         with self._index_lock:
@@ -490,18 +491,27 @@ class FileCache(object):
                     if not node.removable:
                         if not ignore_removable:
                             raise FileCacheError('File [{}] is not removable'.format(file_id), FileServerErrorCode.FILE_NOT_REMOVABLE)
-                    if node.num_readers > 0:
-                        raise FileCacheError('File has [{}] readers but is removable'.format(node.num_readers), FileServerErrorCode.INTERNAL_ERROR)
-                    if node.num_writers > 0:
-                        raise FileCacheError('File has [{}] writers but is removable'.format(node.num_writers), FileServerErrorCode.INTERNAL_ERROR)
+                        else:
+                            logging.warn('File [{}] is not removable'.format(file_id))
+                    elif node.num_readers > 0:
+                        if not ignore_removable:
+                            raise FileCacheError('File has [{}] readers but is removable'.format(node.num_readers), FileServerErrorCode.INTERNAL_ERROR)
+                        else:
+                            logging.warn('File has [{}] readers but is removable'.format(node.num_readers))
+                    elif node.num_writers > 0:
+                        if not ignore_removable:
+                            raise FileCacheError('File has [{}] writers but is removable'.format(node.num_writers), FileServerErrorCode.INTERNAL_ERROR)
+                        else:
+                            logging.warn('File has [{}] writers but is removable'.format(node.num_writers))
+                    size_on_disk = node.size_on_disk
                 self._index.pop_node(file_id)
                 try:
                     shutil.rmtree(os.path.join(self._cache_path, file_id))
                 except Exception as e:
                     logging.warn('Could not remove file [{}] from cache: {}'.format(file_id, str(e)))
                 logging.debug('Removed file [{}] from cache'.format(file_id))
-                self._cache_used -= node.size_on_disk
-                logging.debug('Reclaimed [{}] space in cache'.format(str_mem_size(node.size_on_disk)))
+                self._cache_used -= size_on_disk
+                logging.debug('Reclaimed [{}] space in cache'.format(str_mem_size(size_on_disk)))
             else:
                 raise FileCacheError('File [{}] not found in cache'.format(file_id), FileServerErrorCode.FILE_NOT_FOUND)
 
@@ -546,9 +556,10 @@ class FileCache(object):
             # Head node is LRU file.
             curr_node = self._index.head()
             while total_size < size and curr_node is not None:
-                if curr_node.size_on_disk > 0 and curr_node.removable:
-                    total_size += curr_node.size_on_disk
-                curr_node = curr_node._next
+                with curr_node.lock:
+                    if curr_node.size_on_disk > 0 and curr_node.removable:
+                        total_size += curr_node.size_on_disk
+                    curr_node = curr_node._next
 
             if total_size < size:
                 raise FileCacheError('Insufficient space in cache', FileServerErrorCode.INSUFFICIENT_SPACE)
@@ -556,12 +567,13 @@ class FileCache(object):
             total_size = 0
             curr_node = self._index.head()
             while total_size < size and curr_node is not None:
-                next_node = curr_node._next
+                with curr_node.lock:
+                    next_node = curr_node._next
 
-                if curr_node.removable:
-                    file_id = curr_node.file_id()
-                    self.remove_file_by_id(file_id)
-                    total_size += curr_node.size_on_disk
-                    logging.debug('Evicted file [{}] from cache, recovered [{}] space'.format(file_id, str_mem_size(curr_node.size_on_disk)))
+                    if curr_node.removable:
+                        file_id = curr_node.file_id()
+                        self.remove_file_by_id(file_id)
+                        total_size += curr_node.size_on_disk
+                        logging.debug('Evicted file [{}] from cache, recovered [{}] space'.format(file_id, str_mem_size(curr_node.size_on_disk)))
 
-                curr_node = next_node
+                    curr_node = next_node
