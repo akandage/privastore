@@ -27,8 +27,8 @@ class TestFileCache(unittest.TestCase):
         }
         self.cache = FileCache(cache_config)
 
-        f1 = self.cache.write_file()
-        f2 = self.cache.write_file()
+        f1 = self.cache.write_file(file_size=150)
+        f2 = self.cache.write_file(file_size=50)
 
         self.assertNotEqual(f1.file_id(), f2.file_id())
         chunk1 = random.randbytes(100)
@@ -46,13 +46,13 @@ class TestFileCache(unittest.TestCase):
         self.assertTrue(f3 is not None)
         self.assertEqual(f3.read_chunk(), chunk1)
         self.assertEqual(f3.read_chunk(), chunk2)
-        self.assertTrue(f3.read_chunk() is None)
+        self.assertEqual(f3.read_chunk(), b'')
         self.cache.close_file(f3)
 
         f4 = self.cache.read_file(f2.file_id())
         self.assertTrue(f4 is not None)
         self.assertEqual(f4.read_chunk(), chunk3)
-        self.assertTrue(f4.read_chunk() is None)
+        self.assertEqual(f4.read_chunk(), b'')
         self.cache.close_file(f4)
 
         f5_id = File.generate_file_id()
@@ -70,7 +70,7 @@ class TestFileCache(unittest.TestCase):
         }
         self.cache = FileCache(cache_config)
 
-        f1 = self.cache.write_file()
+        f1 = self.cache.write_file(file_size=150)
         self.cache.close_file(f1, removable=False, writable=True)
 
         self.assertEqual(f1.file_size(), 0)
@@ -91,7 +91,7 @@ class TestFileCache(unittest.TestCase):
         self.assertTrue(f3 is not None)
         self.assertEqual(f3.read_chunk(), chunk1)
         self.assertEqual(f3.read_chunk(), chunk2)
-        self.assertTrue(f3.read_chunk() is None)
+        self.assertEqual(f3.read_chunk(), b'')
         self.cache.close_file(f3)
     
     def test_remove_file(self):
@@ -100,8 +100,8 @@ class TestFileCache(unittest.TestCase):
         }
         self.cache = FileCache(cache_config)
 
-        f1 = self.cache.write_file()
-        f2 = self.cache.write_file()
+        f1 = self.cache.write_file(file_size=150)
+        f2 = self.cache.write_file(file_size=50)
 
         chunk1 = random.randbytes(100)
         chunk2 = random.randbytes(50)

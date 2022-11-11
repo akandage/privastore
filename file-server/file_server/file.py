@@ -4,23 +4,27 @@ import uuid
 from .error import FileError, FileServerErrorCode
 from .file_chunk import default_chunk_encoder, default_chunk_decoder
 from .util.crypto import sha256
+from .util.file import KILOBYTE
 
 METADATA_FILE = '.metadata'
 FILE_ID_LENGTH = 38
 
 class File(object):
 
-    def __init__(self, path, file_id=None, mode='r', encode_chunk=default_chunk_encoder, decode_chunk=default_chunk_decoder, skip_metadata=False):
+    def __init__(self, path, file_id=None, mode='r', chunk_size=KILOBYTE, encode_chunk=default_chunk_encoder, decode_chunk=default_chunk_decoder, skip_metadata=False):
         self._file_id = file_id or self.generate_file_id()
         self._file_path = os.path.join(path, self._file_id)
         self._mode = mode
         self._modified = False
         self._closed = False
+        self._chunk_size = chunk_size
         self._chunks_read = 0
         self._chunks_written = 0
         self._total_chunks = 0
         self._file_size = 0
         self._size_on_disk = 0
+        self._read_buffer = bytes()
+        self._read_offset = 0
         self._encode_chunk = encode_chunk
         self._decode_chunk = decode_chunk
 
@@ -96,6 +100,9 @@ class File(object):
     def mode(self) -> str:
         return self._mode
 
+    def chunk_size(self) -> int:
+        return self._chunk_size
+
     def chunks_read(self) -> int:
         return self._chunks_read
     
@@ -120,8 +127,17 @@ class File(object):
     def set_closed(self) -> None:
         self._closed = True
 
+    def seek(self, offset: int) -> None:
+        if offset < 0 or offset > self.file_size():
+            raise FileError('Cannot seek to offset [{}]'.format(offset), FileServerErrorCode.INVALID_SEEK_OFFSET)
+        chunk_size = self.chunk_size()
+        chunk_num = offset // chunk_size
+        self.seek_chunk(chunk_num)
+        self._read_buffer = self.read_chunk()
+        self._read_offset = offset % chunk_size
+
     def seek_chunk(self, offset: int) -> None:
-        if offset >= self._total_chunks:
+        if offset < 0 or offset > self.total_chunks():
             raise FileError('Cannot seek to chunk [{}]'.format(offset), FileServerErrorCode.INVALID_CHUNK_NUM)
         self._chunks_read = offset
 
@@ -129,14 +145,22 @@ class File(object):
         '''
             Implement this so it behaves like file-like object.
         '''
-        self.append_chunk(data)
-        return len(data)
+        data_len = len(data)
+        if data_len == 0:
+            return 0
+        chunk_size = self.chunk_size()
+        for offset in range(0, data_len, chunk_size):
+            end = min(offset+chunk_size, data_len)
+            self.append_chunk(data[offset:end])
+        return data_len
 
     def append_chunk(self, chunk_bytes: bytes) -> None:
         if self.closed():
             raise FileError('File closed')
         if self._mode != 'w' and self._mode != 'a':
             raise FileError('File not opened for writing')
+        if len(chunk_bytes) == 0:
+            raise FileError('Cannot append empty chunk')
         file_path = os.path.join(self._file_path, str(self._total_chunks+1))
         if os.path.exists(file_path):
             raise FileError('File chunk exists', FileServerErrorCode.FILE_IS_CORRUPT)
@@ -151,10 +175,34 @@ class File(object):
         '''
             Implement this so it behaves like file-like object.
         '''
-        chunk = self.read_chunk()
-        if chunk is None:
+        if size < 0:
+            raise FileError('Invalid read size!')
+        if size == 0:
             return b''
-        return chunk
+        
+        # Max read size is the chunk size.
+        buf = bytes()
+        buf_len = 0
+        size = min(self.chunk_size(), size)
+
+        while buf_len < size:
+            read_buf_len = len(self._read_buffer)
+
+            if read_buf_len - self._read_offset == 0:
+                self._read_buffer = self.read_chunk()
+                self._read_offset = 0
+                read_buf_len = len(self._read_buffer)
+            
+            if read_buf_len == 0:
+                break
+            
+            read_size = min(read_buf_len - self._read_offset, size - buf_len)
+            read_end = self._read_offset + read_size
+            buf += self._read_buffer[self._read_offset:read_end]
+            buf_len += read_size
+            self._read_offset = read_end
+
+        return buf
 
     def read_chunk(self) -> bytes:
         if self.closed():
@@ -169,6 +217,7 @@ class File(object):
                 chunk_bytes = self._decode_chunk(chunk_file=chunk_file)
             self._chunks_read += 1
             return chunk_bytes
+        return b''
 
     def remove(self) -> None:
         shutil.rmtree(self._file_path)

@@ -76,7 +76,7 @@ class TestFile(unittest.TestCase):
         self.assertEqual(chunk1, f2.read_chunk())
         self.assertEqual(chunk2, f2.read_chunk())
         self.assertEqual(chunk3, f2.read_chunk())
-        self.assertTrue(f2.read_chunk() is None)
+        self.assertEqual(f2.read_chunk(), b'')
         f2.close()
     
     def test_append_file(self):
@@ -99,7 +99,7 @@ class TestFile(unittest.TestCase):
         self.assertEqual(f3.file_size(), 2048)
         self.assertEqual(f3.read_chunk(), chunk1)
         self.assertEqual(f3.read_chunk(), chunk2)
-        self.assertTrue(f3.read_chunk() is None)
+        self.assertEqual(f3.read_chunk(), b'')
         f3.close()
 
     def test_read_write_encrypted_file(self):
@@ -123,5 +123,5 @@ class TestFile(unittest.TestCase):
         self.assertEqual(f2.read_chunk(), chunk1)
         self.assertEqual(f2.read_chunk(), chunk2)
         self.assertEqual(f2.read_chunk(), chunk3)
-        self.assertTrue(f2.read_chunk() is None)
+        self.assertEqual(f2.read_chunk(), b'')
         f2.close()

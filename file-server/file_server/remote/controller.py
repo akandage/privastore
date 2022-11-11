@@ -85,6 +85,8 @@ class RemoteServerController(Controller):
                 # Seek just before the chunk to read.
                 file.seek_chunk(chunk_num-1)
                 chunk = file.read_chunk()
+                if len(chunk) == 0:
+                    raise RemoteFileError('Chunk [{}] not found'.format(chunk_num), FileServerErrorCode.INVALID_CHUNK_NUM)
                 logging.debug('Read chunk size [{}]'.format(len(chunk)))
 
                 return chunk
