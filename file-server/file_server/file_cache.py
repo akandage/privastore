@@ -397,11 +397,11 @@ class FileCache(object):
         is insufficient space in the cache.
 
     '''
-    def touch_file(self, file_id: str, file_size: int) -> None:
+    def touch_file(self, file_id: str, file_size: int, writable: bool = True, removable: bool = False) -> None:
         with self._index_lock:
             node = self.create_cache_entry(file_id, file_size, size_on_disk=file_size)
-            node.writable = True
-            node.removable = False
+            node.writable = writable
+            node.removable = removable
             File.touch_file(self._cache_path, file_id)
 
     '''
@@ -479,9 +479,9 @@ class FileCache(object):
         Remove file from cache.
 
     '''
-    def remove_file(self, file: File, ignore_removable: bool = False) -> None:
+    def remove_file(self, file: File) -> None:
         file_id = file.file_id()
-        self.remove_file_by_id(file_id, ignore_removable)
+        self.remove_file_by_id(file_id)
 
     def remove_file_by_id(self, file_id: str, ignore_removable: bool = False) -> None:
         with self._index_lock:
@@ -491,18 +491,11 @@ class FileCache(object):
                     if not node.removable:
                         if not ignore_removable:
                             raise FileCacheError('File [{}] is not removable'.format(file_id), FileServerErrorCode.FILE_NOT_REMOVABLE)
-                        else:
-                            logging.warn('File [{}] is not removable'.format(file_id))
-                    elif node.num_readers > 0:
-                        if not ignore_removable:
-                            raise FileCacheError('File has [{}] readers but is removable'.format(node.num_readers), FileServerErrorCode.INTERNAL_ERROR)
-                        else:
-                            logging.warn('File has [{}] readers but is removable'.format(node.num_readers))
-                    elif node.num_writers > 0:
-                        if not ignore_removable:
-                            raise FileCacheError('File has [{}] writers but is removable'.format(node.num_writers), FileServerErrorCode.INTERNAL_ERROR)
-                        else:
-                            logging.warn('File has [{}] writers but is removable'.format(node.num_writers))
+                    if node.num_readers > 0:
+                        raise FileCacheError('Removing file with [{}] readers'.format(node.num_readers), FileServerErrorCode.INTERNAL_ERROR)
+                    if node.num_writers > 0:
+                        raise FileCacheError('Removing file with [{}] writers'.format(node.num_writers), FileServerErrorCode.INTERNAL_ERROR)
+
                     size_on_disk = node.size_on_disk
                 self._index.pop_node(file_id)
                 try:

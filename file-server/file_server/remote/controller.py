@@ -26,7 +26,7 @@ class RemoteServerController(Controller):
 
             file_dao = self.dao_factory().file_dao(conn)
             file_dao.create_file(remote_id, file_size)
-            self.store().touch_file(remote_id, file_size)
+            self.store().touch_file(remote_id, file_size, removable=True)
 
             logging.debug('Created remote file [{}]'.format(remote_id))
         finally:
@@ -61,7 +61,7 @@ class RemoteServerController(Controller):
                 file_dao.file_modified(remote_id)
                 logging.debug('Updated file modified timestamp')
             finally:
-                self.store().close_file(file, writable=True, removable=False)
+                self.store().close_file(file, writable=True)
 
             logging.debug('Appended to remote file [{}]'.format(remote_id))
         finally:
@@ -124,7 +124,7 @@ class RemoteServerController(Controller):
                 file_dao.commit_file(epoch_no, remote_id)
             finally:
                 if not committed:
-                    self.store().close_file(file, writable=True, removable=False)
+                    self.store().close_file(file, writable=True)
 
             
             logging.debug('Committed remote file [{}]'.format(remote_id))
