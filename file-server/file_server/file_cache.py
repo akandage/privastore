@@ -48,6 +48,9 @@ class FileCache(object):
             self._read_timeout = read_timeout
 
             with self._node.lock:
+                if self._node.error:
+                    raise FileCacheError('File [{}] in error state'.format(file_id))
+
                 self._node.num_readers += 1
                 self._node.removable = False
             
@@ -136,6 +139,8 @@ class FileCache(object):
                 raise FileError('Invalid mode!', FileServerErrorCode.INTERNAL_ERROR)
 
             with self._node.lock:
+                if self._node.error:
+                    raise FileCacheError('File [{}] in error state'.format(file_id))
                 if self._node.num_writers != 0:
                     raise FileCacheError('File [{}] already has writer!'.format(self.file_id()), FileServerErrorCode.FILE_NOT_WRITABLE)
                 if not self._node.writable:
@@ -152,27 +157,15 @@ class FileCache(object):
             else:
                 logging.debug('File [{}] opened for writing'.format(file_id))
 
-        def write(self, data):
-            lock = self._node.lock
-            try:
-                prev_chunks = self.total_chunks()
-                written = super().write(data)
-                with lock:
-                    self._node.file_chunks += self.total_chunks() - prev_chunks
-                    self._node.reader_cv.notify_all()
-                return written
-            except Exception as e:
-                with lock:
-                    self._node.error = True
-                    self._node.reader_cv.notify_all()
-                raise e
-
         def append_chunk(self, chunk_bytes):
+            chunk_len = len(chunk_bytes)
             lock = self._node.lock
-            try:
-                chunk_len = len(chunk_bytes)
+            with lock:
+                if self._node.error:
+                    raise FileCacheError('File [{}] in error state'.format(self.file_id()))
                 if self._file_size + chunk_len > self._node.file_size():
                     raise FileCacheError('File [{}] exceeds allocated size in cache!'.format(self.file_id()), FileServerErrorCode.FILE_TOO_LARGE)
+            try:
                 super().append_chunk(chunk_bytes)
                 with lock:
                     self._node.file_chunks += 1
@@ -185,6 +178,9 @@ class FileCache(object):
 
         def close(self):
             lock = self._node.lock
+            with lock:
+                if self._node.error:
+                    raise FileCacheError('File [{}] in error state'.format(self.file_id()))
             try:
                 super().close()
                 with lock:
@@ -452,6 +448,11 @@ class FileCache(object):
                 with node.lock:
                     if mode == 'w' or mode == 'a':
                         if not writable:
+                            if file.file_size() < node.file_size():
+                                node.error = True
+                                node.reader_cv.notify_all()
+                                raise FileCacheError('Not all allocated space for file [{}] used'.format(file.file_id()))
+
                             node.writable = False
                             node.reader_cv.notify_all()
                             logging.debug('File [{}] no longer writable'.format(file_id))

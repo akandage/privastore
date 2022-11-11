@@ -34,6 +34,7 @@ class TestFileCache(unittest.TestCase):
         chunk1 = random.randbytes(100)
         chunk2 = random.randbytes(50)
         chunk3 = random.randbytes(50)
+        chunk4 = random.randbytes(25)
         f1.append_chunk(chunk1)
         f1.append_chunk(chunk2)
         f2.append_chunk(chunk3)
@@ -64,6 +65,24 @@ class TestFileCache(unittest.TestCase):
             self.assertEqual('File [{}] already exists in cache'.format(f5_id), str(e))
         self.cache.close_file(f5)
 
+        f6 = self.cache.write_file(file_size=75)
+        f6.append_chunk(chunk3)
+        try:
+            f6.append_chunk(chunk3)
+            self.fail('Expected exceeded allocated size error')
+        except FileCacheError as e:
+            self.assertEqual('File [{}] exceeds allocated size in cache!'.format(f6.file_id()), str(e))
+        f6.append_chunk(chunk4)
+        self.cache.close_file(f6)
+
+        f7 = self.cache.write_file(file_size=75)
+        f7.append_chunk(chunk3)
+        try:
+            self.cache.close_file(f7)
+            self.fail('Expected not all allocated space used error')
+        except FileCacheError as e:
+            self.assertEqual('Not all allocated space for file [{}] used'.format(f7.file_id()), str(e))
+       
     def test_append_file(self):
         cache_config = {
             'store-path': 'test_file_cache',
