@@ -78,6 +78,18 @@ class TestFile(unittest.TestCase):
         self.assertEqual(chunk3, f2.read_chunk())
         self.assertEqual(f2.read_chunk(), b'')
         f2.close()
+
+        f3 = File('test_file', file_id=file_id, mode='r')
+        self.assertEqual(f3.read(), chunk1 + chunk2 + chunk3)
+        f3.seek(0)
+        self.assertEqual(f3.read(512), chunk1[:512])
+        self.assertEqual(f3.read(1024), chunk1[512:] + chunk2[:512])
+        self.assertEqual(f3.read(), chunk2[512:] + chunk3)
+        f3.seek(512)
+        self.assertEqual(f3.read(512+1024+50), chunk1[512:] + chunk2 + chunk3[:50])
+        f3.seek(1024+512)
+        self.assertEqual(f3.read(), chunk2[512:] + chunk3)
+        f3.close()
     
     def test_append_file(self):
         chunk1 = random.randbytes(1024)

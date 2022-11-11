@@ -5,6 +5,7 @@ from .error import FileError, FileServerErrorCode
 from .file_chunk import default_chunk_encoder, default_chunk_decoder
 from .util.crypto import sha256
 from .util.file import KILOBYTE
+from typing import Optional
 
 METADATA_FILE = '.metadata'
 FILE_ID_LENGTH = 38
@@ -171,19 +172,19 @@ class File(object):
         self._total_chunks += 1
         self._modified = True
     
-    def read(self, size: int) -> bytes:
+    def read(self, size: Optional[int] = None) -> bytes:
         '''
             Implement this so it behaves like file-like object.
         '''
+        if size is None:
+            size = self.file_size()
         if size < 0:
             raise FileError('Invalid read size!')
         if size == 0:
             return b''
         
-        # Max read size is the chunk size.
         buf = bytes()
         buf_len = 0
-        size = min(self.chunk_size(), size)
 
         while buf_len < size:
             read_buf_len = len(self._read_buffer)
