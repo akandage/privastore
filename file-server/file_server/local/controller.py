@@ -77,7 +77,7 @@ class LocalServerController(Controller):
                 # Set a unique id (UUID) for the file and record its size.
                 #
                 local_file_id = File.generate_file_id()
-                file_dao.update_file_local(path, file_name, file_version, local_file_id, file_size, size_on_disk=0, total_chunks=0, transfer_status=FileTransferStatus.RECEIVING)
+                file_dao.update_file_local(path, file_name, file_version, local_file_id, file_size, size_on_disk=0, total_chunks=0, transfer_status=FileTransferStatus.TRANSFERRING_DATA)
 
                 #
                 # Uploaded file data is stored in the cache and cannot be removed
@@ -107,7 +107,7 @@ class LocalServerController(Controller):
                 # Update the status of the file in the database to received and
                 # record the local file id and file size.
                 #
-                file_dao.update_file_local(path, file_name, file_version, upload_file.file_id(), file_size, size_on_disk, total_chunks, transfer_status=FileTransferStatus.RECEIVED)
+                file_dao.update_file_local(path, file_name, file_version, upload_file.file_id(), file_size, size_on_disk, total_chunks, transfer_status=FileTransferStatus.SYNCED_DATA)
                 logging.debug('File metadata updated')
             except Exception as e:
                 logging.error('Could not upload file: {}'.format(str(e)))
@@ -151,11 +151,11 @@ class LocalServerController(Controller):
             file_type = file_metadata.file_type
             file_id = file_metadata.local_id
             file_size = file_metadata.file_size
-            transfer_status = file_metadata.transfer_status
+            transfer_status = file_metadata.local_transfer_status
 
-            if transfer_status == FileTransferStatus.RECEIVING:
+            if transfer_status == FileTransferStatus.NONE or transfer_status == FileTransferStatus.TRANSFERRING_DATA:
                 raise FileDownloadError('File upload not complete!')
-            elif transfer_status == FileTransferStatus.RECEIVING_FAILED:
+            elif transfer_status == FileTransferStatus.TRANSFER_DATA_FAILED:
                 raise FileDownloadError('File upload failed!')
             
             #

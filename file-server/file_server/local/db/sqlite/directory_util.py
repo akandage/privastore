@@ -17,9 +17,9 @@ def query_directory_id(cur: sqlite3.Cursor, parent_directory_id: int, directory_
 def query_file_id(cur: sqlite3.Cursor, parent_directory_id: int, file_name: str, show_hidden: bool=False) -> Optional[int]:
     cur.execute('''
         SELECT F.id FROM ps_file AS F INNER JOIN ps_file_version AS V ON F.id = V.file_id 
-        WHERE F.parent_id = ? AND F.name = ? AND V.transfer_status <> ? AND (F.is_hidden <> 1 OR F.is_hidden = ?) 
+        WHERE F.parent_id = ? AND F.name = ? AND V.local_transfer_status <> ? AND (F.is_hidden <> 1 OR F.is_hidden = ?) 
             AND F.is_removed <> 1
-    ''', (parent_directory_id, file_name, FileTransferStatus.RECEIVING_FAILED.value, show_hidden))
+    ''', (parent_directory_id, file_name, FileTransferStatus.TRANSFER_DATA_FAILED.value, show_hidden))
     res = cur.fetchone()
     if res is None:
         return None

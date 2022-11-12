@@ -60,8 +60,8 @@ class SqliteDirectoryDAO(DirectoryDAO):
                     raise FileError('File [{}] exists in path [{}]'.format(file_name, str_path(path)), FileServerErrorCode.FILE_EXISTS)
                 cur.execute('INSERT INTO ps_file (name, file_type, parent_id, is_hidden) VALUES (?, ?, ?, ?)', (file_name, file_type.value, directory_id, is_hidden))
                 created_file_id = cur.lastrowid
-                cur.execute('INSERT INTO ps_file_version (file_id, version, transfer_status) VALUES (?, ?, ?)', 
-                    (created_file_id, 1, FileTransferStatus.EMPTY.value))
+                cur.execute('INSERT INTO ps_file_version (file_id, version, local_transfer_status, remote_transfer_status) VALUES (?, ?, ?, ?)', 
+                    (created_file_id, 1, FileTransferStatus.NONE.value, FileTransferStatus.NONE.value))
                 self._conn.commit()
                 return created_file_id
             except DirectoryError as e:
@@ -143,9 +143,9 @@ class SqliteDirectoryDAO(DirectoryDAO):
                     entries.append(('d', directory_name[0]))
                 cur.execute('''SELECT F.name 
                     FROM ps_file AS F INNER JOIN ps_file_version AS V ON F.id = V.file_id
-                    WHERE F.parent_id = ? AND (F.is_hidden <> 1 OR F.is_hidden = ?) AND V.transfer_status <> ?
+                    WHERE F.parent_id = ? AND (F.is_hidden <> 1 OR F.is_hidden = ?) AND V.local_transfer_status <> ?
                         AND F.is_removed <> 1 
-                    ORDER BY F.name ASC''', (directory_id, show_hidden, FileTransferStatus.RECEIVING_FAILED.value))
+                    ORDER BY F.name ASC''', (directory_id, show_hidden, FileTransferStatus.TRANSFERRING_DATA.value))
                 for file_name in cur.fetchall():
                     entries.append(('f', file_name[0]))
                 self._conn.commit()

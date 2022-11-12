@@ -25,14 +25,18 @@ class SqliteFileDAO(FileDAO):
                     raise FileError('File [{}] not found in path [{}]'.format(file_name, str_path(path)), FileServerErrorCode.FILE_NOT_FOUND)
                 if version is not None:
                     cur.execute('''
-                        SELECT F.file_type, V.version, V.local_id, V.remote_id, V.file_size, V.size_on_disk, V.total_chunks, V.transfer_status 
+                        SELECT F.file_type, V.version, V.local_id, V.remote_id, 
+                            V.file_size, V.size_on_disk, V.total_chunks, 
+                            V.local_transfer_status, V.remote_transfer_status 
                         FROM ps_file AS F INNER JOIN ps_file_version AS V ON F.id = V.file_id 
                         WHERE F.id = ? AND V.version = ?
                     ''', (file_id, version))
                     res = cur.fetchone()
                 else:
                     cur.execute('''
-                        SELECT F.file_type, V.version, V.local_id, V.remote_id, V.file_size, V.size_on_disk, V.total_chunks, V.transfer_status 
+                        SELECT F.file_type, V.version, V.local_id, V.remote_id, 
+                            V.file_size, V.size_on_disk, V.total_chunks, 
+                            V.local_transfer_status, V.remote_transfer_status 
                         FROM ps_file AS F INNER JOIN ps_file_version AS V ON F.id = V.file_id 
                         WHERE F.id = ? 
                         ORDER BY V.version DESC
@@ -49,7 +53,8 @@ class SqliteFileDAO(FileDAO):
                     res[4],
                     res[5],
                     res[6],
-                    FileTransferStatus(res[7])
+                    FileTransferStatus(res[7]),
+                    FileTransferStatus(res[8])
                 )
             except DirectoryError as e:
                 logging.error('Directory error: {}'.format(str(e)))
@@ -69,7 +74,7 @@ class SqliteFileDAO(FileDAO):
             except:
                 pass
     
-    def update_file_local(self, path, file_name, version, local_id, file_size, size_on_disk, total_chunks, transfer_status=FileTransferStatus.RECEIVED):
+    def update_file_local(self, path, file_name, version, local_id, file_size, size_on_disk, total_chunks, transfer_status):
         if len(file_name) == 0:
             raise FileError('File name can\'t be empty!', FileServerErrorCode.FILE_NAME_EMPTY)
         if not File.is_valid_file_id(local_id):
@@ -90,7 +95,7 @@ class SqliteFileDAO(FileDAO):
                     raise FileError('File [{}] not found in path [{}]'.format(file_name, str_path(path)), FileServerErrorCode.FILE_NOT_FOUND)
                 cur.execute('''
                         UPDATE ps_file_version 
-                        SET local_id = ?, file_size = ?, size_on_disk = ?, total_chunks = ?, transfer_status = ? 
+                        SET local_id = ?, file_size = ?, size_on_disk = ?, total_chunks = ?, local_transfer_status = ? 
                         WHERE file_id = ? AND version = ?
                     ''', (local_id, file_size, size_on_disk, total_chunks, transfer_status.value, file_id, version))
                 if cur.rowcount != 1:
@@ -129,7 +134,7 @@ class SqliteFileDAO(FileDAO):
                     raise FileError('File [{}] not found in path [{}]'.format(file_name, str_path(path)), FileServerErrorCode.FILE_NOT_FOUND)
                 cur.execute('''
                         UPDATE ps_file_version 
-                        SET remote_id = ?, transfer_status = ? 
+                        SET remote_id = ?, remote_transfer_status = ? 
                         WHERE file_id = ? AND version = ?
                     ''', (remote_id, transfer_status.value, file_id, version))
                 if cur.rowcount != 1:
@@ -153,7 +158,7 @@ class SqliteFileDAO(FileDAO):
             except:
                 pass
     
-    def update_file_transfer_status(self, path, file_name, version, transfer_status):
+    def update_file_transfer_status(self, path, file_name, version, local_transfer_status=None, remote_transfer_status=None):
         if len(file_name) == 0:
             raise FileError('File name can\'t be empty!', FileServerErrorCode.FILE_NAME_EMPTY)
         cur = self._conn.cursor()
@@ -164,13 +169,22 @@ class SqliteFileDAO(FileDAO):
                 file_id = query_file_id(cur, directory_id, file_name)
                 if file_id is None:
                     raise FileError('File [{}] not found in path [{}]'.format(file_name, str_path(path)), FileServerErrorCode.FILE_NOT_FOUND)
-                cur.execute('''
-                        UPDATE ps_file_version 
-                        SET transfer_status = ? 
-                        WHERE file_id = ? AND version = ?
-                    ''', (transfer_status.value, file_id, version))
-                if cur.rowcount != 1:
-                    raise FileError('File [{}] version [{}] not found!'.format(str_path(path + [file_name]), version), FileServerErrorCode.FILE_VERSION_NOT_FOUND)
+                if local_transfer_status is not None:
+                    cur.execute('''
+                            UPDATE ps_file_version 
+                            SET local_transfer_status = ? 
+                            WHERE file_id = ? AND version = ?
+                        ''', (local_transfer_status.value, file_id, version))
+                    if cur.rowcount != 1:
+                        raise FileError('File [{}] version [{}] not found!'.format(str_path(path + [file_name]), version), FileServerErrorCode.FILE_VERSION_NOT_FOUND)
+                if remote_transfer_status is not None:
+                    cur.execute('''
+                            UPDATE ps_file_version 
+                            SET remote_transfer_status = ? 
+                            WHERE file_id = ? AND version = ?
+                        ''', (remote_transfer_status.value, file_id, version))
+                    if cur.rowcount != 1:
+                        raise FileError('File [{}] version [{}] not found!'.format(str_path(path + [file_name]), version), FileServerErrorCode.FILE_VERSION_NOT_FOUND)
                 self._conn.commit()
             except DirectoryError as e:
                 logging.error('Directory error: {}'.format(str(e)))

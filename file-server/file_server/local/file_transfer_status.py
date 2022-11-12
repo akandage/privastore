@@ -2,42 +2,30 @@ from enum import Enum
 
 class FileTransferStatus(Enum):
     '''
-        File is empty.
+        Default transfer status (start state).
     '''
-    EMPTY = 1
+    NONE = 1
     '''
-        Receiving file data.
+        Transferring file data.
     '''
-    RECEIVING = 2
+    TRANSFERRING_DATA = 2
     '''
-        Received all file data.
+        Transferred all file data.
     '''
-    RECEIVED = 3
-    '''
-        Failed to receive all file data due to error, timeout etc.
-    '''
-    RECEIVING_FAILED = 4
-    '''
-        Transferring file data to remote server.
-    '''
-    TRANSFERRING_TO_REMOTE = 5
-    '''
-        Transferred all file data to remote server.
-    '''
-    TRANSFERRED_TO_REMOTE = 6
+    TRANSFERRED_DATA = 3
     '''
         Failed to transfer all file data due to error, timeout etc.
     '''
-    TRANSFER_TO_REMOTE_FAILED = 7
+    TRANSFER_DATA_FAILED = 4
     '''
-        Syncing file (ensure it is durable) at remote server.
+        Syncing file (ensure it is durable).
     '''
-    SYNCING_REMOTE = 8
+    SYNCING_DATA = 5
     '''
-        All file data is transferred and synced at remote server.
+        All file data is transferred and synced.
     '''
-    SYNCED = 9
+    SYNCED_DATA = 6
     '''
-        Failed to sync file at remote server due to error, timeout etc.
+        Failed to sync file due to error, timeout etc.
     '''
-    SYNC_FAILED = 10
+    SYNC_DATA_FAILED = 7
