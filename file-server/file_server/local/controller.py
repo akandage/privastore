@@ -119,19 +119,19 @@ class LocalServerController(Controller):
                 if upload_file is not None:
                     try:
                         self.store().close_file(upload_file)
-                    except Exception as e:
-                        logging.error('Could not close uploaded file in cache: {}'.format(str(e)))
+                    except Exception as e1:
+                        logging.error('Could not close uploaded file in cache: {}'.format(str(e1)))
 
                     try:
                         self.store().remove_file(upload_file)
                         logging.debug('Removed file from cache')
-                    except Exception as e:
-                        logging.error('Could not remove uploaded file from cache: {}'.format(str(e)))
+                    except Exception as e1:
+                        logging.error('Could not remove uploaded file from cache: {}'.format(str(e1)))
 
                 try:
                     dir_dao.remove_file(path, file_name, delete=True)
-                except Exception as e:
-                    logging.error('Could not cleanup uploaded file in db: {}'.format(str(e)))
+                except Exception as e1:
+                    logging.error('Could not cleanup uploaded file in db: {}'.format(str(e1)))
 
                 raise e
 

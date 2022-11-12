@@ -159,6 +159,7 @@ class FileCache(object):
 
         def append_chunk(self, chunk_bytes):
             chunk_len = len(chunk_bytes)
+            logging.debug('Append chunk [{}]'.format(chunk_len))
             lock = self._node.lock
             with lock:
                 if self._node.error:

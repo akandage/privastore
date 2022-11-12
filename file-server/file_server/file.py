@@ -26,6 +26,7 @@ class File(object):
         self._size_on_disk = 0
         self._read_buffer = bytes()
         self._read_offset = 0
+        self._write_buffer = bytes()
         self._encode_chunk = encode_chunk
         self._decode_chunk = decode_chunk
 
@@ -57,6 +58,8 @@ class File(object):
         File(file_path, file_id, mode='w').close()
 
     def read_metadata_file(self):
+        if not os.path.exists(self._file_path):
+            raise FileError('File not found', FileServerErrorCode.FILE_NOT_FOUND)
         metadata_file_path = self.metadata_file_path()
         if not os.path.exists(metadata_file_path):
             raise FileError('Metadata file not found', FileServerErrorCode.FILE_IS_CORRUPT)
@@ -149,10 +152,19 @@ class File(object):
         data_len = len(data)
         if data_len == 0:
             return 0
+        self._write_buffer += data
+        self._modified = True
+        wbuf_len = len(self._write_buffer)
         chunk_size = self.chunk_size()
-        for offset in range(0, data_len, chunk_size):
-            end = min(offset+chunk_size, data_len)
-            self.append_chunk(data[offset:end])
+        if wbuf_len >= chunk_size:
+            num_chunks = wbuf_len // chunk_size
+            for offset in range(0, num_chunks*chunk_size, chunk_size):
+                end = offset + chunk_size
+                self.append_chunk(self._write_buffer[offset:end])
+            if end < wbuf_len:
+                self._write_buffer = self._write_buffer[end:]
+            else:
+                self._write_buffer = bytes()
         return data_len
 
     def append_chunk(self, chunk_bytes: bytes) -> None:
@@ -231,5 +243,8 @@ class File(object):
 
     def close(self) -> None:
         if not self.closed() and self.modified() and (self._mode == 'w' or self._mode == 'a'):
+            if len(self._write_buffer) > 0:
+                self.append_chunk(self._write_buffer)
+                self._write_buffer = bytes()
             self.write_metadata_file()
         self.set_closed()

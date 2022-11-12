@@ -54,6 +54,24 @@ class TestFile(unittest.TestCase):
 
         self.assertEqual(len(chunk1)+len(chunk2)+len(chunk3), f2.file_size())
         self.assertTrue(f2.size_on_disk() >= len(chunk1)+len(chunk2)+len(chunk3))
+
+        chunk4 = random.randbytes(512)
+        chunk5 = random.randbytes(1024)
+        chunk6 = random.randbytes(1024)
+        chunk7 = random.randbytes(100)
+        f3 = File('test_file', mode='w', chunk_size=1024)
+        self.assertEqual(f3.write(chunk4), 512)
+        self.assertEqual(f3.write(chunk5), 1024)
+        self.assertEqual(f3.write(chunk6), 1024)
+        self.assertEqual(f3.write(chunk7), 100)
+        f3.close()
+
+        f4 = File('test_file', mode='r', file_id=f3.file_id())
+        self.assertEqual(f4.read_chunk(), chunk4 + chunk5[:512])
+        self.assertEqual(f4.read_chunk(), chunk5[512:] + chunk6[:512])
+        self.assertEqual(f4.read_chunk(), chunk6[512:] + chunk7)
+        self.assertEqual(f4.read_chunk(), b'')
+        f4.close()
         
     def test_read_write_file(self):
         chunk1 = random.randbytes(1024)
