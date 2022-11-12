@@ -87,9 +87,6 @@ class FileCache(object):
             else:
                 logging.debug('File [{}] opened for writing'.format(file_id))
 
-        def read_chunk(self):
-            raise FileCacheError('Operation not supported!', FileServerErrorCode.INTERNAL_ERROR)
-
         def append_chunk(self, chunk_bytes):
             prev_size = self.size_on_disk()
             super().append_chunk(chunk_bytes)
