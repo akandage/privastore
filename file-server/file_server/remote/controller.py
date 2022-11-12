@@ -25,7 +25,7 @@ class RemoteServerController(Controller):
             logging.debug('Acquired database connection')
 
             file_dao = self.dao_factory().file_dao(conn)
-            file_dao.create_file(remote_id, file_size)
+            file_dao.create_file(remote_id)
             self.store().create_empty_file(remote_id, file_size, removable=True)
 
             logging.debug('Created remote file [{}]'.format(remote_id))
@@ -50,11 +50,6 @@ class RemoteServerController(Controller):
                 next_chunk_num = file.total_chunks()+1
                 if chunk_num != next_chunk_num:
                     raise RemoteFileError('Cannot write file [{}] chunk [{}]. Next chunk is [{}]'.format(remote_id, chunk_num, next_chunk_num), FileServerErrorCode.INVALID_CHUNK_NUM)
-                
-                file_alloc_size = file_metadata.file_size
-                file_size = file.size_on_disk() + len(chunk)
-                if file_size > file_alloc_size:
-                    raise RemoteFileError('Cannot write file [{}] chunk [{}]. File size [{}] would exceed allocated size [{}]'.format(remote_id, chunk_num, file_size, file_alloc_size), FileServerErrorCode.FILE_TOO_LARGE)
 
                 file.append_chunk(chunk)
                 logging.debug('Appended chunk')
@@ -85,10 +80,11 @@ class RemoteServerController(Controller):
                 # Seek just before the chunk to read.
                 file.seek_chunk(chunk_num-1)
                 chunk = file.read_chunk()
+
                 if len(chunk) == 0:
                     raise RemoteFileError('Chunk [{}] not found'.format(chunk_num), FileServerErrorCode.INVALID_CHUNK_NUM)
+                
                 logging.debug('Read chunk size [{}]'.format(len(chunk)))
-
                 return chunk
             finally:
                 self.store().close_file(file)
@@ -115,10 +111,6 @@ class RemoteServerController(Controller):
 
             try:
                 epoch_dao.check_valid_epoch(epoch_no)
-                file_alloc_size = file_metadata.file_size
-                file_size = file.size_on_disk()
-                if file_size < file_alloc_size:
-                    raise RemoteFileError('Cannot commit remote file [{}]. File size [{}] < allocated size [{}]'.format(remote_id, str_mem_size(file_size), str_mem_size(file_alloc_size)), FileServerErrorCode.FILE_TOO_SMALL)
                 self.store().close_file(file, writable=False)
                 committed = True
                 file_dao.commit_file(epoch_no, remote_id)
@@ -146,7 +138,8 @@ class RemoteServerController(Controller):
 
             return {
                 'remote-file-id': remote_id,
-                'file-size': file_metadata_db.file_size,
+                'file-size': file_metadata_store.size_on_disk,
+                'file-store-usage': file_metadata_store.alloc_space,
                 'file-chunks': file_metadata_store.file_chunks,
                 'is-committed': file_metadata_db.is_committed,
                 'created-epoch-no': file_metadata_db.created_epoch,

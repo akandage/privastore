@@ -1,20 +1,18 @@
 from collections import namedtuple
 from ....file import File
-from ..file_dao import FileDAO
+from ..file_dao import FileDAO, RemoteFileMetadata
 from ....error import EpochError, FileServerErrorCode, RemoteFileError
 from .epoch_util import check_valid_epoch
 from .file_util import is_file_committed
 import logging
 import time
 
-RemoteFileMetadata = namedtuple('RemoteFileMetadata', ['file_size', 'is_committed', 'created_timestamp', 'modified_timestamp', 'created_epoch', 'removed_epoch'])
-
 class SqliteFileDAO(FileDAO):
 
     def __init__(self, conn):
         super().__init__(conn)
 
-    def create_file(self, remote_id, file_size):
+    def create_file(self, remote_id):
         if not File.is_valid_file_id(remote_id):
             raise RemoteFileError('Invalid remote file id!', FileServerErrorCode.INVALID_FILE_ID)
         cur = self._conn.cursor()
@@ -23,15 +21,11 @@ class SqliteFileDAO(FileDAO):
                 file_timestamp = round(time.time())
                 cur.execute(
                     '''
-                    INSERT INTO ps_remote_file (remote_id, file_size, created_timestamp, modified_timestamp) 
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO ps_remote_file (remote_id, created_timestamp, modified_timestamp) 
+                    VALUES (?, ?, ?)
                     '''
-                , (remote_id, file_size, file_timestamp, file_timestamp))
+                , (remote_id, file_timestamp, file_timestamp))
                 self._conn.commit()
-            except EpochError as e:
-                logging.error('Epoch error {}'.format(str(e)))
-                self.rollback_nothrow()
-                raise e
             except Exception as e:
                 logging.error('Query error {}'.format(str(e)))
                 self.rollback_nothrow()
@@ -50,7 +44,7 @@ class SqliteFileDAO(FileDAO):
             try:
                 cur.execute(
                     '''
-                    SELECT file_size, created_timestamp, modified_timestamp, created_epoch, removed_epoch 
+                    SELECT created_timestamp, modified_timestamp, created_epoch, removed_epoch 
                     FROM ps_remote_file 
                     WHERE remote_id = ? AND removed_epoch IS NULL
                     '''
@@ -60,12 +54,11 @@ class SqliteFileDAO(FileDAO):
                     raise RemoteFileError('Remote file [{}] not found'.format(remote_id), FileServerErrorCode.FILE_NOT_FOUND)
                 self._conn.commit()
                 return RemoteFileMetadata(
-                    res[0],
-                    bool(res[3] is not None),
+                    bool(res[2] is not None),
+                    time.gmtime(res[0]),
                     time.gmtime(res[1]),
-                    time.gmtime(res[2]),
-                    res[3],
-                    res[4]
+                    res[2],
+                    res[3]
                 )
             except RemoteFileError as e:
                 logging.error('Remote file error {}'.format(str(e)))
@@ -101,10 +94,6 @@ class SqliteFileDAO(FileDAO):
                 if cur.rowcount != 1:
                     raise RemoteFileError('No rows updated!')
                 self._conn.commit()
-            except EpochError as e:
-                logging.error('Query error {}'.format(str(e)))
-                self.rollback_nothrow()
-                raise e
             except RemoteFileError as e:
                 logging.error('Remote file error {}'.format(str(e)))
                 self.rollback_nothrow()

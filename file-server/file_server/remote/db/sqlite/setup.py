@@ -38,7 +38,6 @@ def create_file_table(conn):
         CREATE TABLE ps_remote_file (
             id INTEGER PRIMARY KEY NOT NULL, 
             remote_id VARCHAR(38) UNIQUE NOT NULL, 
-            file_size INTEGER NOT NULL DEFAULT 0, 
             created_timestamp INTEGER NOT NULL DEFAULT 0, 
             modified_timestamp INTEGER NOT NULL DEFAULT 0, 
             created_epoch INTEGER NULL, 

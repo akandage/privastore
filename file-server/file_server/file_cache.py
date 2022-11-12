@@ -42,8 +42,8 @@ class FileCache(object):
                 if node.num_writers != 0:
                     raise FileCacheError('File [{}] has [{}] writers!'.format(file_id, node.num_writers), FileServerErrorCode.FILE_NOT_READABLE)
 
-                self._node.num_readers += 1
-                self._node.removable = False
+                node.num_readers += 1
+                node.removable = False
             
             logging.debug('File [{}] opened for reading'.format(file_id))
 
@@ -105,7 +105,7 @@ class FileCache(object):
                         raise FileCacheError('File [{}] in invalid state!', FileServerErrorCode.INTERNAL_ERROR)
                     self._node.num_writers = 0
 
-    IndexNodeMetadata = namedtuple('IndexNodeMetadata', ['file_size', 'size_on_disk', 'file_chunks'])
+    IndexNodeMetadata = namedtuple('IndexNodeMetadata', ['alloc_space', 'file_size', 'size_on_disk', 'file_chunks'])
 
     class Index(object):
 
@@ -339,9 +339,11 @@ class FileCache(object):
                 raise FileCacheError('File [{}] not found in cache'.format(file_id), FileServerErrorCode.FILE_NOT_FOUND)
             
             node = self._index.get_node(file_id)
+            with node.lock:
+                alloc_space = node.alloc_space
             reader = FileCache.CacheFileReader(file_id, node, chunk_size=self.file_chunk_size())
             try:
-                return FileCache.IndexNodeMetadata(reader.file_size(), reader.size_on_disk(), reader.total_chunks())
+                return FileCache.IndexNodeMetadata(alloc_space, reader.file_size(), reader.size_on_disk(), reader.total_chunks())
             finally:
                 reader.close()
 
@@ -377,8 +379,19 @@ class FileCache(object):
             raise FileCacheError('Already closed!', FileServerErrorCode.INTERNAL_ERROR)
 
         with self._index_lock:
-            file.close()
             file_id = file.file_id()
+            if self._index.has_node(file_id):
+                node = self._index.get_node(file_id)
+            else:
+                raise FileCacheError('File [{}] not found in cache'.format(file_id))
+            
+            try:
+                file.close()
+            except Exception as e:
+                node.writable = False
+                node.removable = True
+                raise e
+            
             size_on_disk = file.size_on_disk()
             mode = file.mode()
 
@@ -389,23 +402,24 @@ class FileCache(object):
             elif mode == 'a':
                 logging.debug('File [{}] appender closed'.format(file_id))
 
-            if self._index.has_node(file_id):
-                node = self._index.get_node(file_id)
-                with node.lock:
-                    if mode == 'w' or mode == 'a':
-                        if node.writable:
-                            if not writable:
-                                node.writable = writable
-                                logging.debug('File [{}] no longer writable'.format(file_id))
+            with node.lock:
+                if mode == 'w' or mode == 'a':
+                    if node.writable:
+                        if not writable:
+                            node.writable = writable
+                            logging.debug('File [{}] no longer writable'.format(file_id))
 
-                    self.resize_node(node, size_on_disk)
-
-                    if node.num_readers == 0 and node.num_writers == 0 and not node.writable:
-                        node.removable = removable
-                        if removable:
-                            logging.debug('File [{}] now removable'.format(file_id))
-            else:
-                raise FileCacheError('File [{}] not found in cache'.format(file_id))
+                self.set_file_removable(node, removable)
+                self.resize_node(node, size_on_disk)
+                
+    def set_file_removable(self, node: 'FileCache.IndexNode', removable: bool):
+        if removable:
+            if node.num_readers == 0 and node.num_writers == 0 and not node.writable:
+                node.removable = True
+                logging.debug('File [{}] now removable'.format(node.file_id()))
+        else:
+            node.removable = removable
+            logging.debug('File [{}] is not removable'.format(node.file_id()))
 
     '''
         Remove file from cache.
