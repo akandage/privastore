@@ -84,7 +84,7 @@ class LocalServerController(Controller):
                 # or evicted from the cache until it has been synced to the remote
                 # server.
                 #
-                upload_file = self.store().write_file(local_file_id, file_size=file_size, encode_chunk=self._encode_chunk, decode_chunk=self._decode_chunk)
+                upload_file = self.store().write_file(local_file_id, alloc_space=file_size, encode_chunk=self._encode_chunk, decode_chunk=self._decode_chunk)
                 logging.debug('Opened file for writing in cache [{}]'.format(upload_file.file_id()))
 
                 #

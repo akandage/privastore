@@ -54,7 +54,7 @@ class File(object):
         return True
 
     @staticmethod
-    def touch_file(file_path: str, file_id: str):
+    def create_empty(file_path: str, file_id: str):
         File(file_path, file_id, mode='w').close()
 
     def read_metadata_file(self):

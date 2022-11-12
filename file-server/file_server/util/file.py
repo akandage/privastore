@@ -1,10 +1,11 @@
 import configparser
+from typing import BinaryIO
 
 KILOBYTE = 1024
 MEGABYTE = 1024 * KILOBYTE
 GIGABYTE = 1024 * MEGABYTE
 
-def chunked_copy(in_file, out_file, file_size, chunk_size):
+def chunked_copy(in_file: BinaryIO, out_file: BinaryIO, file_size: int, chunk_size: int):
     bytes_read = 0
     bytes_copied = 0
     buf = bytes()
@@ -39,7 +40,7 @@ def chunked_copy(in_file, out_file, file_size, chunk_size):
     out_file.flush()
     return bytes_copied
 
-def write_all(file, data):
+def write_all(file: BinaryIO, data: bytes):
     data_len = len(data)
     written = 0
     while written < data_len:
@@ -49,7 +50,7 @@ def write_all(file, data):
         written += w
     return data_len
 
-def parse_mem_size(mem_size):
+def parse_mem_size(mem_size: str) -> int:
     try:
         if mem_size.endswith('KB'):
             return round(KILOBYTE * int(mem_size[:-2]))
@@ -63,7 +64,7 @@ def parse_mem_size(mem_size):
         pass
     raise Exception('Unrecognized memory size [{}]'.format(mem_size))
 
-def str_mem_size(mem_size):
+def str_mem_size(mem_size: int) -> str:
     if mem_size >= GIGABYTE:
         return '{:.2f}GB'.format(mem_size/GIGABYTE)
     elif mem_size >= MEGABYTE:
@@ -72,18 +73,18 @@ def str_mem_size(mem_size):
         return '{:.2f}KB'.format(mem_size/KILOBYTE)
     return '{}B'.format(mem_size)
 
-def str_path(path):
+def str_path(path: list[str]) -> str:
     try:
         return '/' + '/'.join(path)
     except:
         return '[invalid path]'
 
-def read_config(config_path):
+def read_config(config_path: str):
     config = configparser.ConfigParser()
     config.read(config_path)
     return config
 
-def config_bool(config_val):
+def config_bool(config_val: str) -> bool:
     try:
         config_val = config_val.lower()
         if config_val == 'true' or config_val == '1':

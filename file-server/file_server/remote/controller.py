@@ -26,7 +26,7 @@ class RemoteServerController(Controller):
 
             file_dao = self.dao_factory().file_dao(conn)
             file_dao.create_file(remote_id, file_size)
-            self.store().touch_file(remote_id, file_size, removable=True)
+            self.store().create_empty_file(remote_id, file_size, removable=True)
 
             logging.debug('Created remote file [{}]'.format(remote_id))
         finally:
