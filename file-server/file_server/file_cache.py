@@ -345,7 +345,7 @@ class FileCache(object):
             try:
                 return FileCache.IndexNodeMetadata(alloc_space, reader.file_size(), reader.size_on_disk(), reader.total_chunks())
             finally:
-                reader.close()
+                self.close_file(reader)
 
     '''
         Resize the amount of space allocated to the file.
@@ -403,23 +403,24 @@ class FileCache(object):
                 logging.debug('File [{}] appender closed'.format(file_id))
 
             with node.lock:
+                self.set_file_removable(node, removable)
                 if mode == 'w' or mode == 'a':
                     if node.writable:
                         if not writable:
                             node.writable = writable
                             logging.debug('File [{}] no longer writable'.format(file_id))
+                    
+                    self.resize_node(node, size_on_disk)
 
-                self.set_file_removable(node, removable)
-                self.resize_node(node, size_on_disk)
-                
     def set_file_removable(self, node: 'FileCache.IndexNode', removable: bool):
-        if removable:
-            if node.num_readers == 0 and node.num_writers == 0 and not node.writable:
-                node.removable = True
-                logging.debug('File [{}] now removable'.format(node.file_id()))
-        else:
-            node.removable = removable
-            logging.debug('File [{}] is not removable'.format(node.file_id()))
+        with node.lock:
+            if removable:
+                if node.num_readers == 0 and node.num_writers == 0:
+                    node.removable = True
+                    logging.debug('File [{}] now removable'.format(node.file_id()))
+            else:
+                node.removable = removable
+                logging.debug('File [{}] is not removable'.format(node.file_id()))
 
     '''
         Remove file from cache.
@@ -429,14 +430,13 @@ class FileCache(object):
         file_id = file.file_id()
         self.remove_file_by_id(file_id)
 
-    def remove_file_by_id(self, file_id: str, ignore_removable: bool = False) -> None:
+    def remove_file_by_id(self, file_id: str) -> None:
         with self._index_lock:
             if self._index.has_node(file_id):
                 node = self._index.get_node(file_id)
                 with node.lock:
                     if not node.removable:
-                        if not ignore_removable:
-                            raise FileCacheError('File [{}] is not removable'.format(file_id), FileServerErrorCode.FILE_NOT_REMOVABLE)
+                        raise FileCacheError('File [{}] is not removable'.format(file_id), FileServerErrorCode.FILE_NOT_REMOVABLE)
                     if node.num_readers > 0:
                         raise FileCacheError('Removing file with [{}] readers'.format(node.num_readers), FileServerErrorCode.INTERNAL_ERROR)
                     if node.num_writers > 0:

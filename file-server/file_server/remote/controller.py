@@ -156,7 +156,7 @@ class RemoteServerController(Controller):
             logging.debug('Acquired database connection')
 
             file_dao = self.dao_factory().file_dao(conn)
-            file_dao.remove_file(epoch_no, remote_id, remove_file_cb=lambda remote_id: self.store().remove_file_by_id(remote_id, ignore_removable=True))
+            file_dao.remove_file(epoch_no, remote_id, remove_file_cb=lambda remote_id: self.store().remove_file_by_id(remote_id))
 
             logging.debug('Removed remote file [{}]'.format(remote_id))
         finally:
@@ -170,7 +170,7 @@ class RemoteServerController(Controller):
             logging.debug('Acquired database connection')
 
             epoch_dao = self.dao_factory().epoch_dao(conn)
-            epoch_dao.end_epoch(epoch_no, marker_id, remove_file_cb=lambda remote_id: self.store().remove_file_by_id(remote_id, ignore_removable=True))
+            epoch_dao.end_epoch(epoch_no, marker_id, remove_file_cb=lambda remote_id: self.store().remove_file_by_id(remote_id))
 
             logging.debug('Epoch [{}] ended'.format(epoch_no))
         finally:
