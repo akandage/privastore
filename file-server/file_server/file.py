@@ -134,16 +134,33 @@ class File(object):
     def seek(self, offset: int) -> None:
         if offset < 0 or offset > self.file_size():
             raise FileError('Cannot seek to offset [{}]'.format(offset), FileServerErrorCode.INVALID_SEEK_OFFSET)
-        chunk_size = self.chunk_size()
-        chunk_num = offset // chunk_size
-        self.seek_chunk(chunk_num)
-        self._read_buffer = self.read_chunk()
-        self._read_offset = offset % chunk_size
-
+        chunk_offset = 0
+        chunk_start = 0
+        while True:
+            self.seek_chunk(chunk_offset)
+            chunk = self.read_chunk()
+            chunk_len = len(chunk)
+            next_chunk = chunk_start + chunk_len
+            if chunk_len > 0:
+                if offset >= chunk_start and offset < next_chunk:
+                    self._read_buffer = chunk
+                    self._read_offset = offset - chunk_start
+                    return
+            else:
+                raise FileError('Cannot seek to offset [{}]'.format(offset))
+            chunk_offset += 1
+            chunk_start = next_chunk
+    
     def seek_chunk(self, offset: int) -> None:
         if offset < 0 or offset > self.total_chunks():
             raise FileError('Cannot seek to chunk [{}]'.format(offset), FileServerErrorCode.INVALID_CHUNK_NUM)
         self._chunks_read = offset
+        self._read_buffer = bytes()
+        self._read_offset = 0
+
+    def tell(self) -> int:
+        # TODO
+        raise FileError('Not implemented!')
 
     def write(self, data: bytes) -> int:
         '''
