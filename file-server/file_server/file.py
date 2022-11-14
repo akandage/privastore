@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 import uuid
@@ -12,7 +13,7 @@ FILE_ID_LENGTH = 38
 
 class File(object):
 
-    def __init__(self, path, file_id=None, mode='r', chunk_size=KILOBYTE, encode_chunk=default_chunk_encoder, decode_chunk=default_chunk_decoder, skip_metadata=False):
+    def __init__(self, path, file_id=None, mode='r', chunk_size=KILOBYTE, encode_chunk=default_chunk_encoder, decode_chunk=default_chunk_decoder):
         self._file_id = file_id or self.generate_file_id()
         self._file_path = os.path.join(path, self._file_id)
         self._mode = mode
@@ -31,11 +32,17 @@ class File(object):
         self._decode_chunk = decode_chunk
 
         if mode == 'r' or mode == 'a':
-            if not skip_metadata:
-                self.read_metadata_file()
+            self.read_metadata_file()
+            if mode == 'r':
+                logging.debug('File [{}] opened for reading'.format(file_id))
+            else:
+                logging.debug('File [{}] opened for appending'.format(file_id))
         elif mode == 'w':
+            if os.path.exists(self._file_path):
+                raise FileError('File [{}] exists'.format(self.file_id()), FileServerErrorCode.FILE_EXISTS)
             os.mkdir(self._file_path)
             self.write_metadata_file()
+            logging.debug('File [{}] opened for writing'.format(file_id))
         else:
             raise FileError('Invalid mode')
     
@@ -59,7 +66,7 @@ class File(object):
 
     def read_metadata_file(self):
         if not os.path.exists(self._file_path):
-            raise FileError('File not found', FileServerErrorCode.FILE_NOT_FOUND)
+            raise FileError('File [{}] not found'.format(self.file_id()), FileServerErrorCode.FILE_NOT_FOUND)
         metadata_file_path = self.metadata_file_path()
         if not os.path.exists(metadata_file_path):
             raise FileError('Metadata file not found', FileServerErrorCode.FILE_IS_CORRUPT)
