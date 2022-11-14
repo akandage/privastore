@@ -13,6 +13,9 @@ class Daemon(object):
         self._stopped = Event()
         self._thread = None
     
+    def name(self):
+        return self._name
+
     def start(self):
         if self._thread is not None:
             raise Exception('Already started!')

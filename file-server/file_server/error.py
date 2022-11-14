@@ -87,3 +87,7 @@ class RemoteFileError(FileServerError):
 class SessionError(FileServerError):
     def __init__(self, msg: str, error_code: int=FileServerErrorCode.INTERNAL_ERROR):
         super().__init__(msg, error_code)
+
+class UploadWorkerError(FileServerError):
+    def __init__(self, msg: str, error_code: int=FileServerErrorCode.INTERNAL_ERROR):
+        super().__init__(msg, error_code)

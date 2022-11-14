@@ -275,7 +275,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         try:
             file_version = self.url_query.get('version')
             if file_version is not None:
-                file_version = int(file_version)
+                file_version = int(file_version[-1])
 
                 if file_version < 1:
                     self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid file version')
