@@ -1,8 +1,8 @@
 from ..error import FileError
 from ..file import File
-from ..worker_msg import WorkerMessage
+from ..worker_task import WorkerTask
 
-class TransferFileMessage(WorkerMessage):
+class TransferFileTask(WorkerTask):
 
     def __init__(self, file_id: str, chunk_offset: int = 0):
         super().__init__()
@@ -18,4 +18,4 @@ class TransferFileMessage(WorkerMessage):
         return self._chunk_offset
 
     def __str__(self):
-        return 'TransferFileMessage file-id=[{}] chunk-offset=[{}]'.format(self.file_id(), self.chunk_offset())
+        return 'Transfer file file-id=[{}] chunk-offset=[{}]'.format(self.file_id(), self.chunk_offset())
