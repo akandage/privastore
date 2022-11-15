@@ -55,7 +55,7 @@ class Server(Daemon):
     def store(self):
         return self._store
 
-    def init_api(self):
+    def init_api(self) -> None:
         api_type = self.api_config().get('api-type', 'http')
 
         if api_type == 'http':

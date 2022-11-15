@@ -79,7 +79,7 @@ def str_path(path: list[str]) -> str:
     except:
         return '[invalid path]'
 
-def read_config(config_path: str):
+def read_config(config_path: str) -> configparser.ConfigParser:
     config = configparser.ConfigParser()
     config.read(config_path)
     return config

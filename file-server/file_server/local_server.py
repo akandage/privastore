@@ -3,6 +3,7 @@ import logging
 import os
 import signal
 
+from .local.async_controller import AsyncController
 from .local.controller import LocalServerController
 from .file_chunk import get_encrypted_chunk_encoder, get_encrypted_chunk_decoder
 from .server import Server
@@ -14,8 +15,12 @@ class LocalServer(Server):
 
     def __init__(self, config):
         super().__init__('local_server', config)
+        self._async_controller = None
         self._controller = None
-    
+
+    def async_controller(self):
+        return self._async_controller
+
     def controller(self):
         return self._controller
 
@@ -33,6 +38,10 @@ class LocalServer(Server):
             return HttpApiRequestHandler(request, client_address, server, self.controller())
 
         return factory
+
+    def init_async_controller(self):
+        api_config = self.api_config()
+        self._async_controller = AsyncController(api_config)
 
     def do_start(self):      
         logging.info('Starting PrivaStore local server ...')
@@ -56,13 +65,14 @@ class LocalServer(Server):
             raise Exception('No encryption key!')
 
         logging.debug('Initializing controller')
-        self._controller = LocalServerController(self.dao_factory(), 
-            self.db_conn_mgr(), self.session_mgr(), self.store(), 
+        self.init_async_controller()
+        self._controller = LocalServerController(self.async_controller(),
+            self.dao_factory(), self.db_conn_mgr(), self.session_mgr(), self.store(), 
             encode_chunk=encrypt_chunk, decode_chunk=decrypt_chunk)
         self._controller.init_auth(self.auth_config())
-
         self.init_api()
 
+        self.async_controller().start_workers()
         self.session_mgr().start()
         self.session_mgr().wait_started()
         self.api_daemon().start()
@@ -73,6 +83,7 @@ class LocalServer(Server):
         self.api_daemon().join()
         self.session_mgr().stop()
         self.session_mgr().join()
+        self.async_controller().stop_workers()
 
     def setup_db(self):
         db_config = self.db_config()

@@ -1,4 +1,5 @@
 from collections import namedtuple
+import configparser
 from .error import FileCacheError, FileError, FileServerErrorCode
 from .file import File
 from .file_chunk import chunk_encoder, chunk_decoder, default_chunk_encoder, default_chunk_decoder
@@ -8,7 +9,7 @@ import os
 import shutil
 from threading import Condition, RLock
 import time
-from typing import Optional
+from typing import Optional, Union
 
 class FileCache(object):
 
@@ -155,7 +156,7 @@ class FileCache(object):
             self.add_node(node)
 
 
-    def __init__(self, cache_config):
+    def __init__(self, cache_config: Union[dict, configparser.ConfigParser]):
         self._cache_path: str = cache_config.get('store-path', './cache')
         self._cache_used = 0
         self._cache_size = parse_mem_size(cache_config.get('store-size', '1GB'))

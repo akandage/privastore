@@ -1,3 +1,4 @@
+from .async_controller import AsyncController
 from ..controller import Controller
 from .db.dao_factory import DAOFactory
 from ..db.db_conn_mgr import DbConnectionManager
@@ -22,12 +23,13 @@ class LocalServerController(Controller):
         encode_chunk - file chunk encoder
         decode_chunk - file chunk decoder
     '''
-    def __init__(self, dao_factory: DAOFactory, db_conn_mgr: DbConnectionManager, session_mgr: SessionManager, store: FileCache, encode_chunk: chunk_encoder, decode_chunk: chunk_decoder):
+    def __init__(self, async_controller: AsyncController, dao_factory: DAOFactory, db_conn_mgr: DbConnectionManager, session_mgr: SessionManager, store: FileCache, encode_chunk: chunk_encoder, decode_chunk: chunk_decoder):
         super().__init__(db_conn_mgr, session_mgr, store)
+        self._async_controller = async_controller
         self._dao_factory = dao_factory
         self._encode_chunk = encode_chunk
         self._decode_chunk = decode_chunk
-        
+
     def login_user(self, username, password):
         logging.debug('User [{}] login attempt'.format(username))
         conn = self.db_conn_mgr().db_connect()

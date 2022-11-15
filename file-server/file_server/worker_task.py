@@ -11,6 +11,12 @@ class WorkerTask(object):
         self._processed: Event = Event()
         self._worker: Daemon = None
     
+    def task_code(self) -> int:
+        '''
+            Unique identifier for the task type.
+        '''
+        raise Exception('Not implemented!')
+
     def cancel(self):
         '''
             Cancel the task. Worker will either ignore the task or stop processing.
@@ -70,4 +76,20 @@ class WorkerTask(object):
         return self._cancelled.is_set()
     
     def __str__(self):
-        return 'Worker task'
+        return 'TASK'
+
+class PingWorkerTask(WorkerTask):
+    '''
+        Can be used as a ping/heartbeat or no-op with workers.
+    '''
+
+    TASK_CODE = 0
+
+    def __init__(self):
+        super().__init__()
+    
+    def task_code(self):
+        return self.TASK_CODE
+
+    def __str__(self):
+        return 'PING_WORKER'
