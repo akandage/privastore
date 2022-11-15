@@ -427,7 +427,7 @@ class FileCache(object):
                 logging.debug('File [{}] appender closed'.format(file_id))
 
             with node.lock:
-                self.set_file_removable(node, removable)
+                self.set_node_removable(node, removable)
                 if mode == 'w' or mode == 'a':
                     if node.writable:
                         if not writable:
@@ -436,7 +436,16 @@ class FileCache(object):
                     
                     self.resize_node(node, size_on_disk)
 
-    def set_file_removable(self, node: 'FileCache.IndexNode', removable: bool):
+    def set_file_removable(self, file_id: str, removable: bool):
+        with self._index_lock:
+            if self._index.has_node(file_id):
+                node = self._index.get_node(file_id)
+            else:
+                raise FileCacheError('File [{}] not found in cache'.format(file_id))
+        
+            self.set_node_removable(node)
+            
+    def set_node_removable(self, node: 'FileCache.IndexNode', removable: bool):
         with node.lock:
             if removable:
                 if node.num_readers == 0 and node.num_writers == 0:

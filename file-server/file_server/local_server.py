@@ -40,8 +40,8 @@ class LocalServer(Server):
         return factory
 
     def init_async_controller(self):
-        api_config = self.api_config()
-        self._async_controller = AsyncController(api_config)
+        remote_config = self.config('remote')
+        self._async_controller = AsyncController(remote_config, self.dao_factory(), self.db_conn_mgr(), self.store())
 
     def do_start(self):      
         logging.info('Starting PrivaStore local server ...')
@@ -72,7 +72,8 @@ class LocalServer(Server):
         self._controller.init_auth(self.auth_config())
         self.init_api()
 
-        self.async_controller().start_workers()
+        self.async_controller().start()
+        self.async_controller().wait_started()
         self.session_mgr().start()
         self.session_mgr().wait_started()
         self.api_daemon().start()
@@ -83,7 +84,8 @@ class LocalServer(Server):
         self.api_daemon().join()
         self.session_mgr().stop()
         self.session_mgr().join()
-        self.async_controller().stop_workers()
+        self.async_controller().stop()
+        self.async_controller().join()
 
     def setup_db(self):
         db_config = self.db_config()

@@ -102,8 +102,8 @@ class Server(Daemon):
             self.do_start()
         except Exception as e:
             logging.error('Server failed to start: {}'.format(str(e)))
-            self._started.set()
             self._stopped.set()
+            self._started.set()
             return
 
         self._started.set()

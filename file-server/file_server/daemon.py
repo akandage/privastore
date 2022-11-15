@@ -28,6 +28,8 @@ class Daemon(object):
             raise Exception('Not started!')
         if not self._started.wait(timeout):
             raise Exception('Timed out waiting for {} daemon to start!'.format(self._name))
+        if self._stopped.is_set():
+            raise Exception('Daemon {} did not start!'.format(self._name))
 
     def stop(self):
         if self._stop.is_set():

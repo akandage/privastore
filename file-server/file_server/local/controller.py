@@ -30,6 +30,9 @@ class LocalServerController(Controller):
         self._encode_chunk = encode_chunk
         self._decode_chunk = decode_chunk
 
+    def remote_enabled(self):
+        return self._async_controller.remote_enabled()
+
     def login_user(self, username, password):
         logging.debug('User [{}] login attempt'.format(username))
         conn = self.db_conn_mgr().db_connect()
@@ -98,6 +101,7 @@ class LocalServerController(Controller):
                     raise FileUploadError('Could not upload all file data! [{}/{}]'.format(str_mem_size(bytes_transferred), str_mem_size(file_size)))
 
                 self.store().close_file(upload_file, removable=False, writable=False)
+                file_uploaded = True
                 logging.debug('File data uploaded [{}]'.format(str_mem_size(bytes_transferred)))
 
                 size_on_disk = upload_file.size_on_disk()
@@ -119,10 +123,17 @@ class LocalServerController(Controller):
                 #
 
                 if upload_file is not None:
+                    if not file_uploaded:
+                        try:
+                            self.store().close_file(upload_file)
+                        except Exception as e1:
+                            logging.error('Could not close uploaded file in cache: {}'.format(str(e1)))
+
                     try:
-                        self.store().close_file(upload_file)
+                        self.store().set_file_removable(upload_file.file_id(), True)
+                        logging.debug('Set file removable')
                     except Exception as e1:
-                        logging.error('Could not close uploaded file in cache: {}'.format(str(e1)))
+                        logging.error('Could not remove uploaded file from cache: {}'.format(str(e1)))
 
                     try:
                         self.store().remove_file(upload_file)
@@ -140,6 +151,9 @@ class LocalServerController(Controller):
             logging.debug('Uploaded file [{}]'.format(str_path(path + [file_name])))
         finally:
             self.db_conn_mgr().db_close(conn)
+        
+        if self.remote_enabled():
+            self._async_controller.start_async_upload(upload_file.file_id())
 
     def download_file(self, path, file_name, file, file_version=None, api_callback=None):
         logging.debug('Download file [{}] version [{}]'.format(str_path(path + [file_name]), file_version))

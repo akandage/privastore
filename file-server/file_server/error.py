@@ -39,6 +39,7 @@ class FileServerErrorCode:
     INVALID_SEEK_OFFSET = "INVALID_SEEK_OFFSET"
     INVALID_SESSION_ID = "INVALID_SESSION_ID"
     INTERNAL_ERROR = "INTERNAL_ERROR"
+    REMOTE_UPLOAD_ERROR = "REMOTE_UPLOAD_ERROR"
 
 class FileServerError(Exception):
     def __init__(self, msg: str, error_code: int=FileServerErrorCode.INTERNAL_ERROR):

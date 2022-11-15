@@ -3,6 +3,10 @@ import logging
 from threading import Event
 from typing import Optional
 
+class Worker(Daemon):
+
+    pass
+
 class WorkerTask(object):
 
     def __init__(self):
@@ -38,25 +42,27 @@ class WorkerTask(object):
         '''
         self._processed.set()
 
-    def set_worker(self, worker: Daemon):
+    def set_worker(self, worker: 'Worker'):
         '''
             For use by the worker. Set the worker that processed this task.
         '''
         self._worker = worker
 
-    def wait_processed(self, timeout: float=None) -> None:
+    def wait_processed(self, timeout: float=None) -> bool:
         '''
             Wait until this task is processed by the worker thread.
         '''
         logging.debug('[{}] - waiting for task to be processed'.format(str(self)))
-        self._processed.wait(timeout)
+        if not self._processed.wait(timeout):
+            return False
         error = self.error()
         if error is not None:
             logging.error('[{}] - error processing task: {}'.format(str(self), str(error)))
             raise error
         logging.debug('[{}] - task processed by {}'.format(str(self), self.worker().name()))
+        return True
 
-    def worker(self) -> Optional[Daemon]:
+    def worker(self) -> Optional['Worker']:
         '''
             Return the worker that processed this message.
         '''

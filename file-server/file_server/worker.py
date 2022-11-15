@@ -2,14 +2,15 @@ from .daemon import Daemon
 import logging
 from queue import Queue
 from threading import RLock
+from typing import Optional
 from .worker_task import PingWorkerTask, WorkerTask
 
 class Worker(Daemon):
     
-    def __init__(self, worker_name: str, worker_index: int=None, queue_size: int = 1, daemon: bool=True):
+    def __init__(self, worker_name: str, worker_index: int=None, queue: Optional[Queue[WorkerTask]] = None, queue_size: int = 1, daemon: bool=True):
         name = f'{worker_name}-{worker_index}' if worker_index is not None else worker_name
         super().__init__(name, daemon)
-        self._queue: Queue[WorkerTask] = Queue(queue_size)
+        self._queue: Queue[WorkerTask] = queue if queue is not None else Queue(queue_size)
         self._curr_task: WorkerTask = None
         self._lock: RLock = RLock()
     
@@ -32,13 +33,13 @@ class Worker(Daemon):
         if not self._stop.is_set():
             super().stop()
             self.cancel_current_task()
-            self.send_task(PingWorkerTask())
             
     def run(self):
         self._started.set()
         logging.debug('Worker [{}] started'.format(self.name()))
         while not self._stop.is_set():
             task = self._queue.get(block=True)
+            task.set_worker(self)
             with self._lock:
                 self._curr_task = task
             logging.debug('Worker [{}] received task [{}]'.format(self.name(), str(task)))

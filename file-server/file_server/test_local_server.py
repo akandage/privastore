@@ -44,6 +44,9 @@ class TestLocalServer(TestServer):
                 'key-algorithm': 'aes-128-cbc',
                 'key-bytes': '770A8A65DA156D24EE2A093277530142'
             },
+            'remote': {
+                'enable-remote-server': '0'
+            },
             'session': {
                 'session-expiry-time': '300',
                 'session-cleanup-interval': '60'
