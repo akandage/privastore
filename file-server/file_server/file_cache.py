@@ -350,6 +350,8 @@ class FileCache(object):
         with node.lock:
             if node.removed:
                 raise FileCacheError('File [{}] not found in cache'.format(file_id), FileServerErrorCode.FILE_NOT_FOUND)
+            if node.num_writers != 0:
+                raise FileCacheError('File [{}] has [{}] writers!'.format(file_id, node.num_writers), FileServerErrorCode.FILE_NOT_READABLE)
             node.num_readers += 1
             node.removable = False
             reader = FileCache.CacheFileReader(file_id, node, chunk_size=self.file_chunk_size())
@@ -399,8 +401,12 @@ class FileCache(object):
             logging.error('Error closing file [{}] mode [{}]: {}'.format(file.file_id(), mode, str(e)))
             if mode == 'w' or mode == 'a':
                 # Allow the file to be removed if something goes wrong closing writer.
-                node.writable = False
-                node.removable = True
+                with self._index_lock:
+                    node = self._index.get_node(file_id)
+                if node is not None:
+                    with node.lock:
+                        node.writable = False
+                        node.removable = True
             raise e
 
         with self._index_lock:
