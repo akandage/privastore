@@ -263,12 +263,12 @@ class File(object):
         '''
             Implement this so it behaves like file-like object (no-op).
         '''
-        return
+        if len(self._write_buffer) > 0:
+            self.append_chunk(self._write_buffer)
+            self._write_buffer = bytes()
 
     def close(self) -> None:
         if not self.closed() and self.modified() and (self._mode == 'w' or self._mode == 'a'):
-            if len(self._write_buffer) > 0:
-                self.append_chunk(self._write_buffer)
-                self._write_buffer = bytes()
+            self.flush()
             self.write_metadata_file()
         self.set_closed()

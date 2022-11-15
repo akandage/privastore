@@ -20,108 +20,108 @@ class RemoteServerController(Controller):
     def create_file(self, remote_id: str, file_size: int) -> None:
         logging.debug('Create remote file [{}] file-size [{}]'.format(remote_id, str_mem_size(file_size)))
         conn = self.db_conn_mgr().db_connect()
-        
         try:
-            logging.debug('Acquired database connection')
-
-            file_dao = self.dao_factory().file_dao(conn)
-            file_dao.create_file(remote_id)
-            self.store().create_empty_file(remote_id, file_size, removable=True)
-
-            logging.debug('Created remote file [{}]'.format(remote_id))
+            self.dao_factory().file_dao(conn).create_file(remote_id)
         finally:
             self.db_conn_mgr().db_close(conn)
+        
+        self.store().create_empty_file(remote_id, file_size, removable=True)
+        logging.debug('Created remote file [{}]'.format(remote_id))
     
     def append_to_file(self, remote_id: str, chunk_num: int, chunk: bytes) -> None:
         logging.debug('Append to remote file [{}] chunk-size [{}]'.format(remote_id, str_mem_size(len(chunk))))
         conn = self.db_conn_mgr().db_connect()
-        
         try:
-            logging.debug('Acquired database connection')
-
-            file_dao = self.dao_factory().file_dao(conn)
-            file_metadata = file_dao.get_file_metadata(remote_id)
-            if file_metadata.is_committed:
-                raise RemoteFileError('Cannot append chunk to committed remote file [{}]'.format(remote_id), FileServerErrorCode.FILE_IS_COMMITTED)
-
-            file = self.store().append_file(remote_id)
-
-            try:               
-                next_chunk_num = file.total_chunks()+1
-                if chunk_num != next_chunk_num:
-                    raise RemoteFileError('Cannot write file [{}] chunk [{}]. Next chunk is [{}]'.format(remote_id, chunk_num, next_chunk_num), FileServerErrorCode.INVALID_CHUNK_NUM)
-
-                file.append_chunk(chunk)
-                logging.debug('Appended chunk')
-                file_dao.file_modified(remote_id)
-                logging.debug('Updated file modified timestamp')
-            finally:
-                self.store().close_file(file, writable=True)
-
-            logging.debug('Appended to remote file [{}]'.format(remote_id))
+            file_metadata = self.dao_factory().file_dao(conn).get_file_metadata(remote_id)
         finally:
             self.db_conn_mgr().db_close(conn)
+
+        if file_metadata.is_committed:
+            raise RemoteFileError('Cannot append chunk to committed remote file [{}]'.format(remote_id), FileServerErrorCode.FILE_IS_COMMITTED)
+
+        file = self.store().append_file(remote_id)
+
+        try:
+            next_chunk_num = file.total_chunks()+1
+            if chunk_num != next_chunk_num:
+                raise RemoteFileError('Cannot write file [{}] chunk [{}]. Next chunk is [{}]'.format(remote_id, chunk_num, next_chunk_num), FileServerErrorCode.INVALID_CHUNK_NUM)
+
+            file.append_chunk(chunk)
+            logging.debug('Appended chunk')
+
+            conn = self.db_conn_mgr().db_connect()
+            try:
+                file_metadata = self.dao_factory().file_dao(conn).file_modified(remote_id)
+                logging.debug('Updated file modified timestamp')
+            finally:
+                self.db_conn_mgr().db_close(conn)
+        finally:
+            self.store().close_file(file, writable=True)
+
+        logging.debug('Appended to remote file [{}]'.format(remote_id))
 
     def read_from_file(self, remote_id: str, chunk_num: int) -> bytes:
         logging.debug('Read chunk [{}] from remote file [{}]'.format(chunk_num, remote_id))
         conn = self.db_conn_mgr().db_connect()
-        
         try:
-            logging.debug('Acquired database connection')
-
-            file_dao = self.dao_factory().file_dao(conn)
-            file_metadata = file_dao.get_file_metadata(remote_id)
-            if not file_metadata.is_committed:
-                raise RemoteFileError('Cannot read from uncommitted remote file [{}]'.format(remote_id), FileServerErrorCode.FILE_IS_UNCOMMITTED)
-
-            file = self.store().read_file(remote_id)
-
-            try:
-                # Seek just before the chunk to read.
-                file.seek_chunk(chunk_num-1)
-                chunk = file.read_chunk()
-
-                if len(chunk) == 0:
-                    raise RemoteFileError('Chunk [{}] not found'.format(chunk_num), FileServerErrorCode.INVALID_CHUNK_NUM)
-                
-                logging.debug('Read chunk size [{}]'.format(len(chunk)))
-                return chunk
-            finally:
-                self.store().close_file(file)
+            file_metadata = self.dao_factory().file_dao(conn).get_file_metadata(remote_id)
         finally:
             self.db_conn_mgr().db_close(conn)
 
+        if not file_metadata.is_committed:
+            raise RemoteFileError('Cannot read from uncommitted remote file [{}]'.format(remote_id), FileServerErrorCode.FILE_IS_UNCOMMITTED)
+
+        file = self.store().read_file(remote_id)
+
+        try:
+            # Seek just before the chunk to read.
+            file.seek_chunk(chunk_num-1)
+            chunk = file.read_chunk()
+
+            if len(chunk) == 0:
+                raise RemoteFileError('Chunk [{}] not found'.format(chunk_num), FileServerErrorCode.INVALID_CHUNK_NUM)
+            
+            logging.debug('Read chunk size [{}]'.format(len(chunk)))
+            return chunk
+        finally:
+            self.store().close_file(file)
+        
     def commit_file(self, epoch_no: int, remote_id: str) -> None:
         logging.debug('Commit remote file [{}] epoch [{}]'.format(remote_id, epoch_no))
         conn = self.db_conn_mgr().db_connect()
-        
         try:
-            logging.debug('Acquired database connection')
-
-            epoch_dao = self.dao_factory().epoch_dao(conn)
-            file_dao = self.dao_factory().file_dao(conn)
-
-            file_metadata = file_dao.get_file_metadata(remote_id)
-            if file_metadata.is_committed:
-                logging.debug('File [{}] already committed'.format(remote_id))
-                return
-
-            file = self.store().append_file(remote_id)
-            committed = False
-
-            try:
-                epoch_dao.check_valid_epoch(epoch_no)
-                self.store().close_file(file, writable=False)
-                committed = True
-                file_dao.commit_file(epoch_no, remote_id)
-            finally:
-                if not committed:
-                    self.store().close_file(file, writable=True)
-
-            
-            logging.debug('Committed remote file [{}]'.format(remote_id))
+            file_metadata = self.dao_factory().file_dao(conn).get_file_metadata(remote_id)
         finally:
             self.db_conn_mgr().db_close(conn)
+
+        if file_metadata.is_committed:
+            logging.debug('File [{}] already committed'.format(remote_id))
+            return
+
+        file = self.store().append_file(remote_id)
+        committed = False
+
+        try:
+            conn = self.db_conn_mgr().db_connect()
+            try:
+                self.dao_factory().epoch_dao(conn).check_valid_epoch(epoch_no)
+            finally:
+                self.db_conn_mgr().db_close(conn)
+
+            self.store().close_file(file, writable=False)
+            committed = True
+
+            conn = self.db_conn_mgr().db_connect()
+            try:
+                self.dao_factory().file_dao(conn).commit_file(epoch_no, remote_id)
+            finally:
+                self.db_conn_mgr().db_close(conn)
+        finally:
+            if not committed:
+                self.store().close_file(file, writable=True)
+
+        logging.debug('Committed remote file [{}]'.format(remote_id))
+        
 
     def get_file_metadata(self, remote_id: str) -> dict:
         logging.debug('Get remote file metadata [{}]'.format(remote_id))

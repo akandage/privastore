@@ -53,11 +53,11 @@ def write_all(file: BinaryIO, data: bytes):
 def parse_mem_size(mem_size: str) -> int:
     try:
         if mem_size.endswith('KB'):
-            return round(KILOBYTE * int(mem_size[:-2]))
+            return round(KILOBYTE * float(mem_size[:-2]))
         elif mem_size.endswith('MB'):
-            return round(MEGABYTE * int(mem_size[:-2]))
+            return round(MEGABYTE * float(mem_size[:-2]))
         elif mem_size.endswith('GB'):
-            return round(GIGABYTE * int(mem_size[:-2]))
+            return round(GIGABYTE * float(mem_size[:-2]))
         elif mem_size.endswith('B'):
             return int(mem_size[:-1])
     except:

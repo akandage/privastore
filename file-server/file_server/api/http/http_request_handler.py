@@ -201,7 +201,8 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
             try:
                 body_read = 0
                 while body_read < content_len:
-                    data = self.rfile.read(min(content_len - body_read, 4096))
+                    # TODO: Config this from read buffer size.
+                    data = self.rfile.read(min(content_len - body_read, 64*1024))
                     data_len = len(data)
                     if data_len == 0:
                         raise Exception('Unexpected EOF')
