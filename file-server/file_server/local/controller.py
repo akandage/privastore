@@ -9,6 +9,7 @@ from ..file_chunk import chunk_encoder, chunk_decoder
 from .file_transfer_status import FileTransferStatus
 from ..session_mgr import SessionManager
 from ..util.file import chunked_copy, str_mem_size, str_path
+from ..worker_task import WorkerTask
 import logging
 from typing import BinaryIO
 
@@ -77,7 +78,8 @@ class LocalServerController(Controller):
             # TODO
             raise Exception('Not implemented!')
 
-        upload_file = None
+        upload_file: File = None
+        remote_upload_task: WorkerTask = None
 
         try:
             #
@@ -99,9 +101,8 @@ class LocalServerController(Controller):
             upload_file = self.store().write_file(local_file_id, alloc_space=file_size, encode_chunk=self._encode_chunk, decode_chunk=self._decode_chunk)
             logging.debug('Opened file for writing in cache [{}]'.format(upload_file.file_id()))
 
-            remote_upload_task = None
             if self.remote_enabled():
-                remote_upload_task = self._async_controller.start_async_upload(upload_file.file_id())
+                remote_upload_task = self._async_controller.start_async_upload(path, file_name, file_version)
 
             #
             # Read the file in chunks of the configured chunk size and append to
@@ -158,6 +159,13 @@ class LocalServerController(Controller):
             # Cleanup if any error occurs during the upload process.
             #
 
+            if remote_upload_task is not None:
+                try:
+                    remote_upload_task.cancel()
+                    remote_upload_task.wait_processed()
+                except:
+                    pass
+
             if upload_file is not None:
                 if not file_uploaded:
                     try:
@@ -179,7 +187,7 @@ class LocalServerController(Controller):
 
             conn = self.db_conn_mgr().db_connect()
             try:
-                self.dao_factory().directory_dao(conn).remove_file(path, file_name, delete=True)
+                self.dao_factory().directory_dao(conn).remove_file(path, file_name)
             except Exception as e1:
                 logging.error('Could not cleanup uploaded file in db: {}'.format(str(e1)))
             finally:

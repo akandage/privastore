@@ -1,30 +1,25 @@
 from ..error import FileError
-from ..file import File
-from ..util.file import str_mem_size
+from .transfer_file_task import TransferFileTask
+from ..util.file import str_path
 from ..worker_task import WorkerTask
 
-class TransferChunkTask(WorkerTask):
+class TransferChunkTask(TransferFileTask):
 
     TASK_CODE = 1
 
-    def __init__(self, file_id: str, chunk_data: bytes, chunk_offset: int = 0):
-        super().__init__()
-        if file_id is None or not File.is_valid_file_id(file_id):
-            raise FileError('Invalid file id!')
-        if chunk_data is None:
-            raise FileError('No chunk data!')
-        self._file_id = file_id
+    def __init__(self, file_path: list[str], file_name: str, file_version: int, chunk_data: bytes, chunk_offset: int = 0):
+        super().__init__(file_path, file_name, file_version)
         self._chunk_data = chunk_data
         self._chunk_offset = chunk_offset
-    
-    def file_id(self) -> str:
-        return self._file_id
-    
+       
     def chunk_data(self) -> bytes:
         return self._chunk_data
+
+    def chunk_len(self) -> int:
+        return len(self._chunk_data)
 
     def chunk_offset(self) -> int:
         return self._chunk_offset
 
     def __str__(self):
-        return 'TRANSFER_CHUNK file-id=[{}] chunk-length=[{}] chunk-offset=[{}]'.format(self.file_id(), str_mem_size(len(self.chunk_data())), self.chunk_offset())
+        return 'TRANSFER_CHUNK file-id=[{}] file-name=[{}] file-version=[{}] chunk-size=[{}] chunk-offset=[{}]'.format(str_path(self.file_path() + [self.file_name()]), self.file_name(), self.file_version(), self.chunk_len(), self.chunk_offset())

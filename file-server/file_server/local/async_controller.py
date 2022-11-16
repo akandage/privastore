@@ -12,7 +12,7 @@ from threading import RLock
 from .transfer_file_task import TransferFileTask
 from typing import Optional, Union
 from .upload_worker import UploadWorker
-from ..util.file import config_bool
+from ..util.file import config_bool, str_path
 from ..worker_task import PingWorkerTask, WorkerTask
 
 class AsyncController(Daemon):
@@ -30,19 +30,19 @@ class AsyncController(Daemon):
         self._num_upload_workers = int(remote_config.get('num-upload-workers', '1'))
         self._num_download_workers = int(remote_config.get('num-download-workers', '1'))
         worker_queue_size = int(remote_config.get('worker-queue-size', '100'))
-        worker_retries = int(remote_config.get('worker-retries', '1'))
+        worker_retry_interval = int(remote_config.get('worker-retry-interval', '1'))
         self._worker_io_timeout = worker_io_timeout = int(remote_config.get('worker-io-timeout', '90'))
 
         logging.debug('Num upload workers: [{}]'.format(self._num_upload_workers))
         logging.debug('Num download workers: [{}]'.format(self._num_download_workers))
         logging.debug('Worker queue size: [{}]'.format(worker_queue_size))
         logging.debug('Worker I/O timeout: [{}s]'.format(worker_io_timeout))
-        logging.debug('Worker num retries: [{}]'.format(worker_retries))
+        logging.debug('Worker retry interval: [{}s]'.format(worker_retry_interval))
 
         self._upload_queue = Queue(worker_queue_size)
         self._upload_workers: list[UploadWorker]= []
         for i in range(self._num_upload_workers):
-            self._upload_workers.append(UploadWorker(dao_factory, db_conn_mgr, store, worker_index=i, queue=self._upload_queue, num_retries=worker_retries, io_timeout=worker_io_timeout))
+            self._upload_workers.append(UploadWorker(dao_factory, db_conn_mgr, store, worker_index=i, queue=self._upload_queue, retry_interval=worker_retry_interval, io_timeout=worker_io_timeout))
     
     def dao_factory(self):
         return self._dao_factory
@@ -67,20 +67,17 @@ class AsyncController(Daemon):
             raise FileUploadError('Could send task [{}] to workers. Upload queue is full!'.format(str(task)), FileServerErrorCode.REMOTE_UPLOAD_ERROR)
         logging.debug('Sent task [{}] to upload workers'.format(str(task)))
 
-    def start_async_upload(self, file_id: str, chunk_offset: int = 0, is_commit: bool = True) -> TransferFileTask:
+    def start_async_upload(self, file_path: list[str], file_name: str, file_version: int, file_id: str) -> TransferFileTask:
         '''
             Start asynchronously uploading the given file to the remote server.
         '''
-        if not File.is_valid_file_id(file_id):
-            raise FileUploadError('Invalid file id!')
-
         with self._lock:
             if file_id in self._uploads:
-                raise FileUploadError('File [{}] is already being async uploaded'.format(file_id))
+                raise FileUploadError('File [{}] is already being async uploaded'.format(str_path(file_path + [file_name])))
             
-            self._uploads[file_id] = task = TransferFileTask(file_id, chunk_offset, is_commit)
+            self._uploads[file_id] = task = TransferFileTask(file_path, file_name, file_version)
             
-        logging.debug('Starting async upload of file [{}] offset [{}] is-commit [{}]'.format(file_id, chunk_offset, is_commit))
+        logging.debug('Starting async upload of file [{}]'.format(str_path(file_path + [file_name])))
         
         try:
             self._upload_queue.put(task, block=True, timeout=self.worker_io_timeout())
@@ -89,7 +86,7 @@ class AsyncController(Daemon):
                 self._uploads.pop(file_id)
             raise FileUploadError('Upload worker queue is full!', FileServerErrorCode.REMOTE_UPLOAD_ERROR)
     
-        logging.debug('Started async upload of file [{}]'.format(file_id))
+        logging.debug('Started async upload of file [{}]'.format(str_path(file_path + [file_name])))
         return task
 
     def is_async_upload(self, file_id: str) -> bool:
