@@ -140,7 +140,7 @@ class File(object):
         self._closed = True
 
     def seek(self, offset: int) -> None:
-        if offset < 0 or offset > self.file_size():
+        if offset < 0:
             raise FileError('Cannot seek to offset [{}]'.format(offset), FileServerErrorCode.INVALID_SEEK_OFFSET)
         chunk_offset = 0
         chunk_start = 0

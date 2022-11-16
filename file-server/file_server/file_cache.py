@@ -64,27 +64,35 @@ class FileCache(object):
             self._read_timeout = read_timeout
             with self._node.lock:
                 self._total_chunks = self._node.available_chunks
-        
+
+        def seek_chunk(self, offset):
+            if offset > self._total_chunks:
+                self.wait_for_chunks(offset-1)
+            return super().seek_chunk(offset)
+
         def read_chunk(self):
             if self._chunks_read == self._total_chunks:
-                now = start_t = time.time()
-                end_t = start_t + self._read_timeout
-
-                while True:
-                    node = self._node
-                    with node.lock:
-                        self._total_chunks = node.available_chunks
-
-                        if not node.writable or self._chunks_read < self._total_chunks:
-                            break
-
-                        now = time.time()
-                        if now < end_t:
-                            node.readers.wait(end_t - now)
-                        else:
-                            raise FileCacheError('Timed out waiting to read file [{}] chunk'.format(self.file_id()), FileServerErrorCode.IO_TIMEOUT)
+                self.wait_for_chunks(self._chunks_read)
             
             return super().read_chunk()
+
+        def wait_for_chunks(self, offset):
+            now = start_t = time.time()
+            end_t = start_t + self._read_timeout
+
+            while True:
+                node = self._node
+                with node.lock:
+                    self._total_chunks = node.available_chunks
+
+                    if not node.writable or offset < self._total_chunks:
+                        break
+
+                    now = time.time()
+                    if now < end_t:
+                        node.readers.wait(end_t - now)
+                    else:
+                        raise FileCacheError('Timed out waiting for file [{}] chunks'.format(self.file_id()), FileServerErrorCode.IO_TIMEOUT)
 
     class CacheFileWriter(File):
 

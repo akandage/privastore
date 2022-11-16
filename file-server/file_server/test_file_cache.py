@@ -197,6 +197,7 @@ class TestFileCache(unittest.TestCase):
             self.cache = FileCache(cache_config)
             reader1_ok = Event()
             reader2_ok = Event()
+            reader3_ok = Event()
             writer_ok = Event()
             file_id = File.generate_file_id()
             self.cache.create_empty_file(file_id, 5*1024)
@@ -212,6 +213,13 @@ class TestFileCache(unittest.TestCase):
                 self.cache.close_file(file)
                 if all_data == data:
                     ok.set()
+            def reader3(ok: Event):
+                file = self.cache.read_file(file_id)
+                file.seek(data_size//2)
+                half_data = file.read()
+                self.cache.close_file(file)
+                if half_data == data[data_size//2:]:
+                    ok.set()
             def writer(ok):
                 file = self.cache.append_file(file_id)
                 file.write(data)
@@ -221,15 +229,19 @@ class TestFileCache(unittest.TestCase):
                 
             t1 = Thread(target=reader1, args=(reader1_ok,))
             t2 = Thread(target=reader2, args=(reader2_ok,))
-            t3 = Thread(target=writer, args=(writer_ok,))
+            t3 = Thread(target=reader3, args=(reader3_ok,))
+            t4 = Thread(target=writer, args=(writer_ok,))
             t1.start()
             t2.start()
             t3.start()
+            t4.start()
             t1.join()
             t2.join()
             t3.join()
+            t4.join()
             self.assertTrue(reader1_ok.is_set())
             self.assertTrue(reader2_ok.is_set())
+            self.assertTrue(reader3_ok.is_set())
             self.assertTrue(writer_ok.is_set())
             self.cache.remove_file_by_id(file_id)
         
