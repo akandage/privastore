@@ -33,4 +33,36 @@ class UploadWorker(AsyncWorker):
         pass
 
     def do_transfer_file(self, task: TransferFileTask) -> None:
-        pass
+        remote_file_id = self.remote_client().create_file(task.file_size(), timeout=self.io_timeout())
+        logging.debug('Created remote file [{}]'.format(remote_file_id))
+
+        conn = self.db_conn_mgr().db_connect()
+        try:
+            self.dao_factory().file_dao(conn).update_file_remote(task.file_path(), task.file_name(), task.file_version(), remote_file_id, FileTransferStatus.TRANSFERRING_DATA)
+            logging.debug('Updated remote transfer status')
+        finally:
+            self.db_conn_mgr().db_close(conn)
+        
+        file = self.store().read_file(task.local_file_id())
+        logging.debug('Opened file [{}] in cache for reading'.format(task.local_file_id()))
+
+        try:
+            chunks_sent = 0
+            while True:
+                chunk_data = file.read_chunk()
+                if len(chunk_data) == 0:
+                    break
+                self.remote_client().send_file_chunk(remote_file_id, chunk_data, chunks_sent+1, timeout=self.io_timeout())
+                chunks_sent += 1
+            logging.debug('Sent {} file chunks'.format(chunks_sent))
+        finally:
+            self.store().close_file(file)
+            logging.debug('Closed file in cache')
+        
+        conn = self.db_conn_mgr().db_connect()
+        try:
+            self.dao_factory().file_dao(conn).update_file_transfer_status(task.file_path(), task.file_name(), task.file_version(), remote_transfer_status=FileTransferStatus.TRANSFERRED_DATA)
+            logging.debug('Updated remote transfer status')
+        finally:
+            self.db_conn_mgr().db_close(conn)
+

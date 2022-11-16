@@ -62,7 +62,7 @@ class Worker(Daemon):
                     self.process_task(task)
                     task.set_processed()
                 except Exception as e:
-                    logging.error('Worker [{}] - error while processing task: {}'.format(self.name(), str(e)))
+                    logging.error('Worker [{}] - error while processing task [{}]: {}'.format(self.name(), str(task), str(e)))
                     task.set_error(e)
             
             with self._lock:

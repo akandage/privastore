@@ -4,7 +4,7 @@ from .error import FileServerErrorCode, RemoteClientError
 from http import HTTPStatus
 import logging
 import random
-from .remote.api.http.http_request_handler import EPOCH_NO_HEADER
+from .remote.api.http.http_request_handler import EPOCH_NO_HEADER, FILE_ID_HEADER
 import requests
 import time
 from typing import Optional
@@ -23,6 +23,11 @@ class RemoteEndpoint(object):
         host = self._host
         port = self._port
         return f'{protocol}://{host}:{port}'
+    
+    def __str__(self):
+        host = self._host
+        port = self._port
+        return f'{host}:{port}'
 
 class RemoteCredentials(object):
 
@@ -62,7 +67,9 @@ class RemoteClient(object):
         if len(self._endpoints) == 0:
             raise RemoteClientError('No remote server endpoints!')
 
-        return random.choice(self._endpoints)
+        endpoint = random.choice(self._endpoints)
+        logging.debug('Using remote endpoint [{}]'.format(str(endpoint)))
+        return endpoint
 
     def set_remote_credentials(self, creds: RemoteCredentials) -> None:
         self._remote_creds = creds
@@ -75,6 +82,11 @@ class RemoteClient(object):
 
     def session_heartbeat_url(self, endpoint: RemoteEndpoint):
         return f'{endpoint.http_url()}/1/heartbeat'
+
+    def create_file_url(self, endpoint: RemoteEndpoint, file_size: Optional[int] = None):
+        if file_size is not None:
+            return f'{endpoint.http_url()}/1/file?size={file_size}'
+        return f'{endpoint.http_url()}/1/file'
 
     def file_chunk_url(self, endpoint: RemoteEndpoint, file_id: str, chunk_offset: int):
         return f'{endpoint.http_url()}/1/file/{file_id}?chunk={chunk_offset}'
@@ -147,7 +159,7 @@ class RemoteClient(object):
             endpoint = self.get_remote_endpoint()
 
             try:
-                r = requests.put(self.login_url(endpoint), auth=remote_creds, timeout=(end_t-now))
+                r = requests.post(self.login_url(endpoint), auth=remote_creds, timeout=(end_t-now))
             except Exception as e:
                 logging.error('Start session request error: {}'.format(str(e)))
                 time.sleep(self.retry_interval())
@@ -162,6 +174,38 @@ class RemoteClient(object):
             else:
                 raise RemoteClientError('Start session error [{}]'.format(self.get_error_code(r)), FileServerErrorCode.REMOTE_ERROR)
     
+    def create_file(self, file_size: Optional[int] = None, timeout: int = 90) -> str:
+        start_t = time.time()
+        end_t = start_t + timeout
+
+        headers = dict()
+
+        while True:
+            headers[SESSION_ID_HEADER] = self.get_session_id(timeout=(end_t-time.time()))
+
+            now = time.time()
+            if timeout <= 0 or now >= end_t:
+                raise RemoteClientError('Timed out creating file!', FileServerErrorCode.IO_TIMEOUT)
+
+            endpoint = self.get_remote_endpoint()
+
+            try:
+                r = requests.post(self.create_file_url(endpoint, file_size), headers=headers, timeout=(end_t-now))
+            except Exception as e:
+                logging.error('Create file size [{}] request error: {}'.format(file_size, str(e)))
+                time.sleep(self.retry_interval())
+                continue
+
+            if r.status_code == HTTPStatus.OK:
+                remote_file_id = r.headers.get(FILE_ID_HEADER)
+                logging.debug('Created file [{}]'.format(remote_file_id))
+                return remote_file_id
+            elif r.status_code == HTTPStatus.UNAUTHORIZED:
+                self.session_expired()
+            else:
+                error_code = self.get_error_code(r)
+                raise RemoteClientError('Create file size [{}] error [{}]'.format(file_size, error_code), error_code)
+
     def send_file_chunk(self, remote_file_id: str, chunk_data: bytes, chunk_offset: int, timeout: int = 90) -> Optional[str]:
         start_t = time.time()
         end_t = start_t + timeout
@@ -173,12 +217,12 @@ class RemoteClient(object):
 
             now = time.time()
             if timeout <= 0 or now >= end_t:
-                raise RemoteClientError('Timed out committing remote file [{}] data!'.format(remote_file_id), FileServerErrorCode.IO_TIMEOUT)
+                raise RemoteClientError('Timed out sending file [{}] chunk [{}] data!'.format(remote_file_id, chunk_offset), FileServerErrorCode.IO_TIMEOUT)
 
             endpoint = self.get_remote_endpoint()
 
             try:
-                r = requests.put(self.file_chunk_url(endpoint, remote_file_id, chunk_offset), headers=headers, timeout=(end_t-now))
+                r = requests.put(self.file_chunk_url(endpoint, remote_file_id, chunk_offset), headers=headers, data=chunk_data, timeout=(end_t-now))
             except Exception as e:
                 logging.error('Send file [{}] chunk [{}] request error: {}'.format(remote_file_id, chunk_offset, str(e)))
                 time.sleep(self.retry_interval())
@@ -191,8 +235,7 @@ class RemoteClient(object):
                 self.session_expired()
             else:
                 error_code = self.get_error_code(r)
-                logging.error('Send file [{}] chunk [{}] error [{}]'.format(remote_file_id, chunk_offset, error_code))
-                return error_code
+                raise RemoteClientError('Send file [{}] chunk [{}] error [{}]'.format(remote_file_id, chunk_offset, error_code), error_code)
 
 
     def commit_file(self, remote_file_id: str, epoch_no: int, timeout: int = 90) -> Optional[str]:
@@ -214,16 +257,15 @@ class RemoteClient(object):
             try:
                 r = requests.put(self.commit_url(endpoint, remote_file_id), headers=headers, timeout=(end_t-now))
             except Exception as e:
-                logging.error('Commit file [{}] request error: {}'.format(remote_file_id, str(e)))
+                logging.error('Commit file [{}] epoch [{}] request error: {}'.format(remote_file_id, epoch_no, str(e)))
                 time.sleep(self.retry_interval())
                 continue
 
             if r.status_code == HTTPStatus.OK:
-                logging.debug('File [{}] committed'.format(remote_file_id))
+                logging.debug('File [{}] epoch [{}] committed'.format(remote_file_id, epoch_no))
                 return
             elif r.status_code == HTTPStatus.UNAUTHORIZED:
                 self.session_expired()
             else:
                 error_code = self.get_error_code(r)
-                logging.error('File [{}] commit error [{}]'.format(remote_file_id, error_code))
-                return error_code
+                raise RemoteClientError('Commit file [{}] epoch [{}] error [{}]'.format(remote_file_id, epoch_no, error_code), error_code)

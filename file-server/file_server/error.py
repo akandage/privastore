@@ -44,57 +44,57 @@ class FileServerErrorCode:
     REMOTE_UPLOAD_ERROR = "REMOTE_UPLOAD_ERROR"
 
 class FileServerError(Exception):
-    def __init__(self, msg: str, error_code: int=FileServerErrorCode.INTERNAL_ERROR):
+    def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
         super().__init__(msg)
         self._error_code = error_code
 
-    def error_code(self):
+    def error_code(self) -> str:
         return self._error_code
 
 class AuthenticationError(FileServerError):
-    def __init__(self, msg: str, error_code: int=FileServerErrorCode.INTERNAL_ERROR):
+    def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
         super().__init__(msg, error_code)
 
 class DirectoryError(FileServerError):
-    def __init__(self, msg: str, error_code: int=FileServerErrorCode.INTERNAL_ERROR):
+    def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
         super().__init__(msg, error_code)
 
 class EpochError(FileServerError):
-    def __init__(self, msg: str, error_code: int=FileServerErrorCode.INTERNAL_ERROR):
+    def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
         super().__init__(msg, error_code)
 
 class FileCacheError(FileServerError):
-    def __init__(self, msg: str, error_code: int=FileServerErrorCode.INTERNAL_ERROR):
+    def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
         super().__init__(msg, error_code)
 
 class FileError(FileServerError):
-    def __init__(self, msg: str, error_code: int=FileServerErrorCode.INTERNAL_ERROR):
+    def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
         super().__init__(msg, error_code)
 
 class FileChunkError(FileServerError):
-    def __init__(self, msg: str, error_code: int=FileServerErrorCode.INTERNAL_ERROR):
+    def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
         super().__init__(msg, error_code)
 
 class FileDownloadError(FileServerError):
-    def __init__(self, msg: str, error_code: int=FileServerErrorCode.INTERNAL_ERROR):
+    def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
         super().__init__(msg, error_code)
 
 class FileUploadError(FileServerError):
-    def __init__(self, msg: str, error_code: int=FileServerErrorCode.INTERNAL_ERROR):
+    def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
         super().__init__(msg, error_code)
 
 class RemoteClientError(FileServerError):
-    def __init__(self, msg: str, error_code: int=FileServerErrorCode.INTERNAL_ERROR):
+    def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
         super().__init__(msg, error_code)
 
 class RemoteFileError(FileServerError):
-    def __init__(self, msg: str, error_code: int=FileServerErrorCode.INTERNAL_ERROR):
+    def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
         super().__init__(msg, error_code)
 
 class SessionError(FileServerError):
-    def __init__(self, msg: str, error_code: int=FileServerErrorCode.INTERNAL_ERROR):
+    def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
         super().__init__(msg, error_code)
 
 class WorkerError(FileServerError):
-    def __init__(self, msg: str, error_code: int=FileServerErrorCode.INTERNAL_ERROR):
+    def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
         super().__init__(msg, error_code)

@@ -1,24 +1,28 @@
-from ..util.file import str_path
-from ..worker_task import WorkerTask
+from .file_task import FileTask
+from ..util.file import str_mem_size
 
-class TransferFileTask(WorkerTask):
+class TransferFileTask(FileTask):
 
-    TASK_CODE = 2
+    TASK_CODE = 3
 
-    def __init__(self, file_path: list[str], file_name: str, file_version: int):
-        super().__init__()
-        self._file_path = file_path
-        self._file_name = file_name
-        self._file_version = file_version
+    def __init__(self, file_path: list[str], file_name: str, file_version: int, file_size: int, local_file_id: str):
+        super().__init__(file_path, file_name, file_version)
+        self._file_size = file_size
+        self._local_file_id = local_file_id
+
+    def task_code(self):
+        return self.TASK_CODE
     
-    def file_path(self) -> str:
-        return self._file_path
+    def task_name(self):
+        return 'TRANSFER_FILE'
 
-    def file_name(self) -> str:
-        return self.file_name
-    
-    def file_version(self) -> int:
-        return self._file_version
+    def file_size(self) -> int:
+        return self._file_size
+
+    def local_file_id(self) -> str:
+        return self._local_file_id
 
     def __str__(self):
-        return 'TRANSFER_FILE file-id=[{}] file-name=[{}] file-version=[{}]'.format(str_path(self.file_path() + [self.file_name()]), self.file_version())
+        s = super().__str__()
+        s += ' file-size=[{}] local-file-id=[{}]'.format(str_mem_size(self.file_size()), self.local_file_id())
+        return s

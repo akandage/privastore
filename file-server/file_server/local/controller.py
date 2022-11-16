@@ -103,7 +103,7 @@ class LocalServerController(Controller):
             logging.debug('Opened file for writing in cache [{}]'.format(upload_file.file_id()))
 
             if self.remote_enabled():
-                remote_upload_task = self._async_controller.start_async_upload(path, file_name, file_version)
+                remote_upload_task = self._async_controller.start_async_upload(path, file_name, file_version, file_size, local_file_id)
 
             #
             # Read the file in chunks of the configured chunk size and append to

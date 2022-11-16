@@ -68,15 +68,15 @@ class AsyncController(Daemon):
             raise FileUploadError('Could send task [{}] to workers. Upload queue is full!'.format(str(task)), FileServerErrorCode.REMOTE_UPLOAD_ERROR)
         logging.debug('Sent task [{}] to upload workers'.format(str(task)))
 
-    def start_async_upload(self, file_path: list[str], file_name: str, file_version: int, file_id: str) -> TransferFileTask:
+    def start_async_upload(self, file_path: list[str], file_name: str, file_version: int, file_size: int, local_file_id: str) -> TransferFileTask:
         '''
             Start asynchronously uploading the given file to the remote server.
         '''
         with self._lock:
-            if file_id in self._uploads:
+            if local_file_id in self._uploads:
                 raise FileUploadError('File [{}] is already being async uploaded'.format(str_path(file_path + [file_name])))
             
-            self._uploads[file_id] = task = TransferFileTask(file_path, file_name, file_version)
+            self._uploads[local_file_id] = task = TransferFileTask(file_path, file_name, file_version, file_size, local_file_id)
             
         logging.debug('Starting async upload of file [{}]'.format(str_path(file_path + [file_name])))
         
@@ -84,27 +84,27 @@ class AsyncController(Daemon):
             self._upload_queue.put(task, block=True, timeout=self.worker_io_timeout())
         except Full:
             with self._lock:
-                self._uploads.pop(file_id)
+                self._uploads.pop(local_file_id)
             raise FileUploadError('Upload worker queue is full!', FileServerErrorCode.REMOTE_UPLOAD_ERROR)
     
         logging.debug('Started async upload of file [{}]'.format(str_path(file_path + [file_name])))
         return task
 
-    def is_async_upload(self, file_id: str) -> bool:
+    def is_async_upload(self, local_file_id: str) -> bool:
         '''
             Check if the given file is being asynchronously uploaded to the remote server.
         '''
         with self._lock:
-            return file_id in self._uploads
+            return local_file_id in self._uploads
 
-    def stop_async_upload(self, file_id: str):
+    def stop_async_upload(self, local_file_id: str):
         with self._lock:
-            if file_id in self._uploads:
-                task = self._uploads[file_id]
-                logging.debug('Cancelling async upload of file [{}]'.format(file_id))
+            if local_file_id in self._uploads:
+                task = self._uploads[local_file_id]
+                logging.debug('Cancelling async upload of file [{}]'.format(local_file_id))
                 task.cancel()
             else:
-                logging.debug('File [{}] not being async uploaded'.format(file_id))
+                logging.debug('File [{}] not being async uploaded'.format(local_file_id))
                 return
                 
         try:
@@ -113,9 +113,9 @@ class AsyncController(Daemon):
             pass
 
         with self._lock:
-            logging.debug('Cancelled async upload of file [{}]'.format(file_id))
-            if file_id in self._uploads:
-                self._uploads.pop(file_id)
+            logging.debug('Cancelled async upload of file [{}]'.format(local_file_id))
+            if local_file_id in self._uploads:
+                self._uploads.pop(local_file_id)
 
     def start_workers(self):
         self.start_upload_workers()
