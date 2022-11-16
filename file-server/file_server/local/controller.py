@@ -8,8 +8,8 @@ from ..file_cache import FileCache
 from ..file_chunk import chunk_encoder, chunk_decoder
 from .file_transfer_status import FileTransferStatus
 from ..session_mgr import SessionManager
+from .transfer_file_task import TransferFileTask
 from ..util.file import chunked_copy, str_mem_size, str_path
-from ..worker_task import WorkerTask
 import logging
 from typing import BinaryIO
 
@@ -79,7 +79,8 @@ class LocalServerController(Controller):
             raise Exception('Not implemented!')
 
         upload_file: File = None
-        remote_upload_task: WorkerTask = None
+        remote_upload_task: TransferFileTask = None
+        local_file_id: str = None
 
         try:
             #
@@ -160,11 +161,7 @@ class LocalServerController(Controller):
             #
 
             if remote_upload_task is not None:
-                try:
-                    remote_upload_task.cancel()
-                    remote_upload_task.wait_processed()
-                except:
-                    pass
+                self._async_controller.stop_async_upload(local_file_id)
 
             if upload_file is not None:
                 if not file_uploaded:

@@ -19,8 +19,8 @@ from ..worker_task import WorkerTask
 
 class UploadWorker(AsyncWorker):
 
-    def __init__(self, dao_factory: DAOFactory, db_conn_mgr: DbConnectionManager, store: FileCache, worker_index: int=None, queue: Optional[Queue[WorkerTask]] = None, retry_interval: int=1, io_timeout: int=90):
-        super().__init__(dao_factory, db_conn_mgr, store, worker_index, queue, retry_interval, io_timeout)
+    def __init__(self, dao_factory: DAOFactory, db_conn_mgr: DbConnectionManager, store: FileCache, worker_index: int=None, task_queue: Optional[Queue[WorkerTask]] = None, completion_queue: Optional[Queue[WorkerTask]] = None, retry_interval: int=1, io_timeout: int=90):
+        super().__init__(dao_factory, db_conn_mgr, store, worker_index, task_queue, completion_queue, retry_interval, io_timeout)
 
     def process_task(self, task: WorkerTask) -> None:
         if task.task_code() == TransferChunkTask.TASK_CODE:

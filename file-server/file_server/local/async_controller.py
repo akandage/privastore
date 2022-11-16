@@ -39,10 +39,11 @@ class AsyncController(Daemon):
         logging.debug('Worker I/O timeout: [{}s]'.format(worker_io_timeout))
         logging.debug('Worker retry interval: [{}s]'.format(worker_retry_interval))
 
-        self._upload_queue = Queue(worker_queue_size)
+        self._completion_queue: Queue[WorkerTask] = Queue(worker_queue_size*2)
+        self._upload_queue: Queue[WorkerTask] = Queue(worker_queue_size)
         self._upload_workers: list[UploadWorker]= []
         for i in range(self._num_upload_workers):
-            self._upload_workers.append(UploadWorker(dao_factory, db_conn_mgr, store, worker_index=i, queue=self._upload_queue, retry_interval=worker_retry_interval, io_timeout=worker_io_timeout))
+            self._upload_workers.append(UploadWorker(dao_factory, db_conn_mgr, store, worker_index=i, task_queue=self._upload_queue, completion_queue=self._completion_queue, retry_interval=worker_retry_interval, io_timeout=worker_io_timeout))
     
     def dao_factory(self):
         return self._dao_factory
@@ -102,9 +103,19 @@ class AsyncController(Daemon):
                 task = self._uploads[file_id]
                 logging.debug('Cancelling async upload of file [{}]'.format(file_id))
                 task.cancel()
-                logging.debug('Cancelled async upload of file [{}]'.format(file_id))
             else:
                 logging.debug('File [{}] not being async uploaded'.format(file_id))
+                return
+                
+        try:
+            task.wait_processed()
+        except:
+            pass
+
+        with self._lock:
+            logging.debug('Cancelled async upload of file [{}]'.format(file_id))
+            if file_id in self._uploads:
+                self._uploads.pop(file_id)
 
     def start_workers(self):
         self.start_upload_workers()
@@ -137,6 +148,11 @@ class AsyncController(Daemon):
         # TODO
         pass
 
+    def stop(self):
+        if not self._stop.is_set():
+            super().stop()
+            self._completion_queue.put(PingWorkerTask(), block=True)
+
     def run(self):
         try:
             self.start_upload_workers()
@@ -155,8 +171,15 @@ class AsyncController(Daemon):
         self._started.set()
         logging.debug('Async controller started')
 
-        while not self._stop.wait(1):
-            pass
+        while not self._stop.is_set():
+            completed_task = self._completion_queue.get(block=True)
+
+            if completed_task.task_code() == PingWorkerTask.TASK_CODE:
+                logging.debug('Async controller pinged')
+                continue
+
+            if self._stop.is_set():
+                break
 
         try:
             self.stop_upload_workers()
