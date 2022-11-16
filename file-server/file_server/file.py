@@ -13,7 +13,7 @@ FILE_ID_LENGTH = 38
 
 class File(object):
 
-    def __init__(self, path, file_id=None, mode='r', chunk_size=KILOBYTE, encode_chunk=default_chunk_encoder, decode_chunk=default_chunk_decoder):
+    def __init__(self, path, file_id=None, mode='r', chunk_size=KILOBYTE, encode_chunk=default_chunk_encoder, decode_chunk=default_chunk_decoder, skip_metadata=False):
         self._file_id = file_id or self.generate_file_id()
         self._file_path = os.path.join(path, self._file_id)
         self._mode = mode
@@ -32,7 +32,8 @@ class File(object):
         self._decode_chunk = decode_chunk
 
         if mode == 'r' or mode == 'a':
-            self.read_metadata_file()
+            if not skip_metadata:
+                self.read_metadata_file()
             if mode == 'r':
                 logging.debug('File [{}] opened for reading'.format(file_id))
             else:
@@ -212,17 +213,16 @@ class File(object):
         '''
             Implement this so it behaves like file-like object.
         '''
-        if size is None:
-            size = self.file_size()
-        if size < 0:
-            raise FileError('Invalid read size!')
-        if size == 0:
-            return b''
+        if size is not None:
+            if size < 0:
+                raise FileError('Invalid read size!')
+            if size == 0:
+                return b''
         
         buf = bytes()
         buf_len = 0
 
-        while buf_len < size:
+        while size is None or buf_len < size:
             read_buf_len = len(self._read_buffer)
 
             if read_buf_len - self._read_offset == 0:
@@ -233,7 +233,10 @@ class File(object):
             if read_buf_len == 0:
                 break
             
-            read_size = min(read_buf_len - self._read_offset, size - buf_len)
+            read_size = read_buf_len - self._read_offset
+            if size is not None:
+                read_size = min(read_size, size - buf_len)
+
             read_end = self._read_offset + read_size
             buf += self._read_buffer[self._read_offset:read_end]
             buf_len += read_size

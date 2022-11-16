@@ -1,6 +1,6 @@
-import os
 import random
 import shutil
+from threading import Event, Thread
 import unittest
 
 from .error import FileCacheError
@@ -185,4 +185,51 @@ class TestFileCache(unittest.TestCase):
         self.assertFalse(self.cache.has_file(f2.file_id()))
         self.assertFalse(self.cache.has_file(f3.file_id()))
         self.assertTrue(self.cache.has_file(f4.file_id()))
+    
+    def test_concurrent_read_write(self):
+        data_size = 4*1024 + 50
+        data = random.randbytes(data_size)
+        for _ in range(100):
+            cache_config = {
+                'store-path': 'test_file_cache',
+                'chunk-size': '1KB'
+            }
+            self.cache = FileCache(cache_config)
+            reader1_ok = Event()
+            reader2_ok = Event()
+            writer_ok = Event()
+            file_id = File.generate_file_id()
+            self.cache.create_empty_file(file_id, 5*1024)
+            def reader1(ok: Event):
+                file = self.cache.read_file(file_id)
+                all_data = file.read()
+                self.cache.close_file(file)
+                if all_data == data:
+                    ok.set()
+            def reader2(ok: Event):
+                file = self.cache.read_file(file_id)
+                all_data = file.read()
+                self.cache.close_file(file)
+                if all_data == data:
+                    ok.set()
+            def writer(ok):
+                file = self.cache.append_file(file_id)
+                file.write(data)
+                file.flush()
+                self.cache.close_file(file)
+                ok.set()
+                
+            t1 = Thread(target=reader1, args=(reader1_ok,))
+            t2 = Thread(target=reader2, args=(reader2_ok,))
+            t3 = Thread(target=writer, args=(writer_ok,))
+            t1.start()
+            t2.start()
+            t3.start()
+            t1.join()
+            t2.join()
+            t3.join()
+            self.assertTrue(reader1_ok.is_set())
+            self.assertTrue(reader2_ok.is_set())
+            self.assertTrue(writer_ok.is_set())
+            self.cache.remove_file_by_id(file_id)
         

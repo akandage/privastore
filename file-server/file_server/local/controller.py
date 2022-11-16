@@ -61,7 +61,7 @@ class LocalServerController(Controller):
         finally:
             self.db_conn_mgr().db_close(conn)
 
-    def upload_file(self, path: list[str], file_name: str, file: BinaryIO, file_size: int, file_version: int=1):
+    def upload_file(self, path: list[str], file_name: str, file: BinaryIO, file_size: int, file_version: int=1, sync: bool = True):
         logging.debug('Upload file [{}] version [{}] size [{}]'.format(str_path(path + [file_name]), file_version, file_size))
 
         if file_version == 1:
@@ -98,6 +98,10 @@ class LocalServerController(Controller):
             #
             upload_file = self.store().write_file(local_file_id, alloc_space=file_size, encode_chunk=self._encode_chunk, decode_chunk=self._decode_chunk)
             logging.debug('Opened file for writing in cache [{}]'.format(upload_file.file_id()))
+
+            remote_upload_task = None
+            if self.remote_enabled():
+                remote_upload_task = self._async_controller.start_async_upload(upload_file.file_id())
 
             #
             # Read the file in chunks of the configured chunk size and append to
@@ -138,6 +142,15 @@ class LocalServerController(Controller):
                 self.db_conn_mgr().db_close(conn)
             
             logging.debug('File metadata updated')
+
+            #
+            # If this is a synced upload, make sure all data has made it to the
+            # the remote server before returning a response to the caller.
+            #
+            if remote_upload_task is not None:
+                if sync:
+                    remote_upload_task.wait_processed()
+                    logging.debug('Remote upload task synced')
         except Exception as e:
             logging.error('Could not upload file: {}'.format(str(e)))
 
@@ -175,9 +188,6 @@ class LocalServerController(Controller):
             raise e
 
         logging.debug('Uploaded file [{}]'.format(str_path(path + [file_name])))
-
-        if self.remote_enabled():
-            self._async_controller.start_async_upload(upload_file.file_id())
 
     def download_file(self, path, file_name, file, file_version=None, api_callback=None):
         logging.debug('Download file [{}] version [{}]'.format(str_path(path + [file_name]), file_version))

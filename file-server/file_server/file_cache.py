@@ -19,6 +19,7 @@ class FileCache(object):
             self._index = index
             self._file_id = file_id
             self.alloc_space = alloc_space
+            self.available_chunks = 0
             self.num_readers: int = 0
             self.num_writers: int = 0
             self.removable: bool = False
@@ -27,6 +28,7 @@ class FileCache(object):
             self._prev: 'FileCache.IndexNode' = None
             self._next: 'FileCache.IndexNode' = None
             self.lock = RLock()
+            self.readers = Condition(self.lock)
         
         def index(self) -> 'FileCache.Index':
             return self._index
@@ -36,10 +38,9 @@ class FileCache(object):
 
     class CacheFileReader(File):
 
-        def __init__(self, file_id: str, node: 'FileCache.IndexNode', chunk_size: int = KILOBYTE, encode_chunk: chunk_encoder=default_chunk_encoder, decode_chunk: chunk_encoder=default_chunk_decoder):
-            super().__init__(node.index().cache().cache_path(), file_id, mode='r', chunk_size=chunk_size, encode_chunk=encode_chunk, decode_chunk=decode_chunk)
+        def __init__(self, file_id: str, node: 'FileCache.IndexNode', chunk_size: int = KILOBYTE, encode_chunk: chunk_encoder=default_chunk_encoder, decode_chunk: chunk_encoder=default_chunk_decoder, skip_metadata=False):
+            super().__init__(node.index().cache().cache_path(), file_id, mode='r', chunk_size=chunk_size, encode_chunk=encode_chunk, decode_chunk=decode_chunk, skip_metadata=skip_metadata)
             self._node = node
-            logging.debug('File [{}] opened for reading'.format(file_id))
 
         def append_chunk(self, chunk_bytes):
             raise FileCacheError('Operation not supported!', FileServerErrorCode.INTERNAL_ERROR)
@@ -55,6 +56,36 @@ class FileCache(object):
                         raise FileCacheError('File [{}] in invalid state! File has [{}] readers'.format(self.file_id(), self._node.num_readers), FileServerErrorCode.INTERNAL_ERROR)
                     self._node.num_readers -= 1
 
+    class ConcurrentCacheFileReader(CacheFileReader):
+
+        def __init__(self, file_id: str, node: 'FileCache.IndexNode', chunk_size: int = KILOBYTE, encode_chunk: chunk_encoder=default_chunk_encoder, decode_chunk: chunk_encoder=default_chunk_decoder, read_timeout=90):
+            super().__init__(file_id, node, chunk_size, encode_chunk, decode_chunk, skip_metadata=True)
+            # TODO: Configure from config value.
+            self._read_timeout = read_timeout
+            with self._node.lock:
+                self._total_chunks = self._node.available_chunks
+        
+        def read_chunk(self):
+            if self._chunks_read == self._total_chunks:
+                now = start_t = time.time()
+                end_t = start_t + self._read_timeout
+
+                while True:
+                    node = self._node
+                    with node.lock:
+                        self._total_chunks = node.available_chunks
+
+                        if not node.writable or self._chunks_read < self._total_chunks:
+                            break
+
+                        now = time.time()
+                        if now < end_t:
+                            node.readers.wait(end_t - now)
+                        else:
+                            raise FileCacheError('Timed out waiting to read file [{}] chunk'.format(self.file_id()), FileServerErrorCode.IO_TIMEOUT)
+            
+            return super().read_chunk()
+
     class CacheFileWriter(File):
 
         def __init__(self, file_id: str, node: 'FileCache.IndexNode', mode: str='w', chunk_size: int = KILOBYTE, encode_chunk: chunk_encoder=default_chunk_encoder, decode_chunk: chunk_decoder=default_chunk_decoder,):
@@ -62,22 +93,27 @@ class FileCache(object):
             self._node = node
 
         def append_chunk(self, chunk_bytes):
+            node = self._node
             prev_size = self.size_on_disk()
             super().append_chunk(chunk_bytes)
             curr_size = self.size_on_disk()
             if curr_size > prev_size:
-                node = self._node
                 with node.lock:
                     if curr_size > node.alloc_space:
                         node.index().cache().resize_node(node, curr_size)
+                    node.available_chunks = self.total_chunks()
+                    node.readers.notify_all()
 
         def close(self):
             if not self.closed():
                 super().close()
-                with self._node.lock:
-                    if self._node.num_writers != 1:
+                node = self._node
+                with node.lock:
+                    if node.num_writers != 1:
                         raise FileCacheError('File [{}] in invalid state! File has [{}] writers'.format(self.file_id(), self._node.num_writers), FileServerErrorCode.INTERNAL_ERROR)
-                    self._node.num_writers = 0
+                    node.num_writers = 0
+                    node.readers.notify_all()
+                    
 
     IndexNodeMetadata = namedtuple('IndexNodeMetadata', ['alloc_space', 'file_size', 'size_on_disk', 'file_chunks'])
 
@@ -249,12 +285,15 @@ class FileCache(object):
         with node.lock:
             if node.removed:
                 return
-            if node.num_writers != 0:
-                raise FileCacheError('File [{}] has [{}] writers!'.format(file_id, node.num_writers), FileServerErrorCode.FILE_NOT_READABLE)
+            # if node.num_writers != 0:
+            #     raise FileCacheError('File [{}] has [{}] writers!'.format(file_id, node.num_writers), FileServerErrorCode.FILE_NOT_READABLE)
 
             node.num_readers += 1
             node.removable = False
 
+            if node.writable:
+                return FileCache.ConcurrentCacheFileReader(file_id, node, chunk_size=self.file_chunk_size(), encode_chunk=encode_chunk, decode_chunk=decode_chunk)
+            
             return FileCache.CacheFileReader(file_id, node, chunk_size=self.file_chunk_size(), encode_chunk=encode_chunk, decode_chunk=decode_chunk)
 
     '''
@@ -432,6 +471,7 @@ class FileCache(object):
                     if node.writable:
                         if not writable:
                             node.writable = writable
+                            node.readers.notify_all()
                             logging.debug('File [{}] no longer writable'.format(file_id))
                     
                     self.resize_node(node, size_on_disk)
