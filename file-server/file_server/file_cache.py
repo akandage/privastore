@@ -583,7 +583,6 @@ class FileCache(object):
         with node.lock:
             try:
                 File.create_empty(self._cache_path, file_id)
-                node.remove_writer()
                 logging.debug('Empty file [{}] created with [{}] space allocated'.format(file_id, str_mem_size(alloc_space)))
             except Exception as e:
                 logging.error('Error creating empty file [{}]: {}'.format(file_id, str(e)))
@@ -593,6 +592,8 @@ class FileCache(object):
                 except Exception as e1:
                     logging.error('Error cleaning up empty file [{}]: {}'.format(file_id, str(e1)))
                 raise e
+            
+            node.remove_writer()
 
     '''
         Retrieve file metadata:
