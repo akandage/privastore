@@ -737,7 +737,11 @@ class FileCache(object):
             alloc_space = node.alloc_space()
             node.set_removed()
 
-        self._index.pop_node(file_id)
+        with self._index_lock:
+            if self._index.has_node(file_id):
+                self._index.pop_node(file_id)
+            else:
+                raise FileCacheError('File [{}] already removed'.format(file_id), FileServerErrorCode.INTERNAL_ERROR)
 
         try:
             shutil.rmtree(os.path.join(self._cache_path, file_id))
@@ -789,31 +793,35 @@ class FileCache(object):
             # Head node is LRU file.
             curr_node = self._index.head()
             remove_nodes: list['FileCache.IndexNode'] = []
-            while total_size < size and curr_node is not None:
-                curr_node.lock.acquire()
-                next_node = curr_node._next
-                alloc_space = curr_node.alloc_space()
-                if alloc_space > 0 and curr_node.removable():
-                    total_size += alloc_space
-                    # Lock this node for removal.
-                    remove_nodes.append(curr_node)
-                else:
-                    curr_node.lock.release()
-                curr_node = next_node
 
-            if total_size < size:
+            try:
+                while total_size < size and curr_node is not None:
+                    curr_node.lock.acquire()
+                    next_node = curr_node._next
+                    alloc_space = curr_node.alloc_space()
+                    if alloc_space > 0 and curr_node.removable():
+                        total_size += alloc_space
+                        # Lock this node for removal.
+                        remove_nodes.append(curr_node)
+                    else:
+                        curr_node.lock.release()
+                    curr_node = next_node
+
+                if total_size < size:
+                    raise FileCacheError('Insufficient space in cache', FileServerErrorCode.INSUFFICIENT_SPACE)
+
+                #
+                # We can free enough space, remove the files.
+                #
+
                 for node in remove_nodes:
-                    node.lock.release()
-
-                raise FileCacheError('Insufficient space in cache', FileServerErrorCode.INSUFFICIENT_SPACE)
-
-            #
-            # We can free enough space, remove the files.
-            #
-
-            for node in remove_nodes:
-                self.remove_file_by_node(node)
-                node.lock.release()
-                logging.debug('Evicted file [{}] from cache, recovered [{}] space'.format(node.file_id(), str_mem_size(node.alloc_space())))
-            
-            logging.debug('Freed [{}] space in cache'.format(str_mem_size(total_size)))
+                    self.remove_file_by_node(node)
+                    logging.debug('Evicted file [{}] from cache, recovered [{}] space'.format(node.file_id(), str_mem_size(node.alloc_space())))
+                
+                logging.debug('Freed [{}] space in cache'.format(str_mem_size(total_size)))
+            finally:
+                for node in remove_nodes:
+                    try:
+                        node.lock.release()
+                    except:
+                        pass
