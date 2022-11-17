@@ -3,7 +3,7 @@ import shutil
 from threading import Event, Thread
 import unittest
 
-from .error import FileCacheError
+from .error import FileCacheError, FileServerError, FileServerErrorCode
 from .file import File
 from .file_cache import FileCache
 
@@ -242,6 +242,72 @@ class TestFileCache(unittest.TestCase):
             self.assertTrue(reader1_ok.is_set())
             self.assertTrue(reader2_ok.is_set())
             self.assertTrue(reader3_ok.is_set())
+            self.assertTrue(writer_ok.is_set())
+            self.cache.remove_file_by_id(file_id)
+    
+
+    def test_concurrent_read_write_error(self):
+        for _ in range(100):
+            cache_config = {
+                'store-path': 'test_file_cache',
+                'max-file-size': '4KB',
+                'chunk-size': '1KB'
+            }
+            self.cache = FileCache(cache_config)
+            reader1_ok = Event()
+            reader2_ok = Event()
+            writer_ok = Event()
+            file_id = File.generate_file_id()
+            self.cache.create_empty_file(file_id, 0)
+            def reader1(ok: Event):
+                file = self.cache.read_file(file_id)
+                reader_error: FileCacheError = None
+                try:
+                    file.read()
+                except FileCacheError as e:
+                    reader_error = e
+                self.cache.close_file(file)
+                if reader_error.error_code() == FileServerErrorCode.FILE_NOT_READABLE:
+                    ok.set()
+            def reader2(ok: Event):
+                file = self.cache.read_file(file_id)
+                reader_error: FileCacheError = None
+                try:
+                    file.read()
+                except FileCacheError as e:
+                    reader_error = e
+                self.cache.close_file(file)
+                if reader_error.error_code() == FileServerErrorCode.FILE_NOT_READABLE:
+                    ok.set()
+            def writer(ok):
+                file = self.cache.append_file(file_id)
+                file.write(random.randbytes(4*1024))
+                close_error: FileServerError = None
+                write_error: FileCacheError = None
+                try:
+                    file.write(random.randbytes(10))
+                    file.flush()
+                except FileCacheError as e:
+                    write_error = e
+                try:
+                    self.cache.close_file(file)
+                except FileServerError as e:
+                    close_error = e
+
+                if close_error is not None and write_error.error_code() == FileServerErrorCode.FILE_TOO_LARGE:
+                    ok.set()
+                
+            t1 = Thread(target=reader1, args=(reader1_ok,))
+            t2 = Thread(target=reader2, args=(reader2_ok,))
+            t3 = Thread(target=writer, args=(writer_ok,))
+            t1.start()
+            t2.start()
+            t3.start()
+            t1.join()
+            t2.join()
+            t3.join()
+            self.assertTrue(reader1_ok.is_set())
+            self.assertTrue(reader2_ok.is_set())
             self.assertTrue(writer_ok.is_set())
             self.cache.remove_file_by_id(file_id)
         

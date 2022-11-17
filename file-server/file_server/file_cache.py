@@ -268,7 +268,7 @@ class FileCache(object):
             while True:
                 with node.lock:
                     if node.error():
-                        raise FileCacheError('Cannot read file [{}]. File in error state!'.format(self.file_id()))
+                        raise FileCacheError('Cannot read file [{}]. File in error state!'.format(self.file_id()), FileServerErrorCode.FILE_NOT_READABLE)
                     
                     self._total_chunks = node.available_chunks()
                     if not node.writable() or self._total_chunks >= num_chunks:
@@ -623,6 +623,10 @@ class FileCache(object):
             if node.removed():
                 raise FileCacheError('Cannot resize removed file [{}]'.format(file_id))
 
+            if size_on_disk > self.max_file_size():
+                node.set_error()
+                raise FileCacheError('File [{}] size [{}B] greater than max size [{}B]'.format(file_id, size_on_disk, self.max_file_size()), FileServerErrorCode.FILE_TOO_LARGE)
+
             if size_on_disk > alloc_space:
                 extra_space = size_on_disk - alloc_space
                 logging.debug('Allocate [{}B] extra space for file [{}]'.format(extra_space, file_id))
@@ -776,8 +780,6 @@ class FileCache(object):
             return
         if size < 0:
             raise FileCacheError('Invalid size!', FileServerErrorCode.INTERNAL_ERROR)
-        if size > self._max_file_size:
-            raise FileCacheError('File size too large!', FileServerErrorCode.FILE_TOO_LARGE)
         
         with self._index_lock:
             if self.cache_free_space() >= size:

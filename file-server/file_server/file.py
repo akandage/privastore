@@ -17,6 +17,7 @@ class File(object):
         self._file_id = file_id or self.generate_file_id()
         self._file_path = os.path.join(path, self._file_id)
         self._mode = mode
+        self._error = False
         self._modified = False
         self._closed = False
         self._chunk_size = chunk_size
@@ -130,6 +131,9 @@ class File(object):
     def size_on_disk(self) -> int:
         return self._size_on_disk
 
+    def error(self) -> bool:
+        return self._error
+
     def modified(self) -> bool:
         return self._modified
 
@@ -140,6 +144,10 @@ class File(object):
         self._closed = True
 
     def seek(self, offset: int) -> None:
+        if self.error():
+            raise FileError('Cannot seek file [{}] in error state'.format(self.file_id()))
+        if self.closed():
+            raise FileError('File closed')
         if offset < 0:
             raise FileError('Cannot seek to offset [{}]'.format(offset), FileServerErrorCode.INVALID_SEEK_OFFSET)
         chunk_offset = 0
@@ -160,6 +168,10 @@ class File(object):
             chunk_start = next_chunk
     
     def seek_chunk(self, offset: int) -> None:
+        if self.error():
+            raise FileError('Cannot seek file [{}] in error state'.format(self.file_id()))
+        if self.closed():
+            raise FileError('File closed')
         if offset < 0 or offset > self.total_chunks():
             raise FileError('Cannot seek to chunk [{}]'.format(offset), FileServerErrorCode.INVALID_CHUNK_NUM)
         self._chunks_read = offset
@@ -174,6 +186,10 @@ class File(object):
         '''
             Implement this so it behaves like file-like object.
         '''
+        if self.error():
+            raise FileError('Cannot write file [{}] in error state'.format(self.file_id()))
+        if self.closed():
+            raise FileError('File closed')
         data_len = len(data)
         if data_len == 0:
             return 0
@@ -185,7 +201,11 @@ class File(object):
             num_chunks = wbuf_len // chunk_size
             for offset in range(0, num_chunks*chunk_size, chunk_size):
                 end = offset + chunk_size
-                self.append_chunk(self._write_buffer[offset:end])
+                try:
+                    self.append_chunk(self._write_buffer[offset:end])
+                except Exception as e:
+                    self._error = True
+                    raise e
             if end < wbuf_len:
                 self._write_buffer = self._write_buffer[end:]
             else:
@@ -193,6 +213,10 @@ class File(object):
         return data_len
 
     def append_chunk(self, chunk_bytes: bytes) -> None:
+        if self.error():
+            raise FileError('Cannot write file [{}] in error state'.format(self.file_id()))
+        if self.closed():
+            raise FileError('File closed')
         if self.closed():
             raise FileError('File closed')
         if self._mode != 'w' and self._mode != 'a':
@@ -213,6 +237,10 @@ class File(object):
         '''
             Implement this so it behaves like file-like object.
         '''
+        if self.error():
+            raise FileError('Cannot read file [{}] in error state'.format(self.file_id()))
+        if self.closed():
+            raise FileError('File closed')
         if size is not None:
             if size < 0:
                 raise FileError('Invalid read size!')
@@ -245,6 +273,8 @@ class File(object):
         return buf
 
     def read_chunk(self) -> bytes:
+        if self.error():
+            raise FileError('Cannot read file [{}] in error state'.format(self.file_id()))
         if self.closed():
             raise FileError('File closed')
         if self._mode != 'r':
@@ -266,11 +296,22 @@ class File(object):
         '''
             Implement this so it behaves like file-like object (no-op).
         '''
+        if self.error():
+            raise FileError('Cannot flush file [{}] in error state'.format(self.file_id()))
+        if self.closed():
+            raise FileError('File closed')
         if len(self._write_buffer) > 0:
-            self.append_chunk(self._write_buffer)
+            try:
+                self.append_chunk(self._write_buffer)
+            except Exception as e:
+                self._error = True
+                raise e
             self._write_buffer = bytes()
 
     def close(self) -> None:
+        if self.error():
+            self.set_closed()
+            raise FileError('Closed file [{}] in error state'.format(self.file_id()))
         if self.closed():
             return
 
@@ -282,7 +323,8 @@ class File(object):
                 self.write_metadata_file()
         except Exception as e:
             error = e
+            self._error = True
         
         self.set_closed()
         if error is not None:
-            raise e
+            raise error
