@@ -271,7 +271,18 @@ class File(object):
             self._write_buffer = bytes()
 
     def close(self) -> None:
-        if not self.closed() and self.modified() and (self._mode == 'w' or self._mode == 'a'):
-            self.flush()
-            self.write_metadata_file()
+        if self.closed():
+            return
+
+        error = None
+
+        try:
+            if self.modified() and (self._mode == 'w' or self._mode == 'a'):
+                self.flush()
+                self.write_metadata_file()
+        except Exception as e:
+            error = e
+        
         self.set_closed()
+        if error is not None:
+            raise e
