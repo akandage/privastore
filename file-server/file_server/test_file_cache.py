@@ -11,7 +11,7 @@ class TestFileCache(unittest.TestCase):
 
     def cleanup(self):
         try:
-            shutil.rmtree(self.cache.cache_path())
+            shutil.rmtree('test_file_cache')
         except:
             pass
     
@@ -162,7 +162,7 @@ class TestFileCache(unittest.TestCase):
             self.cache.write_file(alloc_space=4096)
             self.fail('Expected insufficient space in cache error')
         except FileCacheError as e:
-            self.assertEqual('Insufficient space in cache', str(e))
+            self.assertEqual(e.error_code(), FileServerErrorCode.INSUFFICIENT_SPACE)
 
         self.assertTrue(self.cache.has_file(f1.file_id()))
         self.assertTrue(self.cache.has_file(f2.file_id()))
@@ -186,6 +186,52 @@ class TestFileCache(unittest.TestCase):
         self.assertFalse(self.cache.has_file(f3.file_id()))
         self.assertTrue(self.cache.has_file(f4.file_id()))
     
+    def test_concurrent_write(self):
+        cache_config = {
+            'store-path': 'test_file_cache',
+            'store-size': '4KB',
+            'chunk-size': '1KB'
+        }
+        self.cache = FileCache(cache_config)
+        self.assertEqual(self.cache.cache_used(), 0)
+        self.assertEqual(self.cache.cache_size(), 4096)
+        writer1_ok = Event()
+        writer2_ok = Event()
+        def writer1(ok: Event):
+            for i in range(100):
+                wfile = self.cache.write_file()
+                rfile = self.cache.read_file(wfile.file_id())
+                data = random.randbytes(random.randint(1,2*1024))
+                wfile.write(data)
+                self.cache.close_file(wfile)
+                r = rfile.read()
+                if r != data:
+                    return
+                self.cache.close_file(rfile)
+            ok.set()
+        def writer2(ok: Event):
+            for i in range(100):
+                wfile = self.cache.write_file()
+                rfile = self.cache.read_file(wfile.file_id())
+                data = random.randbytes(random.randint(1,2*1024))
+                wfile.write(data)
+                self.cache.close_file(wfile)
+                r = rfile.read()
+                if r != data:
+                    return
+                self.cache.close_file(rfile)
+                
+            ok.set()
+            
+        t1 = Thread(target=writer1, args=(writer1_ok,))
+        t2 = Thread(target=writer2, args=(writer2_ok,))
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
+        self.assertTrue(writer1_ok.is_set())
+        self.assertTrue(writer2_ok.is_set())
+
     def test_concurrent_read_write(self):
         data_size = 4*1024 + 50
         data = random.randbytes(data_size)
@@ -245,7 +291,6 @@ class TestFileCache(unittest.TestCase):
             self.assertTrue(writer_ok.is_set())
             self.cache.remove_file_by_id(file_id)
     
-
     def test_concurrent_read_write_error(self):
         for _ in range(100):
             cache_config = {

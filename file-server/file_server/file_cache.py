@@ -139,7 +139,7 @@ class FileCache(object):
                     raise FileCacheError('Cannot remove reader. File [{}] has no readers!'.format(self.file_id()))
 
                 self._num_readers -= 1
-                self.set_removable(True)
+                # self.set_removable(True)
 
         def reader_wait(self, timeout: float = None):
             with self.lock:
@@ -165,7 +165,7 @@ class FileCache(object):
                     raise FileCacheError('Cannot remove writer. File [{}] has no writers!'.format(self.file_id()))
 
                 self._num_writers = 0
-                self.set_removable(True)
+                # self.set_removable(True)
                 self._readers.notify_all()
 
         def set_error(self):
@@ -305,10 +305,11 @@ class FileCache(object):
             if curr_size > prev_size:
                 file_size = self.file_size()
                 total_chunks = self.total_chunks()
+
+                if curr_size > node.alloc_space():
+                    node.index().cache().resize_node(node, curr_size)
+                
                 with node.lock:
-                    if curr_size > node.alloc_space():
-                        node.index().cache().resize_node(node, curr_size)
-                    
                     node.set_available_bytes(file_size)
                     node.set_used_space(curr_size)
                     node.set_available_chunks(total_chunks)
@@ -440,16 +441,12 @@ class FileCache(object):
         return self._cache_size
     
     def cache_used(self) -> int:
-        cache_used = 0
         with self._index_lock:
-            cache_used = self._cache_used
-        return cache_used
+            return self._cache_used
     
     def cache_free_space(self) -> int:
-        free_space = 0
         with self._index_lock:
-            free_space = max(0, self._cache_size - self._cache_used)
-        return free_space
+            return max(0, self._cache_size - self._cache_used)
     
     def file_chunk_size(self) -> int:
         return self._chunk_size
@@ -614,43 +611,42 @@ class FileCache(object):
 
     '''
     def resize_node(self, node: 'FileCache.IndexNode', size_on_disk: int) -> None:
-        with node.lock:
-            file_id = node.file_id()
-            alloc_space = node.alloc_space()
+        with self._index_lock:
+            with node.lock:
+                file_id = node.file_id()
+                alloc_space = node.alloc_space()
 
-            if node.error():
-                raise FileCacheError('Cannot resize file [{}] in error state'.format(file_id))
-            if node.removed():
-                raise FileCacheError('Cannot resize removed file [{}]'.format(file_id))
+                if node.error():
+                    raise FileCacheError('Cannot resize file [{}] in error state'.format(file_id))
+                if node.removed():
+                    raise FileCacheError('Cannot resize removed file [{}]'.format(file_id))
 
-            if size_on_disk > self.max_file_size():
-                node.set_error()
-                raise FileCacheError('File [{}] size [{}B] greater than max size [{}B]'.format(file_id, size_on_disk, self.max_file_size()), FileServerErrorCode.FILE_TOO_LARGE)
-
-            if size_on_disk > alloc_space:
-                extra_space = size_on_disk - alloc_space
-                logging.debug('Allocate [{}B] extra space for file [{}]'.format(extra_space, file_id))
-
-                try:
-                    self.ensure_cache_space(extra_space)
-                except Exception as e:
-                    logging.error('Error allocating [{}B] extra space for file [{}]'.format(extra_space, file_id))
+                if size_on_disk > self.max_file_size():
                     node.set_error()
-                    raise e
+                    raise FileCacheError('File [{}] size [{}B] greater than max size [{}B]'.format(file_id, size_on_disk, self.max_file_size()), FileServerErrorCode.FILE_TOO_LARGE)
 
-                node.set_alloc_space(size_on_disk)
-                with self._index_lock:
-                    self._cache_used += extra_space
-                logging.debug('Allocated [{}B] extra space for file [{}]'.format(extra_space, file_id))
-            elif not node.writable():
-                extra_space = alloc_space - size_on_disk
+                if size_on_disk > alloc_space:
+                    extra_space = size_on_disk - alloc_space
+                    logging.debug('Allocate [{}B] extra space for file [{}]'.format(extra_space, file_id))
 
-                if extra_space > 0:
-                    logging.debug('Free [{}B] extra space for file [{}]'.format(extra_space, file_id))
+                    try:
+                        self.ensure_cache_space(extra_space)
+                    except Exception as e:
+                        logging.error('Error allocating [{}B] extra space for file [{}]'.format(extra_space, file_id))
+                        node.set_error()
+                        raise e
+
                     node.set_alloc_space(size_on_disk)
-                    with self._index_lock:
+                    self._cache_used += extra_space
+                    logging.debug('Allocated [{}B] extra space for file [{}]'.format(extra_space, file_id))
+                elif not node.writable():
+                    extra_space = alloc_space - size_on_disk
+
+                    if extra_space > 0:
+                        logging.debug('Free [{}B] extra space for file [{}]'.format(extra_space, file_id))
+                        node.set_alloc_space(size_on_disk)
                         self._cache_used -= extra_space
-                    logging.debug('Free [{}B] extra space for file [{}]'.format(extra_space, file_id))
+                        logging.debug('Free [{}B] extra space for file [{}]'.format(extra_space, file_id))
 
     '''
         Close file in cache.
@@ -747,15 +743,14 @@ class FileCache(object):
                 self._index.pop_node(file_id)
             else:
                 raise FileCacheError('File [{}] already removed'.format(file_id), FileServerErrorCode.INTERNAL_ERROR)
+            self._cache_used -= alloc_space
 
         try:
             shutil.rmtree(os.path.join(self._cache_path, file_id))
         except Exception as e:
             logging.warn('Could not remove file [{}] from cache: {}'.format(file_id, str(e)))
 
-        logging.debug('Removed file [{}] from cache'.format(file_id))
-        self._cache_used -= alloc_space
-        logging.debug('Reclaimed [{}] space in cache'.format(str_mem_size(alloc_space)))
+        logging.debug('Removed file [{}] from cache. Reclaimed [{}B] space in cache'.format(file_id, alloc_space))
 
     '''
         Remove the LRU (least recently used file) from the cache to free up space.
@@ -782,10 +777,12 @@ class FileCache(object):
             raise FileCacheError('Invalid size!', FileServerErrorCode.INTERNAL_ERROR)
         
         with self._index_lock:
-            if self.cache_free_space() >= size:
+            free_space = self.cache_free_space()
+
+            if free_space >= size:
                 return
             elif not self._file_eviction:
-                raise FileCacheError('Insufficient space in cache', FileServerErrorCode.INSUFFICIENT_SPACE)
+                raise FileCacheError('Cannot allocate [{}B] space. Insufficient space [{}B] in cache'.format(size, free_space), FileServerErrorCode.INSUFFICIENT_SPACE)
             
             #
             # First check if we can make enough space available before
@@ -798,7 +795,7 @@ class FileCache(object):
             remove_nodes: list['FileCache.IndexNode'] = []
 
             try:
-                while total_size < size and curr_node is not None:
+                while free_space+total_size < size and curr_node is not None:
                     curr_node.lock.acquire()
                     next_node = curr_node._next
                     alloc_space = curr_node.alloc_space()
@@ -810,8 +807,8 @@ class FileCache(object):
                         curr_node.lock.release()
                     curr_node = next_node
 
-                if total_size < size:
-                    raise FileCacheError('Insufficient space in cache', FileServerErrorCode.INSUFFICIENT_SPACE)
+                if free_space+total_size < size:
+                    raise FileCacheError('Cannot allocate [{}B] space. Insufficient space [{}B] in cache'.format(size, free_space+total_size), FileServerErrorCode.INSUFFICIENT_SPACE)
 
                 #
                 # We can free enough space, remove the files.
@@ -819,9 +816,9 @@ class FileCache(object):
 
                 for node in remove_nodes:
                     self.remove_file_by_node(node)
-                    logging.debug('Evicted file [{}] from cache, recovered [{}] space'.format(node.file_id(), str_mem_size(node.alloc_space())))
+                    logging.debug('Evicted file [{}] from cache, recovered [{}B] space'.format(node.file_id(), node.alloc_space()))
                 
-                logging.debug('Freed [{}] space in cache'.format(str_mem_size(total_size)))
+                logging.debug('Freed [{}B] space in cache'.format(total_size))
             finally:
                 for node in remove_nodes:
                     try:
