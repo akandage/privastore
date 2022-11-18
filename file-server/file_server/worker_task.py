@@ -1,6 +1,6 @@
 from .daemon import Daemon
 import logging
-from threading import Event
+from threading import Event, Lock
 from typing import Optional
 
 class Worker(Daemon):
@@ -14,6 +14,7 @@ class WorkerTask(object):
         self._cancelled: Event = Event()
         self._processed: Event = Event()
         self._worker: Worker = None
+        self._lock: Lock = Lock()
     
     def task_code(self) -> int:
         '''
@@ -32,7 +33,8 @@ class WorkerTask(object):
             For use by the worker. Notify listeners that an error occurred while
             processing this message.
         '''
-        self._error = error
+        with self._lock:
+            self._error = error
         self._processed.set()
     
     def set_processed(self):
@@ -46,7 +48,8 @@ class WorkerTask(object):
         '''
             For use by the worker. Set the worker that processed this task.
         '''
-        self._worker = worker
+        with self._lock:
+            self._worker = worker
 
     def wait_processed(self, timeout: float=None) -> bool:
         '''
@@ -66,14 +69,16 @@ class WorkerTask(object):
         '''
             Return the worker that processed this message.
         '''
-        return self._worker
+        with self._lock:
+            return self._worker
 
     def error(self) -> Optional[Exception]:
         '''
             If an error occurred while processing this message, return it.
             Return None otherwise.
         '''
-        return self._error
+        with self._lock:
+            return self._error
 
     def is_processed(self) -> bool:
         return self._processed.is_set()
