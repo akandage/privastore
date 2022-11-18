@@ -68,17 +68,17 @@ class AsyncController(Daemon):
             raise FileUploadError('Could send task [{}] to workers. Upload queue is full!'.format(str(task)), FileServerErrorCode.REMOTE_UPLOAD_ERROR)
         logging.debug('Sent task [{}] to upload workers'.format(str(task)))
 
-    def start_async_upload(self, file_path: list[str], file_name: str, file_version: int, file_size: int, local_file_id: str) -> TransferFileTask:
+    def start_async_upload(self, local_file_id: str, file_size: int) -> TransferFileTask:
         '''
             Start asynchronously uploading the given file to the remote server.
         '''
         with self._lock:
             if local_file_id in self._uploads:
-                raise FileUploadError('File [{}] is already being async uploaded'.format(str_path(file_path + [file_name])))
+                raise FileUploadError('File [{}] is already being async uploaded'.format(local_file_id))
             
-            self._uploads[local_file_id] = task = TransferFileTask(file_path, file_name, file_version, file_size, local_file_id)
+            self._uploads[local_file_id] = task = TransferFileTask(local_file_id, file_size)
             
-        logging.debug('Starting async upload of file [{}]'.format(str_path(file_path + [file_name])))
+        logging.debug('Starting async upload of file [{}]'.format(local_file_id))
         
         try:
             self._upload_queue.put(task, block=True, timeout=self.worker_io_timeout())
@@ -87,7 +87,7 @@ class AsyncController(Daemon):
                 self._uploads.pop(local_file_id)
             raise FileUploadError('Upload worker queue is full!', FileServerErrorCode.REMOTE_UPLOAD_ERROR)
     
-        logging.debug('Started async upload of file [{}]'.format(str_path(file_path + [file_name])))
+        logging.debug('Started async upload of file [{}]'.format(local_file_id))
         return task
 
     def is_async_upload(self, local_file_id: str) -> bool:

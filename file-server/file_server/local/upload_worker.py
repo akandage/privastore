@@ -37,9 +37,12 @@ class UploadWorker(AsyncWorker):
         remote_file_id = self.remote_client().create_file(task.file_size(), timeout=self.io_timeout())
         logging.debug('Created remote file [{}]'.format(remote_file_id))
 
+        if self.is_current_task_cancelled():
+            raise FileUploadError('File [{}] upload cancelled'.format(task.local_file_id()), FileServerErrorCode.REMOTE_UPLOAD_CANCELLED)
+
         conn = self.db_conn_mgr().db_connect()
         try:
-            self.dao_factory().file_dao(conn).update_file_remote(task.file_path(), task.file_name(), task.file_version(), remote_file_id, FileTransferStatus.TRANSFERRING_DATA)
+            self.dao_factory().file_dao(conn).update_file_remote(task.local_file_id(), remote_file_id, FileTransferStatus.TRANSFERRING_DATA)
             logging.debug('Updated remote transfer status')
         finally:
             self.db_conn_mgr().db_close(conn)
@@ -50,6 +53,8 @@ class UploadWorker(AsyncWorker):
         try:
             chunks_sent = 0
             while True:
+                if self.is_current_task_cancelled():
+                    raise FileUploadError('File [{}] upload cancelled'.format(task.local_file_id()), FileServerErrorCode.REMOTE_UPLOAD_CANCELLED)
                 chunk_data = file.read_chunk()
                 if len(chunk_data) == 0:
                     break
@@ -62,7 +67,7 @@ class UploadWorker(AsyncWorker):
         
         conn = self.db_conn_mgr().db_connect()
         try:
-            self.dao_factory().file_dao(conn).update_file_transfer_status(task.file_path(), task.file_name(), task.file_version(), remote_transfer_status=FileTransferStatus.TRANSFERRED_DATA)
+            self.dao_factory().file_dao(conn).update_file_remote(task.local_file_id(), transfer_status=FileTransferStatus.TRANSFERRED_DATA)
             logging.debug('Updated remote transfer status')
         finally:
             self.db_conn_mgr().db_close(conn)

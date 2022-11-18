@@ -21,6 +21,12 @@ class Worker(Daemon):
         self._task_queue.put(task, block=block, timeout=timeout)
         logging.debug('Sent task [{}] to worker [{}]'.format(self.name(), str(task)))
 
+    def is_current_task_cancelled(self):
+        # Don't need a lock here, should only be called by worker.
+        if self._curr_task is not None:
+            return self._curr_task.is_cancelled()
+        return False
+
     def cancel_current_task(self):
         with self._lock:
             if self._curr_task is not None:

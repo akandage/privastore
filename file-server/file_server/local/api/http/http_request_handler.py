@@ -6,6 +6,7 @@ from ....api.http.http_request_handler import CONNECTION_HEADER, CONNECTION_CLOS
 import json
 import logging
 import urllib.parse
+from ....util.logging import log_exception_stack
 
 DIRECTORY_PATH = '/1/directory'
 DIRECTORY_PATH_LEN = len(DIRECTORY_PATH)
@@ -119,6 +120,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             return
         except Exception as e:
             self.handle_internal_error(e)
+            log_exception_stack()
             return
 
         self.send_response(HTTPStatus.OK)
@@ -175,6 +177,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             return
         except Exception as e:
             self.handle_internal_error(e)
+            log_exception_stack()
             return
 
         self.send_response(HTTPStatus.OK)
@@ -231,6 +234,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             return
         except Exception as e:
             self.handle_internal_error(e)
+            log_exception_stack()
             return
 
         self.send_response(HTTPStatus.OK)
@@ -292,6 +296,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             self.handle_file_error(e)
         except Exception as e:
             self.handle_internal_error(e)
+            log_exception_stack()
     
     def send_download_file_headers(self, file_id, file_type, file_size):
         logging.debug('Send download file headers [{}] [{}] [{}]'.format(file_id, file_type.mime_type, file_size))

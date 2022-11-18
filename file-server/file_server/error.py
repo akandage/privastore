@@ -42,6 +42,7 @@ class FileServerErrorCode:
     REMOTE_ERROR = "REMOTE_ERROR"
     REMOTE_AUTH_ERROR = "REMOTE_AUTH_ERROR"
     REMOTE_UPLOAD_ERROR = "REMOTE_UPLOAD_ERROR"
+    REMOTE_UPLOAD_CANCELLED = "REMOTE_UPLOAD_CANCELLED"
 
 class FileServerError(Exception):
     def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):

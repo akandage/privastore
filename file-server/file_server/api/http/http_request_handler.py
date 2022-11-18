@@ -8,6 +8,7 @@ import urllib
 import urllib.parse
 from ...util.sock import SocketWrapper
 from typing import Optional
+from ...util.logging import log_exception_stack
 
 AUTHORIZATION_HEADER = 'Authorization'
 CONNECTION_HEADER = 'Connection'
@@ -102,11 +103,11 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
         self.send_error_response(HTTPStatus.INTERNAL_SERVER_ERROR, e)
 
     def handle_session_error(self, e: SessionError):
-            logging.error('Session error: {}'.format(str(e)))
-            if e.error_code() == FileServerErrorCode.SESSION_NOT_FOUND:
-                self.send_error_response(HTTPStatus.UNAUTHORIZED, e)
-            else:
-                self.send_error_response(HTTPStatus.BAD_REQUEST, e)
+        logging.error('Session error: {}'.format(str(e)))
+        if e.error_code() == FileServerErrorCode.SESSION_NOT_FOUND:
+            self.send_error_response(HTTPStatus.UNAUTHORIZED, e)
+        else:
+            self.send_error_response(HTTPStatus.BAD_REQUEST, e)
 
     def parse_path(self):
         if self.url_path is not None and self.url_query is not None:
@@ -257,6 +258,7 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
             return False
         except Exception as e:
             self.handle_internal_error(e)
+            log_exception_stack()
             return False
     
     def handle_login_user(self):
@@ -288,6 +290,7 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
             return
         except Exception as e:
             self.handle_internal_error(e)
+            log_exception_stack()
             return
 
         self.send_response(HTTPStatus.OK)
@@ -351,6 +354,7 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
             return
         except Exception as e:
             self.handle_internal_error(e)
+            log_exception_stack()
             return
 
         self.send_response(HTTPStatus.OK)

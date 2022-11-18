@@ -74,7 +74,7 @@ class SqliteFileDAO(FileDAO):
             except:
                 pass
     
-    def update_file_local(self, path, file_name, version, local_id, file_size, size_on_disk, total_chunks, transfer_status):
+    def update_file_local(self, path, file_name, version, local_id, file_size, size_on_disk, total_chunks, transfer_status = FileTransferStatus.NONE):
         if len(file_name) == 0:
             raise FileError('File name can\'t be empty!', FileServerErrorCode.FILE_NAME_EMPTY)
         if not File.is_valid_file_id(local_id):
@@ -119,26 +119,28 @@ class SqliteFileDAO(FileDAO):
             except:
                 pass
     
-    def update_file_remote(self, path, file_name, version, remote_id, transfer_status):
-        if len(file_name) == 0:
-            raise FileError('File name can\'t be empty!', FileServerErrorCode.FILE_NAME_EMPTY)
-        if not File.is_valid_file_id(remote_id):
+    def update_file_remote(self, local_id, remote_id = None, transfer_status = FileTransferStatus.NONE):
+        if not File.is_valid_file_id(local_id):
+            raise FileError('Invalid local file id!', FileServerErrorCode.INVALID_FILE_ID)
+        if remote_id is not None and not File.is_valid_file_id(remote_id):
             raise FileError('Invalid remote file id!', FileServerErrorCode.INVALID_FILE_ID)
         cur = self._conn.cursor()
         try:
             try:
-                cur.execute('BEGIN')
-                directory_id = traverse_path(cur, path)
-                file_id = query_file_id(cur, directory_id, file_name)
-                if file_id is None:
-                    raise FileError('File [{}] not found in path [{}]'.format(file_name, str_path(path)), FileServerErrorCode.FILE_NOT_FOUND)
-                cur.execute('''
-                        UPDATE ps_file_version 
-                        SET remote_id = ?, remote_transfer_status = ? 
-                        WHERE file_id = ? AND version = ?
-                    ''', (remote_id, transfer_status.value, file_id, version))
+                if remote_id is not None:
+                    cur.execute('''
+                            UPDATE ps_file_version 
+                            SET remote_id = ?, remote_transfer_status = ? 
+                            WHERE local_id = ?
+                        ''', (remote_id, transfer_status.value, local_id))
+                else:
+                    cur.execute('''
+                            UPDATE ps_file_version 
+                            SET remote_transfer_status = ? 
+                            WHERE local_id = ?
+                        ''', (transfer_status.value ,local_id))
                 if cur.rowcount != 1:
-                    raise FileError('File [{}] version [{}] not found!'.format(str_path(path + [file_name]), version), FileServerErrorCode.FILE_VERSION_NOT_FOUND)
+                    raise FileError('File [{}] not found!'.format(local_id), FileServerErrorCode.FILE_VERSION_NOT_FOUND)
                 self._conn.commit()
             except DirectoryError as e:
                 logging.error('Directory error: {}'.format(str(e)))

@@ -13,7 +13,7 @@ class WorkerTask(object):
         self._error: Exception = None
         self._cancelled: Event = Event()
         self._processed: Event = Event()
-        self._worker: Daemon = None
+        self._worker: Worker = None
     
     def task_code(self) -> int:
         '''

@@ -7,8 +7,8 @@ class TransferChunkTask(FileTask):
 
     TASK_CODE = 2
 
-    def __init__(self, file_path: list[str], file_name: str, file_version: int, local_file_id: str, chunk_data: bytes, chunk_offset: int = 0):
-        super().__init__(file_path, file_name, file_version)
+    def __init__(self, local_file_id: str, chunk_data: bytes, chunk_offset: int = 0):
+        super().__init__(local_file_id)
         self._chunk_data = chunk_data
         self._chunk_offset = chunk_offset
     
