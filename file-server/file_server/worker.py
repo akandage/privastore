@@ -3,6 +3,7 @@ import logging
 from queue import Queue
 from threading import RLock
 from typing import Optional
+from .util.logging import log_exception_stack
 from .worker_task import PingWorkerTask, WorkerTask
 
 class Worker(Daemon):
@@ -63,6 +64,7 @@ class Worker(Daemon):
                     task.set_processed()
                 except Exception as e:
                     logging.error('Worker [{}] - error while processing task [{}]: {}'.format(self.name(), str(task), str(e)))
+                    log_exception_stack()
                     task.set_error(e)
             
             with self._lock:

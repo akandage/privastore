@@ -25,9 +25,10 @@ class UploadWorker(AsyncWorker):
     def process_task(self, task: WorkerTask) -> None:
         if task.task_code() == TransferChunkTask.TASK_CODE:
             self.do_transfer_chunk(task)
-        if task.task_code() == TransferFileTask.TASK_CODE:
+        elif task.task_code() == TransferFileTask.TASK_CODE:
             self.do_transfer_file(task)
-        raise WorkerError('Unrecognized task code [{}]'.format(task.task_code()))
+        else:
+            raise WorkerError('Unrecognized task code [{}]'.format(task.task_code()))
 
     def do_transfer_chunk(self, task: TransferChunkTask) -> None:
         pass

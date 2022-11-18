@@ -5,8 +5,11 @@ import requests
 import urllib
 import uuid
 from .local_server import LocalServer
+from .remote_server import RemoteServer
 from .session import Sessions
 from .test_server import TestServer, HOSTNAME, PORT, URL
+
+REMOTE_PORT = 9090
 
 class TestLocalServer(TestServer):
     
@@ -54,8 +57,64 @@ class TestLocalServer(TestServer):
         }
         return self.config
 
+    def get_remote_config(self):
+        if self.remote_config:
+            return self.remote_config
+
+        self.remote_config = {
+            'logging': {
+              'log-level': 'DEBUG'  
+            },
+            'api': {
+                'api-type': 'http',
+                'api-hostname': HOSTNAME,
+                'api-port': str(REMOTE_PORT)
+            },
+            'auth': {
+                'auth-type': 'config',
+                'username': 'psadmin',
+                'password-hash': '67755C157F6CF48FA66C5193AEEBC73A32EA92EDFD301E678EFE9C8D727F13DD'
+            },
+            'store': {
+                'store-path': os.path.join(self.get_test_dir(), 'remote' 'cache'),
+                'max-file-size': '500MB',
+                'store-size': '1GB',
+                'chunk-size': '1.5MB',
+                'enable-file-eviction': '0'
+            },
+            'db': {
+                'db-type': 'sqlite',
+                'sqlite-db-path': os.path.join(self.get_test_dir(), 'remote', 'remote_server.db'),
+                'connection-pool-size': '1'
+            },
+            'session': {
+                'session-expiry-time': '300',
+                'session-cleanup-interval': '60'
+            }
+        }
+        return self.remote_config
+
+    def setUp(self):
+        super().setUp()
+        os.mkdir(os.path.join(self.get_test_dir(), 'remote'))
+        self.remote_config = None
+        self.remote_config = self.get_remote_config()
+        self.remote_server = None
+
+    def tearDown(self):
+        if self.remote_server is not None:
+            self.remote_server.stop()
+            self.remote_server.join()
+        super().tearDown()
+
     def server_factory(self):
         return LocalServer(self.get_config())
+
+    def start_remote_server(self):
+        self.remote_server = RemoteServer(self.get_remote_config())
+        self.remote_server.setup_db()
+        self.remote_server.start()
+        self.remote_server.wait_started()
 
     def test_session_api(self):
         self.start_server()
@@ -148,7 +207,17 @@ class TestLocalServer(TestServer):
         self.assertEqual(r, [])
 
     def test_file_api(self):
+        self.config['remote'] = {
+            'enable-remote-server': '1',
+            'worker-io-timeout': '90',
+            'worker-queue-size': '100',
+            'worker-retry-interval': '1',
+            'num-download-workers': '1',
+            'num-upload-workers': '1'
+        }
+
         self.start_server()
+        self.start_remote_server()
 
         r = requests.post(URL.format('/1/login'), auth=('psadmin', 'psadmin'))
         self.assertEqual(r.status_code, HTTPStatus.OK)

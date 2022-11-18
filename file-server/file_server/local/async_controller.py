@@ -24,7 +24,7 @@ class AsyncController(Daemon):
         self._db_conn_mgr = db_conn_mgr
         self._store = store
         self._uploads: dict[str, WorkerTask] = dict()
-        self._lock = RLock
+        self._lock = RLock()
 
         self._remote_enabled = config_bool(remote_config.get('enable-remote-server', '1'))
         self._num_upload_workers = int(remote_config.get('num-upload-workers', '1'))

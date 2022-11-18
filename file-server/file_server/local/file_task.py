@@ -21,11 +21,11 @@ class FileTask(WorkerTask):
         return self._file_path
 
     def file_name(self) -> str:
-        return self.file_name
+        return self._file_name
     
     def file_version(self) -> int:
         return self._file_version
 
     def __str__(self):
-        return '{} path=[{}] file-version=[{}] file-size=[{}]'.format(self.task_name(), str_path(self.file_path() + [self.file_name()]), 
+        return '{} path=[{}] file-version=[{}]'.format(self.task_name(), str_path(self.file_path() + [self.file_name()]), 
             self.file_version())
