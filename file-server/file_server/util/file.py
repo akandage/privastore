@@ -40,6 +40,18 @@ def chunked_copy(in_file: BinaryIO, out_file: BinaryIO, file_size: int, chunk_si
     out_file.flush()
     return bytes_copied
 
+def read_all(file: BinaryIO, read_len: int):
+    read = 0
+    buf = bytes()
+    while read < read_len:
+        r = file.read(read_len-read)
+        r_len = len(r)
+        if r_len == 0:
+            raise Exception('No data read!')
+        buf += r
+        read += r_len
+    return buf
+
 def write_all(file: BinaryIO, data: bytes):
     data_len = len(data)
     written = 0

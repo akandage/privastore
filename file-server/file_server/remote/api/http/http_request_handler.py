@@ -6,7 +6,7 @@ from ....api.http.http_request_handler import BaseHttpApiRequestHandler
 from ....api.http.http_request_handler import CONNECTION_HEADER, CONNECTION_CLOSE, CONTENT_TYPE_HEADER, CONTENT_TYPE_JSON, CONTENT_LENGTH_HEADER
 import json
 import logging
-import urllib.parse
+from ....util.file import read_all
 
 EPOCH_NO_HEADER = 'x-privastore-epoch-no'
 FILE_ID_HEADER = 'x-privastore-remote-file-id'
@@ -337,7 +337,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             self.send_error_response(HTTPStatus.BAD_REQUEST, FileError('File chunk too large', FileServerErrorCode.FILE_CHUNK_TOO_LARGE))
             return
         
-        chunk = self.rfile.read(self.content_len)
+        chunk = read_all(self.rfile, self.content_len)
         if len(chunk) < self.content_len:
             self.send_error_response(HTTPStatus.BAD_REQUEST, 'Not all chunk bytes could be read!')
             return
