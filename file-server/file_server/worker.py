@@ -8,7 +8,7 @@ from .worker_task import PingWorkerTask, WorkerTask
 
 class Worker(Daemon):
     
-    def __init__(self, worker_name: str, worker_index: int=None, task_queue: Optional[Queue[WorkerTask]] = None, completion_queue: Optional[Queue[WorkerTask]] = None, queue_size: int = 1, daemon: bool=True):
+    def __init__(self, worker_name: str, worker_index: int=None, task_queue: Optional[Queue[WorkerTask]]=None, completion_queue: Optional[Queue[WorkerTask]]=None, queue_size: int=1, daemon: bool=True):
         name = f'{worker_name}-{worker_index}' if worker_index is not None else worker_name
         super().__init__(name, daemon)
         self._task_queue: Queue[WorkerTask] = task_queue if task_queue is not None else Queue(queue_size)
@@ -17,9 +17,9 @@ class Worker(Daemon):
         self._lock: RLock = RLock()
     
     def send_task(self, task: WorkerTask, block=True, timeout=None) -> None:
-        logging.debug('Sending task [{}] to worker [{}]'.format(self.name(), str(task)))
+        logging.debug('Sending task [{}] to worker [{}]'.format(str(task), self.name()))
         self._task_queue.put(task, block=block, timeout=timeout)
-        logging.debug('Sent task [{}] to worker [{}]'.format(self.name(), str(task)))
+        logging.debug('Sent task [{}] to worker [{}]'.format(str(task), self.name()))
 
     def is_current_task_cancelled(self):
         # Don't need a lock here, should only be called by worker.

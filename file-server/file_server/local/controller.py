@@ -6,10 +6,11 @@ from ..error import FileDownloadError, FileServerErrorCode, FileUploadError
 from ..file import File
 from ..file_cache import FileCache
 from ..file_chunk import chunk_encoder, chunk_decoder
+from .file_task import FileTask
 from .file_transfer_status import FileTransferStatus
 from ..session_mgr import SessionManager
-from .transfer_file_task import TransferFileTask
 from ..util.file import chunked_copy, str_mem_size, str_path
+from ..util.logging import log_exception_stack
 import logging
 from typing import BinaryIO
 
@@ -31,6 +32,9 @@ class LocalServerController(Controller):
         self._dao_factory = dao_factory
         self._encode_chunk = encode_chunk
         self._decode_chunk = decode_chunk
+
+    def async_controller(self):
+        return self._async_controller
 
     def dao_factory(self):
         return self._dao_factory
@@ -79,8 +83,7 @@ class LocalServerController(Controller):
             raise Exception('Not implemented!')
 
         upload_file: File = None
-        remote_upload_task: TransferFileTask = None
-        local_file_id: str = None
+        file_uploaded: bool = False
 
         try:
             #
@@ -103,7 +106,9 @@ class LocalServerController(Controller):
             logging.debug('Opened file for writing in cache [{}]'.format(upload_file.file_id()))
 
             if self.remote_enabled():
-                remote_upload_task = self._async_controller.start_async_upload(local_file_id, file_size)
+                if sync:
+                    # TODO: Configure timeout.
+                    self.async_controller().start_upload(local_file_id, file_size, timeout=30)
 
             #
             # Read the file in chunks of the configured chunk size and append to
@@ -149,19 +154,24 @@ class LocalServerController(Controller):
             # If this is a synced upload, make sure all data has made it to the
             # the remote server before returning a response to the caller.
             #
-            if remote_upload_task is not None:
+            if self.remote_enabled():
                 if sync:
-                    remote_upload_task.wait_processed()
-                    logging.debug('Remote upload task synced')
+                    # TODO: Configure timeout.
+                    self.async_controller().commit_upload(local_file_id, timeout=30)
         except Exception as e:
             logging.error('Could not upload file: {}'.format(str(e)))
+            log_exception_stack()
 
             #
             # Cleanup if any error occurs during the upload process.
             #
 
-            if remote_upload_task is not None:
-                self._async_controller.stop_async_upload(local_file_id)
+            if self.remote_enabled():
+                try:
+                    self.async_controller().stop_upload(local_file_id)
+                    self.async_controller().remove_upload_task(local_file_id)
+                except Exception as e:
+                    logging.warn('Could not stop file [{}] upload: {}'.format(str(e)))
 
             if upload_file is not None:
                 if not file_uploaded:

@@ -1,16 +1,12 @@
 from .async_worker import AsyncWorker
-from collections import namedtuple
+from .commit_file_task import CommitFileTask
 from .db.dao_factory import DAOFactory
 from ..db.db_conn_mgr import DbConnectionManager
-from ..error import FileError, FileServerErrorCode, FileUploadError, WorkerError
-from ..file import File
+from ..error import FileServerErrorCode, FileUploadError, WorkerError
 from ..file_cache import FileCache
 from .file_transfer_status import FileTransferStatus
-from http import HTTPStatus
 import logging
 from queue import Queue
-import requests
-import time
 from .transfer_chunk_task import TransferChunkTask
 from .transfer_file_task import TransferFileTask
 from typing import Optional
@@ -19,10 +15,13 @@ from ..worker_task import WorkerTask
 
 class UploadWorker(AsyncWorker):
 
-    def __init__(self, dao_factory: DAOFactory, db_conn_mgr: DbConnectionManager, store: FileCache, worker_index: int=None, task_queue: Optional[Queue[WorkerTask]] = None, completion_queue: Optional[Queue[WorkerTask]] = None, retry_interval: int=1, io_timeout: int=90):
-        super().__init__(dao_factory, db_conn_mgr, store, worker_index, task_queue, completion_queue, retry_interval, io_timeout)
+    def __init__(self, dao_factory: DAOFactory, db_conn_mgr: DbConnectionManager, store: FileCache, worker_index: int=None, queue_size: int=1, completion_queue: Optional[Queue[WorkerTask]] = None, retry_interval: int=1, io_timeout: int=90):
+        super().__init__(dao_factory, db_conn_mgr, store, worker_index, queue_size, completion_queue, retry_interval, io_timeout)
 
     def process_task(self, task: WorkerTask) -> None:
+        if task.task_code() == CommitFileTask.TASK_CODE:
+            # TODO
+            return
         if task.task_code() == TransferChunkTask.TASK_CODE:
             self.do_transfer_chunk(task)
         elif task.task_code() == TransferFileTask.TASK_CODE:

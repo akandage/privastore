@@ -1,18 +1,20 @@
 import configparser
+from .commit_file_task import CommitFileTask
 from ..daemon import Daemon
 from .db.dao_factory import DAOFactory
 from ..db.db_conn_mgr import DbConnectionManager
-from ..error import FileError, FileServerErrorCode, FileUploadError
+from ..error import FileServerErrorCode, FileUploadError
 from ..file import File
 from ..file_cache import FileCache
-from .file_transfer_status import FileTransferStatus
+from .file_task import FileTask
 import logging
-from queue import Queue, Full
+from queue import Queue
 from threading import RLock
+import time
 from .transfer_file_task import TransferFileTask
-from typing import Optional, Union
+from typing import Union
 from .upload_worker import UploadWorker
-from ..util.file import config_bool, str_path
+from ..util.file import config_bool
 from ..worker_task import PingWorkerTask, WorkerTask
 
 class AsyncController(Daemon):
@@ -23,8 +25,6 @@ class AsyncController(Daemon):
         self._dao_factory = dao_factory
         self._db_conn_mgr = db_conn_mgr
         self._store = store
-        self._uploads: dict[str, WorkerTask] = dict()
-        self._lock = RLock()
 
         self._remote_enabled = config_bool(remote_config.get('enable-remote-server', '1'))
         self._num_upload_workers = int(remote_config.get('num-upload-workers', '1'))
@@ -40,10 +40,16 @@ class AsyncController(Daemon):
         logging.debug('Worker retry interval: [{}s]'.format(worker_retry_interval))
 
         self._completion_queue: Queue[WorkerTask] = Queue(worker_queue_size*2)
-        self._upload_queue: Queue[WorkerTask] = Queue(worker_queue_size)
         self._upload_workers: list[UploadWorker]= []
         for i in range(self._num_upload_workers):
-            self._upload_workers.append(UploadWorker(dao_factory, db_conn_mgr, store, worker_index=i, task_queue=self._upload_queue, completion_queue=self._completion_queue, retry_interval=worker_retry_interval, io_timeout=worker_io_timeout))
+            self._upload_workers.append(UploadWorker(dao_factory, db_conn_mgr, 
+                store, worker_index=i, queue_size=worker_queue_size, 
+                completion_queue=self._completion_queue, 
+                retry_interval=worker_retry_interval, 
+                io_timeout=worker_io_timeout))
+        
+        self._upload_tasks: dict[str, FileTask] = dict()
+        self._uploads_lock: RLock = RLock()
     
     def dao_factory(self):
         return self._dao_factory
@@ -60,63 +66,67 @@ class AsyncController(Daemon):
     def worker_io_timeout(self):
         return self._worker_io_timeout
 
-    def send_to_upload_workers(self, task: WorkerTask, block=True, timeout=None) -> None:
-        logging.debug('Sending task [{}] to upload workers'.format(str(task)))
-        try:
-            self._upload_queue.put(task, block=block, timeout=timeout)
-        except Full:
-            raise FileUploadError('Could send task [{}] to workers. Upload queue is full!'.format(str(task)), FileServerErrorCode.REMOTE_UPLOAD_ERROR)
-        logging.debug('Sent task [{}] to upload workers'.format(str(task)))
-
-    def start_async_upload(self, local_file_id: str, file_size: int) -> TransferFileTask:
-        '''
-            Start asynchronously uploading the given file to the remote server.
-        '''
-        with self._lock:
-            if local_file_id in self._uploads:
-                raise FileUploadError('File [{}] is already being async uploaded'.format(local_file_id))
-            
-            self._uploads[local_file_id] = task = TransferFileTask(local_file_id, file_size)
-            
-        logging.debug('Starting async upload of file [{}]'.format(local_file_id))
-        
-        try:
-            self._upload_queue.put(task, block=True, timeout=self.worker_io_timeout())
-        except Full:
-            with self._lock:
-                self._uploads.pop(local_file_id)
-            raise FileUploadError('Upload worker queue is full!', FileServerErrorCode.REMOTE_UPLOAD_ERROR)
+    def has_upload(self, local_file_id: str):
+        with self._uploads_lock:
+            return local_file_id in self._upload_tasks
     
-        logging.debug('Started async upload of file [{}]'.format(local_file_id))
+    def add_upload_task(self, local_file_id: str, task: FileTask):
+        with self._uploads_lock:
+            if self.has_upload(local_file_id):
+                raise FileUploadError('File [{}] already being uploaded'.format(local_file_id))
+            self._upload_tasks[local_file_id] = task
+
+    def get_upload_task(self, local_file_id: str) -> FileTask:
+        with self._uploads_lock:
+            return self._upload_tasks.get(local_file_id)
+
+    def remove_upload_task(self, local_file_id: str):
+        with self._uploads_lock:
+            if local_file_id in self._upload_tasks:
+                self._upload_tasks.pop(local_file_id)
+
+    def get_upload_worker(self, local_file_id: str) -> UploadWorker:
+        return self._upload_workers[hash(local_file_id) % self._num_upload_workers]
+
+    def start_upload(self, local_file_id: str, file_size: int, timeout: float=None):
+        task = TransferFileTask(local_file_id, file_size, is_commit=False)
+        self.add_upload_task(local_file_id, task)
+        self.get_upload_worker(local_file_id).send_task(task, timeout=timeout)
         return task
 
-    def is_async_upload(self, local_file_id: str) -> bool:
-        '''
-            Check if the given file is being asynchronously uploaded to the remote server.
-        '''
-        with self._lock:
-            return local_file_id in self._uploads
+    def commit_upload(self, local_file_id: str, timeout: float=None):
+        # TODO: Epoch handling.
+        task = CommitFileTask(local_file_id, epoch_no=1)
+        self.get_upload_worker(local_file_id).send_task(task, timeout=timeout)
 
-    def stop_async_upload(self, local_file_id: str):
-        with self._lock:
-            if local_file_id in self._uploads:
-                task = self._uploads[local_file_id]
-                logging.debug('Cancelling async upload of file [{}]'.format(local_file_id))
-                task.cancel()
-            else:
-                logging.debug('File [{}] not being async uploaded'.format(local_file_id))
+    def wait_for_upload(self, local_file_id: str, timeout: float=None) -> FileTask:
+        # TODO
+        pass
+
+    def cancel_upload(self, local_file_id: str) -> FileTask:
+        with self._uploads_lock:
+            task = self.get_upload_task(local_file_id)
+            if task is None:
                 return
-                
-        try:
-            task.wait_processed()
-        except:
-            pass
+            task.cancel()
+            return task
 
-        with self._lock:
-            logging.debug('Cancelled async upload of file [{}]'.format(local_file_id))
-            if local_file_id in self._uploads:
-                self._uploads.pop(local_file_id)
+    def stop_upload(self, local_file_id: str, timeout: float=None) -> bool:
+        task = self.cancel_upload(local_file_id)
+        if task is not None:
+            try:
+                task.wait_processed()
+            except:
+                pass
+            if not task.is_processed():
+                raise FileUploadError('Timed out waiting for file [{}] to upload'.format(local_file_id))
 
+    def on_commit_file_completed(self, task: CommitFileTask):
+        self.remove_upload_task(task.local_file_id())
+
+    def on_transfer_file_completed(self, task: TransferFileTask):
+        pass
+    
     def start_workers(self):
         self.start_upload_workers()
     
@@ -174,8 +184,19 @@ class AsyncController(Daemon):
         while not self._stop.is_set():
             completed_task = self._completion_queue.get(block=True)
 
+            if completed_task.error() is None:
+                logging.debug('Task [{}] completed'.format(str(completed_task)))
+            else:
+                logging.debug('Task [{}] completed with error {}'.format(str(completed_task), str(completed_task.error())))
+
             if completed_task.task_code() == PingWorkerTask.TASK_CODE:
                 logging.debug('Async controller pinged')
+                continue
+            if completed_task.task_code() == CommitFileTask.TASK_CODE:
+                self.on_commit_file_completed(completed_task)
+                continue
+            if completed_task.task_code() == TransferFileTask.TASK_CODE:
+                self.on_transfer_file_completed(completed_task)
                 continue
 
             if self._stop.is_set():
