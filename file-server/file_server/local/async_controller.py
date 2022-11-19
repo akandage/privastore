@@ -148,7 +148,7 @@ class AsyncController(Daemon):
         logging.debug('Stopping upload workers')
         for worker in self._upload_workers:
             worker.stop()
-            self._upload_queue.put(PingWorkerTask(), block=True)
+            worker.send_task(PingWorkerTask())
         for worker in self._upload_workers:
             worker.join()
         self._upload_workers = []

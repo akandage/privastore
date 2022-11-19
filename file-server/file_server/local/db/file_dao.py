@@ -10,7 +10,7 @@ class FileDAO(DataAccessObject):
     def __init__(self, conn):
         super().__init__(conn)
     
-    def get_file_version_metadata(self, path: list[str], file_name: str, version:Optional[int]=None) -> 'FileVersionMetadata':
+    def get_file_version_metadata(self, path: Optional[list[str]]=None, file_name: Optional[str]=None, version:Optional[int]=None, local_id: Optional[str]=None) -> 'FileVersionMetadata':
         raise Exception('Not implemented!')
     
     def update_file_local(self, path: list[str], file_name: str, version: int, local_id: str, file_size: int, size_on_disk: int, total_chunks: int, transfer_status: FileTransferStatus=FileTransferStatus.NONE) -> None:

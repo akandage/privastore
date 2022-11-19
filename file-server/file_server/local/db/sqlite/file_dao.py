@@ -12,36 +12,48 @@ class SqliteFileDAO(FileDAO):
     def __init__(self, conn):
         super().__init__(conn)
 
-    def get_file_version_metadata(self, path, file_name, version=None):
-        if len(file_name) == 0:
+    def get_file_version_metadata(self, path=None, file_name=None, version=None, local_id=None):
+        if file_name is not None and len(file_name) == 0:
             raise FileError('File name can\'t be empty!', FileServerErrorCode.FILE_NAME_EMPTY)
+        if local_id is not None and not File.is_valid_file_id(local_id):
+            raise FileError('Invalid local file id!', FileServerErrorCode.INVALID_FILE_ID)
         cur = self._conn.cursor()
         try:
             try:
                 cur.execute('BEGIN')
-                directory_id = traverse_path(cur, path)
-                file_id = query_file_id(cur, directory_id, file_name)
-                if file_id is None:
-                    raise FileError('File [{}] not found in path [{}]'.format(file_name, str_path(path)), FileServerErrorCode.FILE_NOT_FOUND)
-                if version is not None:
+                if local_id is not None:
                     cur.execute('''
                         SELECT F.file_type, V.version, V.local_id, V.remote_id, 
                             V.file_size, V.size_on_disk, V.total_chunks, 
                             V.local_transfer_status, V.remote_transfer_status 
                         FROM ps_file AS F INNER JOIN ps_file_version AS V ON F.id = V.file_id 
-                        WHERE F.id = ? AND V.version = ?
-                    ''', (file_id, version))
+                        WHERE V.local_id = ?
+                    ''', (local_id,))
                     res = cur.fetchone()
                 else:
-                    cur.execute('''
-                        SELECT F.file_type, V.version, V.local_id, V.remote_id, 
-                            V.file_size, V.size_on_disk, V.total_chunks, 
-                            V.local_transfer_status, V.remote_transfer_status 
-                        FROM ps_file AS F INNER JOIN ps_file_version AS V ON F.id = V.file_id 
-                        WHERE F.id = ? 
-                        ORDER BY V.version DESC
-                    ''', (file_id,))
-                    res = cur.fetchone()
+                    directory_id = traverse_path(cur, path)
+                    file_id = query_file_id(cur, directory_id, file_name)
+                    if file_id is None:
+                        raise FileError('File [{}] not found in path [{}]'.format(file_name, str_path(path)), FileServerErrorCode.FILE_NOT_FOUND)
+                    if version is not None:
+                        cur.execute('''
+                            SELECT F.file_type, V.version, V.local_id, V.remote_id, 
+                                V.file_size, V.size_on_disk, V.total_chunks, 
+                                V.local_transfer_status, V.remote_transfer_status 
+                            FROM ps_file AS F INNER JOIN ps_file_version AS V ON F.id = V.file_id 
+                            WHERE F.id = ? AND V.version = ?
+                        ''', (file_id, version))
+                        res = cur.fetchone()
+                    else:
+                        cur.execute('''
+                            SELECT F.file_type, V.version, V.local_id, V.remote_id, 
+                                V.file_size, V.size_on_disk, V.total_chunks, 
+                                V.local_transfer_status, V.remote_transfer_status 
+                            FROM ps_file AS F INNER JOIN ps_file_version AS V ON F.id = V.file_id 
+                            WHERE F.id = ? 
+                            ORDER BY V.version DESC
+                        ''', (file_id,))
+                        res = cur.fetchone()
                 if res is None:
                     raise FileError('File [{}] version [{}] not found!'.format(str_path(path + [file_name]), version), FileServerErrorCode.FILE_VERSION_NOT_FOUND)
                 self._conn.commit()
@@ -138,7 +150,7 @@ class SqliteFileDAO(FileDAO):
                             UPDATE ps_file_version 
                             SET remote_transfer_status = ? 
                             WHERE local_id = ?
-                        ''', (transfer_status.value ,local_id))
+                        ''', (transfer_status.value, local_id))
                 if cur.rowcount != 1:
                     raise FileError('File [{}] not found!'.format(local_id), FileServerErrorCode.FILE_VERSION_NOT_FOUND)
                 self._conn.commit()

@@ -1,7 +1,9 @@
 from .db.dao_factory import DAOFactory
 from ..db.db_conn_mgr import DbConnectionManager
+from .db.file_dao import FileVersionMetadata
 from ..error import FileServerErrorCode, WorkerError
 from ..file_cache import FileCache
+from .file_transfer_status import FileTransferStatus
 import logging
 from queue import Queue
 from ..remote_client import RemoteClient, RemoteCredentials, RemoteEndpoint
@@ -45,3 +47,17 @@ class AsyncWorker(Worker):
     
     def remote_client(self):
         return self._remote_client
+    
+    def get_file_metadata(self, local_id: str) -> 'FileVersionMetadata':
+        conn = self.db_conn_mgr().db_connect()
+        try:
+            return self.dao_factory().file_dao(conn).get_file_version_metadata(local_id=local_id)
+        finally:
+            self.db_conn_mgr().db_close(conn)
+
+    def update_file_remote(self, local_id: str, remote_id: Optional[str]=None, transfer_status: FileTransferStatus=FileTransferStatus.NONE):
+        conn = self.db_conn_mgr().db_connect()
+        try:
+            self.dao_factory().file_dao(conn).update_file_remote(local_id, remote_id, transfer_status)
+        finally:
+            self.db_conn_mgr().db_close(conn)

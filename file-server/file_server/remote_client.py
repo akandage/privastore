@@ -243,7 +243,7 @@ class RemoteClient(object):
         end_t = start_t + timeout
 
         headers = dict()
-        headers[EPOCH_NO_HEADER] = epoch_no
+        headers[EPOCH_NO_HEADER] = str(epoch_no)
 
         while True:
             headers[SESSION_ID_HEADER] = self.get_session_id(timeout=(end_t-time.time()))
