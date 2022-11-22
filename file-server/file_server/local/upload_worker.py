@@ -70,12 +70,12 @@ class UploadWorker(AsyncWorker):
 
         if self.is_current_task_cancelled():
             raise FileUploadError('File [{}] upload cancelled'.format(task.local_file_id()), FileServerErrorCode.REMOTE_UPLOAD_CANCELLED)
-
-        self.update_file_remote(task.local_file_id(), remote_file_id, FileTransferStatus.TRANSFERRING_DATA)
-        logging.debug('Updated file remote status to transferring data')
         
         file = self.store().read_file(task.local_file_id())
         logging.debug('Opened file [{}] in cache for reading'.format(task.local_file_id()))
+
+        self.update_file_remote(task.local_file_id(), remote_file_id, FileTransferStatus.TRANSFERRING_DATA)
+        logging.debug('Updated file remote status to transferring data')
 
         try:
             chunks_sent = 0
