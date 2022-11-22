@@ -63,7 +63,7 @@ class UploadWorker(AsyncWorker):
         remote_transfer_status = file_metadata.remote_transfer_status
 
         if remote_transfer_status == FileTransferStatus.SYNCING_DATA or remote_transfer_status == FileTransferStatus.SYNCED_DATA or remote_transfer_status == FileTransferStatus.SYNC_DATA_FAILED:
-            raise FileUploadError('File [{}] has or may already be committed. Cannot transfer file data'.format(task.local_file_id()))
+            raise FileUploadError('File [{}] has or may already be committed. Cannot transfer file data'.format(task.local_file_id()), FileServerErrorCode.FILE_IS_COMMITTED)
 
         remote_file_id = self.remote_client().create_file(task.file_size(), timeout=self.io_timeout())
         logging.debug('Created remote file [{}]'.format(remote_file_id))

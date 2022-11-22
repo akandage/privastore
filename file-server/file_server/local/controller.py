@@ -195,6 +195,7 @@ class LocalServerController(Controller):
             conn = self.db_conn_mgr().db_connect()
             try:
                 self.dao_factory().directory_dao(conn).remove_file(path, file_name)
+                logging.debug('Removed uploaded file from db')
             except Exception as e1:
                 logging.error('Could not cleanup uploaded file in db: {}'.format(str(e1)))
             finally:
@@ -269,5 +270,27 @@ class LocalServerController(Controller):
             dir_entries = dir_dao.list_directory(path, show_hidden)
             logging.debug('Listed directory [{}]'.format(str_path(path)))
             return dir_entries
+        finally:
+            self.db_conn_mgr().db_close(conn)
+    
+    def get_file_metadata(self, path, file_name, show_hidden=False):
+        logging.debug('Get file metadata [{}]'.format(str_path(path + [file_name])))
+        conn = self.db_conn_mgr().db_connect()
+        try:
+            logging.debug('Acquired database connection')
+            file_dao = self._dao_factory.file_dao(conn)
+            # TODO: Return metadata for multiple file versions.
+            file_metadata = file_dao.get_file_version_metadata(path, file_name)
+            logging.debug('Retrieved file metadata [{}]'.format(str_path(path + [file_name])))
+            return {
+                "version": file_metadata.version,
+                "file-size": file_metadata.file_size,
+                "size-on-disk": file_metadata.size_on_disk,
+                "total-chunks": file_metadata.total_chunks,
+                "local-file-id": file_metadata.local_id,
+                "remote-file-id": file_metadata.remote_id,
+                "local-transfer-status": file_metadata.local_transfer_status.name,
+                "remote-transfer-status": file_metadata.remote_transfer_status.name
+            }
         finally:
             self.db_conn_mgr().db_close(conn)

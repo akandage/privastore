@@ -7,6 +7,7 @@ import uuid
 from .local_server import LocalServer
 from .remote_server import RemoteServer
 from .session import Sessions
+import time
 from .test_server import TestServer, HOSTNAME, PORT, URL
 
 REMOTE_PORT = 9090
@@ -116,6 +117,22 @@ class TestLocalServer(TestServer):
         self.remote_server.start()
         self.remote_server.wait_started()
 
+    def wait_file_synced(self, file_path: str, headers: dict(), timeout: float=30, synced_local: bool=True, synced_remote: bool=True):
+        start_t = time.time()
+        end_t = start_t + timeout
+
+        while time.time() < end_t:
+            r = requests.get(URL.format('/1/file{}'.format(file_path)), headers=headers, timeout=max(0, end_t - time.time()))
+            if r.status_code != HTTPStatus.OK:
+                self.fail('Unexpected file metadata response code {}'.format(str(r.status_code)))
+            r = r.json()
+            local_transfer_status = r['local-transfer-status']
+            remote_transfer_status = r['remote-transfer-status']
+            if local_transfer_status == 'SYNCED_DATA' and remote_transfer_status == 'SYNCED_DATA':
+                return True
+        
+        return False
+    
     def test_session_api(self):
         self.start_server()
 
@@ -247,6 +264,12 @@ class TestLocalServer(TestServer):
         self.assertEqual(r.status_code, HTTPStatus.CONFLICT)
         r = self.send_request(URL.format('/1/upload/file_1'), data=small_file, headers=req_headers, method=requests.post)
         self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = self.send_request(URL.format('/1/file/file_1'), headers=req_headers, method=requests.get)
+        self.assertEqual(r['version'], 1)
+        self.assertEqual(r['file-size'], len(small_file))
+        self.assertTrue(r['size-on-disk'] >= len(small_file))
+        self.assertEqual(r['total-chunks'], 1)
+        self.assertTrue(self.wait_file_synced('/file_1', headers=req_headers))
         r = self.send_request(URL.format('/1/upload/file_1'), data=small_file, headers=req_headers, method=requests.post)
         self.assertEqual(r.status_code, HTTPStatus.CONFLICT)
 
@@ -264,8 +287,20 @@ class TestLocalServer(TestServer):
 
         r = self.send_request(URL.format('/1/upload/file_2'), data=chunk_file, headers=req_headers, method=requests.post)
         self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = self.send_request(URL.format('/1/file/file_2'), headers=req_headers, method=requests.get)
+        self.assertEqual(r['version'], 1)
+        self.assertEqual(r['file-size'], len(chunk_file))
+        self.assertTrue(r['size-on-disk'] >= len(chunk_file))
+        self.assertEqual(r['total-chunks'], 1)
+        self.assertTrue(self.wait_file_synced('/file_2', headers=req_headers))
         r = self.send_request(URL.format('/1/upload/file_3'), data=large_file, headers=req_headers, method=requests.post)
         self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = self.send_request(URL.format('/1/file/file_3'), headers=req_headers, method=requests.get)
+        self.assertEqual(r['version'], 1)
+        self.assertEqual(r['file-size'], len(large_file))
+        self.assertTrue(r['size-on-disk'] >= len(large_file))
+        self.assertEqual(r['total-chunks'], 5)
+        self.assertTrue(self.wait_file_synced('/file_3', headers=req_headers))
         r = self.send_request(URL.format('/1/upload/dir_1/file_1'), data=small_file, headers=req_headers, method=requests.post)
         self.assertEqual(r.status_code, HTTPStatus.OK)
         # r = self.send_request(URL.format('/1/upload/dir_1/file_2'), data=chunk_file, headers=req_headers, method=requests.post)

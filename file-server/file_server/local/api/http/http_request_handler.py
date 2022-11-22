@@ -10,6 +10,8 @@ from ....util.logging import log_exception_stack
 
 DIRECTORY_PATH = '/1/directory'
 DIRECTORY_PATH_LEN = len(DIRECTORY_PATH)
+FILE_PATH = '/1/file'
+FILE_PATH_LEN = len(FILE_PATH)
 UPLOAD_PATH = '/1/upload'
 UPLOAD_PATH_LEN = len(UPLOAD_PATH)
 DOWNLOAD_PATH = '/1/download'
@@ -31,6 +33,8 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             self.handle_list_directory()
         elif self.url_path.startswith(DOWNLOAD_PATH):
             self.handle_download_file()
+        elif self.url_path.startswith(FILE_PATH):
+            self.handle_get_file_metadata()
         else:
             super().do_GET()
         
@@ -187,13 +191,83 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         self.end_headers()
         self.wfile.write(dir_entries)
     
+    def handle_get_file_metadata(self):
+        '''
+        
+            Handle get file metadata API.
+
+            Method: GET
+            Path: /1/file/<path>
+            Request Headers:
+                x-privastore-session-id: <session-id>
+            
+            Examples:
+                Get file /foo/bar metadata.
+
+                GET /1/file/foo/bar
+                Reponse Body:
+                {
+                    "mime-type": "application/octet-stream",
+                    "versions":
+                    [
+                        {
+                            "version": 1,
+                            "file-size": 1572864,
+                            "size-on-disk": 1572864,
+                            "total-chunks": 2,
+                            "local-file-id": "F-5c0875e8-3551-41f6-9e44-bb8af4f1718e",
+                            "remote-file-id": "F-d2dc4f34-ae68-4a67-9227-ef1dc53f8f92",
+                            "local-transfer-status": "SYNCED_DATA",
+                            "remote-transfer-status": "SYNCED_DATA"
+                        }
+                    ]
+                }
+
+        '''
+        logging.debug('Get file metadata')
+        self.wrap_sockets()
+        session_id = self.get_session_id()
+        if session_id is None:
+            return
+        
+        if not self.heartbeat_session(session_id):
+            return
+
+        try:
+            path = self.parse_directory_path(self.url_path[FILE_PATH_LEN:])
+            file_name = path.pop()
+        except:
+            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid directory path or filename')
+            return
+        
+        try:
+            file_metadata = self.controller().get_file_metadata(path, file_name)
+            file_metadata = json.dumps(file_metadata).encode('utf-8')
+        except DirectoryError as e:
+            self.handle_directory_error(e)
+            return
+        except FileError as e:
+            self.handle_file_error(e)
+            return
+        except Exception as e:
+            self.handle_internal_error(e)
+            log_exception_stack()
+            return
+
+        self.send_response(HTTPStatus.OK)
+        self.send_header(CONTENT_TYPE_HEADER, CONTENT_TYPE_JSON)
+        self.send_header(CONTENT_LENGTH_HEADER, str(len(file_metadata)))
+        self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
+        self.end_headers()
+        self.wfile.write(file_metadata)
+
     def handle_upload_file(self):
         '''
 
             Handle upload file API.
 
             Method: POST
-            Path: /1/file/<file-id>
+            Path: /1/upload/<path>
             Request Headers:
                 Content-Length: <file-size (bytes)>
                 Content-Type: <mime-type>
@@ -249,7 +323,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             Optionally provide a version of file to download in query-string.
 
             Method: GET
-            Path: /1/file/<file-id>[?version=<v>]
+            Path: /1/download/<path>[?version=<v>]
             Request Headers:
                 x-privastore-session-id: <session-id>
             
