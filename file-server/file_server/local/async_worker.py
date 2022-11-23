@@ -15,8 +15,8 @@ SESSION_ID_HEADER = 'x-privastore-session-id'
 
 class AsyncWorker(Worker):
 
-    def __init__(self, dao_factory: DAOFactory, db_conn_mgr: DbConnectionManager, store: FileCache, worker_index: int=None, queue_size: int=1, completion_queue: Optional[Queue[WorkerTask]] = None, retry_interval: int=1, io_timeout: int=90):
-        super().__init__(worker_name='upload-worker', worker_index=worker_index, queue_size=queue_size, completion_queue=completion_queue)
+    def __init__(self, dao_factory: DAOFactory, db_conn_mgr: DbConnectionManager, store: FileCache, worker_name: str='async-worker', worker_index: int=None, queue_size: int=1, completion_queue: Optional[Queue[WorkerTask]] = None, retry_interval: int=1, io_timeout: int=90):
+        super().__init__(worker_name=worker_name, worker_index=worker_index, queue_size=queue_size, completion_queue=completion_queue)
         self._dao_factory = dao_factory
         self._db_conn_mgr = db_conn_mgr
         self._store = store

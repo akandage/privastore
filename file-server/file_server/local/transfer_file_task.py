@@ -5,7 +5,7 @@ class TransferFileTask(FileTask):
 
     TASK_CODE = 3
 
-    def __init__(self, local_file_id: str, file_size: int, is_commit: bool):
+    def __init__(self, local_file_id: str, file_size: int=0, is_commit: bool=False):
         super().__init__(local_file_id)
         self._file_size = file_size
         self._is_commit = is_commit

@@ -16,7 +16,7 @@ from ..worker_task import WorkerTask
 class UploadWorker(AsyncWorker):
 
     def __init__(self, dao_factory: DAOFactory, db_conn_mgr: DbConnectionManager, store: FileCache, worker_index: int=None, queue_size: int=1, completion_queue: Optional[Queue[WorkerTask]] = None, retry_interval: int=1, io_timeout: int=90):
-        super().__init__(dao_factory, db_conn_mgr, store, worker_index, queue_size, completion_queue, retry_interval, io_timeout)
+        super().__init__(dao_factory, db_conn_mgr, store, 'upload-worker', worker_index, queue_size, completion_queue, retry_interval, io_timeout)
 
     def process_task(self, task: WorkerTask) -> None:
         if task.task_code() == CommitFileTask.TASK_CODE:

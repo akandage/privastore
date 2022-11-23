@@ -9,7 +9,7 @@ from ..file_chunk import chunk_encoder, chunk_decoder
 from .file_task import FileTask
 from .file_transfer_status import FileTransferStatus
 from ..session_mgr import SessionManager
-from ..util.file import chunked_copy, str_mem_size, str_path
+from ..util.file import chunked_copy, str_mem_size, str_path, write_all
 from ..util.logging import log_exception_stack
 import logging
 from typing import BinaryIO
@@ -169,7 +169,6 @@ class LocalServerController(Controller):
             if self.remote_enabled():
                 try:
                     self.async_controller().stop_upload(local_file_id)
-                    self.async_controller().remove_upload_task(local_file_id)
                 except Exception as e:
                     logging.warn('Could not stop file [{}] upload: {}'.format(str(e)))
 
@@ -219,6 +218,7 @@ class LocalServerController(Controller):
         file_id = file_metadata.local_id
         file_size = file_metadata.file_size
         transfer_status = file_metadata.local_transfer_status
+        total_chunks = file_metadata.total_chunks
 
         if transfer_status == FileTransferStatus.NONE or transfer_status == FileTransferStatus.TRANSFERRING_DATA:
             raise FileDownloadError('File upload not complete!')
@@ -233,9 +233,11 @@ class LocalServerController(Controller):
 
         if download_file is None:
             #
-            # TODO: Handle cache miss.
+            # Cache miss, download the file into the cache.
             #
-            raise Exception('Not implemented!')
+            logging.debug('Cache miss, starting download')
+            self.async_controller().start_download(file_id, timeout=30)
+            download_file = self.store().read_file(file_id, encode_chunk=self._encode_chunk, decode_chunk=self._decode_chunk)
 
         #
         # Cache hit, send the file to the client.
@@ -250,7 +252,11 @@ class LocalServerController(Controller):
                 #
                 api_callback(file_id, file_type, file_size)
 
-            bytes_transferred = chunked_copy(download_file, file, file_size, self.store().file_chunk_size())
+            bytes_transferred = 0
+            for _ in range(total_chunks):
+                chunk_data = download_file.read_chunk()
+                bytes_transferred += write_all(file, chunk_data)
+
             if bytes_transferred < file_size:
                 raise FileDownloadError('Could not download all file data! [{}/{}]'.format(str_mem_size(bytes_transferred), str_mem_size(file_size)))
         finally:

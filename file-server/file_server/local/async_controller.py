@@ -1,12 +1,16 @@
+from .async_worker import AsyncWorker
 import configparser
 from .commit_file_task import CommitFileTask
 from ..daemon import Daemon
 from .db.dao_factory import DAOFactory
+from .db.file_dao import FileVersionMetadata
 from ..db.db_conn_mgr import DbConnectionManager
-from ..error import FileServerErrorCode, FileUploadError
+from .download_worker import DownloadWorker
+from ..error import FileDownloadError, FileServerErrorCode, FileUploadError
 from ..file import File
 from ..file_cache import FileCache
 from .file_task import FileTask
+from .file_transfer_status import FileTransferStatus
 import logging
 from queue import Queue
 from threading import RLock
@@ -47,9 +51,18 @@ class AsyncController(Daemon):
                 completion_queue=self._completion_queue, 
                 retry_interval=worker_retry_interval, 
                 io_timeout=worker_io_timeout))
+        self._download_workers: list[DownloadWorker]= []
+        for i in range(self._num_download_workers):
+            self._download_workers.append(DownloadWorker(dao_factory, db_conn_mgr, 
+                store, worker_index=i, queue_size=worker_queue_size, 
+                completion_queue=self._completion_queue, 
+                retry_interval=worker_retry_interval, 
+                io_timeout=worker_io_timeout))
         
-        self._upload_tasks: dict[str, FileTask] = dict()
+        self._upload_tasks: dict[str, list[FileTask]] = dict()
         self._uploads_lock: RLock = RLock()
+        self._download_tasks: dict[str, TransferFileTask] = dict()
+        self._downloads_lock: RLock = RLock()
     
     def dao_factory(self):
         return self._dao_factory
@@ -66,27 +79,62 @@ class AsyncController(Daemon):
     def worker_io_timeout(self):
         return self._worker_io_timeout
 
+    def get_file_metadata(self, local_id: str) -> 'FileVersionMetadata':
+        conn = self.db_conn_mgr().db_connect()
+        try:
+            return self.dao_factory().file_dao(conn).get_file_version_metadata(local_id=local_id)
+        finally:
+            self.db_conn_mgr().db_close(conn)
+
     def has_upload(self, local_file_id: str):
         with self._uploads_lock:
             return local_file_id in self._upload_tasks
     
-    def add_upload_task(self, local_file_id: str, task: FileTask):
+    def has_download(self, local_file_id: str):
+        with self._downloads_lock:
+            return local_file_id in self._download_tasks
+
+    def add_upload_task(self, local_file_id: str, task: TransferFileTask):
         with self._uploads_lock:
             if self.has_upload(local_file_id):
                 raise FileUploadError('File [{}] already being uploaded'.format(local_file_id))
-            self._upload_tasks[local_file_id] = task
+            self._upload_tasks[local_file_id] = [task]
 
-    def get_upload_task(self, local_file_id: str) -> FileTask:
+    def add_commit_task(self, local_file_id: str, task: CommitFileTask):
+        with self._uploads_lock:
+            if not self.has_upload(local_file_id):
+                raise FileUploadError('File [{}] not being uploaded'.format(local_file_id))
+            self._upload_tasks[local_file_id].append(task)
+
+    def add_download_task(self, local_file_id: str, task: TransferFileTask):
+        with self._downloads_lock:
+            if self.has_download(local_file_id):
+                raise FileUploadError('File [{}] already being downloaded'.format(local_file_id))
+            self._download_tasks[local_file_id] = task
+
+    def get_upload_task(self, local_file_id: str) -> list[FileTask]:
         with self._uploads_lock:
             return self._upload_tasks.get(local_file_id)
+
+    def get_download_task(self, local_file_id: str) -> TransferFileTask:
+        with self._downloads_lock:
+            return self._download_tasks.get(local_file_id)
 
     def remove_upload_task(self, local_file_id: str):
         with self._uploads_lock:
             if local_file_id in self._upload_tasks:
                 self._upload_tasks.pop(local_file_id)
 
+    def remove_download_task(self, local_file_id: str):
+        with self._downloads_lock:
+            if local_file_id in self._download_tasks:
+                self._download_tasks.pop(local_file_id)
+
     def get_upload_worker(self, local_file_id: str) -> UploadWorker:
         return self._upload_workers[hash(local_file_id) % self._num_upload_workers]
+
+    def get_download_worker(self, local_file_id: str) -> DownloadWorker:
+        return self._download_workers[hash(local_file_id) % self._num_download_workers]
 
     def start_upload(self, local_file_id: str, file_size: int, timeout: float=None):
         task = TransferFileTask(local_file_id, file_size, is_commit=False)
@@ -97,67 +145,113 @@ class AsyncController(Daemon):
     def commit_upload(self, local_file_id: str, timeout: float=None):
         # TODO: Epoch handling.
         task = CommitFileTask(local_file_id, epoch_no=1)
+        self.add_commit_task(local_file_id, task)
         self.get_upload_worker(local_file_id).send_task(task, timeout=timeout)
+        return task
 
+    def start_download(self, local_file_id: str, timeout: float=None):
+        file_metadata = self.get_file_metadata(local_file_id)
+        file_size = file_metadata.file_size
+        transfer_status = file_metadata.remote_transfer_status
+        if transfer_status != FileTransferStatus.SYNCED_DATA:
+            raise FileDownloadError('Cannot download file [{}] not fully synced on remote server'.format(local_file_id), FileServerErrorCode.REMOTE_DOWNLOAD_ERROR)
+        
+        with self._downloads_lock:
+            if self.has_download(local_file_id):
+                logging.debug('File [{}] already being downloaded'.format(local_file_id))
+                return
+            task = TransferFileTask(local_file_id, file_size)
+            self.add_download_task(local_file_id, task)
+            self.store().create_empty_file(local_file_id, file_size)
+        
+        self.get_download_worker(local_file_id).send_task(task, timeout=timeout)
+    
     def wait_for_upload(self, local_file_id: str, timeout: float=None) -> FileTask:
         # TODO
         pass
 
-    def cancel_upload(self, local_file_id: str) -> FileTask:
+    def cancel_upload(self, local_file_id: str) -> list[FileTask]:
         with self._uploads_lock:
-            task = self.get_upload_task(local_file_id)
+            tasks = self.get_upload_task(local_file_id)
+            if tasks is None:
+                return
+            for task in tasks:
+                task.cancel()
+            return tasks
+
+    def cancel_download(self, local_file_id: str) -> TransferFileTask:
+        with self._downloads_lock:
+            task = self.get_download_task(local_file_id)
             if task is None:
                 return
             task.cancel()
             return task
 
     def stop_upload(self, local_file_id: str, timeout: float=None) -> bool:
-        task = self.cancel_upload(local_file_id)
+        tasks = self.cancel_upload(local_file_id)
+        if tasks is not None:
+            for task in tasks:
+                try:
+                    task.wait_processed(timeout)
+                except:
+                    pass
+                if not task.is_processed():
+                    raise FileUploadError('Timed out waiting for file [{}] to upload'.format(local_file_id))
+            
+            self.remove_upload_task(local_file_id)
+
+    def stop_download(self, local_file_id: str, timeout: float=None) -> bool:
+        task = self.cancel_download(local_file_id)
         if task is not None:
             try:
-                task.wait_processed()
+                task.wait_processed(timeout)
             except:
                 pass
             if not task.is_processed():
-                raise FileUploadError('Timed out waiting for file [{}] to upload'.format(local_file_id))
+                raise FileUploadError('Timed out waiting for file [{}] to download'.format(local_file_id))
+            
+            self.remove_download_task(local_file_id)
 
     def on_commit_file_completed(self, task: CommitFileTask):
         self.remove_upload_task(task.local_file_id())
 
     def on_transfer_file_completed(self, task: TransferFileTask):
         pass
-    
-    def start_workers(self):
-        self.start_upload_workers()
-    
-    def start_upload_workers(self):
-        logging.debug('Starting upload workers')
-        for worker in self._upload_workers:
+   
+    def start_async_workers(self, workers: list[AsyncWorker]):
+        for worker in workers:
             worker.start()
             worker.wait_started()
+
+    def start_upload_workers(self):
+        logging.debug('Starting upload workers')
+        self.start_async_workers(self._upload_workers)
         logging.debug('Started upload workers')
 
     def start_download_workers(self):
-        # TODO
-        pass
+        logging.debug('Starting download workers')
+        self.start_async_workers(self._download_workers)
+        logging.debug('Started download workers')
 
-    def stop_workers(self):
-        self.stop_upload_workers()
-    
-    def stop_upload_workers(self):
-        logging.debug('Stopping upload workers')
-        for worker in self._upload_workers:
+    def stop_async_workers(self, workers: list[AsyncWorker]):
+        for worker in workers:
             worker.stop()
             worker.send_task(PingWorkerTask())
-        for worker in self._upload_workers:
+        for worker in workers:
             worker.join()
+
+    def stop_upload_workers(self):
+        logging.debug('Stopping upload workers')
+        self.stop_async_workers(self._upload_workers)
         self._upload_workers = []
         logging.debug('Stopped upload workers')
-    
-    def stop_download_workers(self):
-        # TODO
-        pass
 
+    def stop_download_workers(self):
+        logging.debug('Stopping download workers')
+        self.stop_async_workers(self._download_workers)
+        self._download_workers = []
+        logging.debug('Stopped download workers')
+    
     def stop(self):
         if not self._stop.is_set():
             super().stop()
