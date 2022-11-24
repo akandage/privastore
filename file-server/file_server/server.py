@@ -5,6 +5,7 @@ import logging
 import os
 from .session_mgr import SessionManager
 from threading import Event
+from .util.logging import log_exception_stack
 
 class Server(Daemon):
 
@@ -102,6 +103,7 @@ class Server(Daemon):
             self.do_start()
         except Exception as e:
             logging.error('Server failed to start: {}'.format(str(e)))
+            log_exception_stack()
             self._stopped.set()
             self._started.set()
             return
@@ -115,6 +117,7 @@ class Server(Daemon):
             self.do_stop()
         except Exception as e:
             logging.error('Server failed to stop: {}'.format(str(e)))
+            log_exception_stack()
 
         self._stopped.set()
         logging.info('Server stopped')

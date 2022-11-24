@@ -21,3 +21,6 @@ class FileDAO(DataAccessObject):
     
     def update_file_transfer_status(self, path: list[str], file_name: str, version: int, local_transfer_status: Optional[FileTransferStatus]=None, remote_transfer_status: Optional[FileTransferStatus]=None):
         raise Exception('Not implemented!')
+    
+    def remove_file_version(self, local_id: str) -> None:
+        raise Exception('Not implemented!')

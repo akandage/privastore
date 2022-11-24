@@ -70,6 +70,7 @@ class LocalServer(Server):
             self.dao_factory(), self.db_conn_mgr(), self.session_mgr(), self.store(), 
             encode_chunk=encrypt_chunk, decode_chunk=decrypt_chunk)
         self._controller.init_auth(self.auth_config())
+        self._controller.init_store()
         self.init_api()
 
         self.async_controller().start()

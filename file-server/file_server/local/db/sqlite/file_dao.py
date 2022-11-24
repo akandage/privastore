@@ -217,3 +217,67 @@ class SqliteFileDAO(FileDAO):
                 cur.close()
             except:
                 pass
+    
+    def remove_file_version(self, local_id: str) -> None:
+        if not File.is_valid_file_id(local_id):
+            raise FileError('Invalid file id!')
+        cur = self._conn.cursor()
+        try:
+            try:
+                cur.execute('BEGIN')
+                cur.execute(
+                    '''
+                        SELECT file_id, version
+                        FROM ps_file_version
+                        WHERE local_id = ?
+                    ''', (local_id,)
+                )
+                res = cur.fetchone()
+                if res is None:
+                    raise FileError('File [{}] not found!'.format(local_id), FileServerErrorCode.FILE_VERSION_NOT_FOUND)
+                file_id, version = res
+                cur.execute(
+                    '''
+                        SELECT count(*)
+                        FROM ps_file_version
+                        WHERE file_id = ?
+                    ''', (file_id,)
+                )
+                count, = cur.fetchone()
+                cur.execute(
+                    '''
+                        DELETE 
+                        FROM ps_file_version 
+                        WHERE file_id = ?, version = ?
+                    ''', (file_id, version)
+                )
+                if cur.rowcount != 1:
+                    raise FileError('Could not delete file [{}]'.format(local_id))
+                if count == 1:
+                    cur.execute(
+                        '''
+                            DELETE 
+                            FROM ps_file
+                            WHERE file_id = ?
+                        ''', (file_id,)
+                    )
+                    if cur.rowcount != 1:
+                        raise FileError('Could not delete file [{}]'.format(local_id))
+                self._conn.commit()
+            except DirectoryError as e:
+                logging.error('Directory error: {}'.format(str(e)))
+                self.rollback_nothrow()
+                raise e
+            except FileError as e:
+                logging.error('File error: {}'.format(str(e)))
+                self.rollback_nothrow()
+                raise e
+            except Exception as e:
+                logging.error('Query error {}'.format(str(e)))
+                self.rollback_nothrow()
+                raise e
+        finally:
+            try:
+                cur.close()
+            except:
+                pass

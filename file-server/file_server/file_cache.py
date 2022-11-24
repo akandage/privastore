@@ -289,6 +289,12 @@ class FileCache(object):
         def node(self):
             return self._node
 
+        def set_error(self):
+            if super().error():
+                return
+            self.node().set_error()
+            super().set_error()
+
         def append_chunk(self, chunk_bytes):
             node = self._node
             if node.error():
@@ -346,6 +352,9 @@ class FileCache(object):
         
         def tail(self) -> 'FileCache.IndexNode':
             return self._tail
+
+        def files(self) -> list[str]:
+            return self._files.keys()
 
         def __len__(self):
             return len(self._files)
@@ -457,6 +466,11 @@ class FileCache(object):
     def has_file(self, file_id: str) -> bool:
         with self._index_lock:
             return self._index.has_node(file_id)
+
+    def files(self):
+        with self._index_lock:
+            files = self._index.files()
+        return files
 
     def create_cache_entry(self, file_id: str, alloc_space: int, writable: bool, removable: bool) -> 'FileCache.IndexNode':
         with self._index_lock:

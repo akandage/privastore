@@ -40,6 +40,7 @@ class DownloadWorker(AsyncWorker):
 
         try:
             try:
+                downloaded = False
                 for chunk_offset in range(total_chunks):
                     if self.is_current_task_cancelled():
                         raise FileDownloadError('File [{}] download cancelled', FileServerErrorCode.REMOTE_DOWNLOAD_CANCELLED)
@@ -48,7 +49,10 @@ class DownloadWorker(AsyncWorker):
                     file.append_chunk(chunk)
                     logging.debug('Received chunk')
                 logging.debug('Received {} chunks'.format(total_chunks))
+                downloaded = True
             finally:
+                if not downloaded:
+                    file.set_error()
                 self.store().close_file(file)
                 logging.debug('Closed file in cache')
         except FileServerError as e:

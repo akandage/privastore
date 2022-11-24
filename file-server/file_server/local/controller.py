@@ -42,6 +42,29 @@ class LocalServerController(Controller):
     def remote_enabled(self):
         return self._async_controller.remote_enabled()
 
+    def init_store(self):
+        conn = self.db_conn_mgr().db_connect()
+        try:
+            file_dao = self.dao_factory().file_dao(conn)
+            num_files_removed = 0
+            for file_id in self.store().files():
+                try:
+                    file_metadata = file_dao.get_file_version_metadata(local_id=file_id)
+                    transfer_status = file_metadata.local_transfer_status
+                    if transfer_status == FileTransferStatus.SYNCED_DATA:
+                        continue
+                    logging.debug('File [{}] status is [{}]'.format(transfer_status.name))
+                    file_dao.remove_file_version(file_id)
+                except Exception as e:
+                    logging.error('Error cleaning up file [{}] in cache: {}'.format(file_id, str(e)))
+                    log_exception_stack()
+
+                self.store().remove_file_by_id(file_id)
+                num_files_removed += 1
+            logging.debug('Cleaned up [{}] files in cache'.format(num_files_removed))
+        finally:
+            self.db_conn_mgr().db_close(conn)
+
     def login_user(self, username: str, password: str):
         logging.debug('User [{}] login attempt'.format(username))
         conn = self.db_conn_mgr().db_connect()
@@ -253,12 +276,16 @@ class LocalServerController(Controller):
                 api_callback(file_id, file_type, file_size)
 
             bytes_transferred = 0
-            for _ in range(total_chunks):
-                chunk_data = download_file.read_chunk()
-                bytes_transferred += write_all(file, chunk_data)
+            try:
+                for _ in range(total_chunks):
+                    chunk_data = download_file.read_chunk()
+                    bytes_transferred += write_all(file, chunk_data)
 
-            if bytes_transferred < file_size:
-                raise FileDownloadError('Could not download all file data! [{}/{}]'.format(str_mem_size(bytes_transferred), str_mem_size(file_size)))
+                if bytes_transferred < file_size:
+                    logging.error('Could not download all file data! [{}/{}]'.format(str_mem_size(bytes_transferred), str_mem_size(file_size)))
+            except Exception as e:
+                logging.error('Could not download all file data! [{}/{}]: {}'.format(str_mem_size(bytes_transferred), str_mem_size(file_size)), str(e))
+                log_exception_stack()
         finally:
             try:
                 self.store().close_file(download_file)
