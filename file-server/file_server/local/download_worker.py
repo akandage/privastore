@@ -43,7 +43,8 @@ class DownloadWorker(AsyncWorker):
                 for chunk_offset in range(total_chunks):
                     if self.is_current_task_cancelled():
                         raise FileDownloadError('File [{}] download cancelled', FileServerErrorCode.REMOTE_DOWNLOAD_CANCELLED)
-                    chunk = self.remote_client().read_file_chunk(remote_id, chunk_offset, timeout=self.io_timeout())
+                    # Chunk numbers are 1-indexed.
+                    chunk = self.remote_client().read_file_chunk(remote_id, chunk_offset+1, timeout=self.io_timeout())
                     file.append_chunk(chunk)
                     logging.debug('Received chunk')
                 logging.debug('Received {} chunks'.format(total_chunks))

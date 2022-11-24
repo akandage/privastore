@@ -384,10 +384,6 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
         if not self.heartbeat_session(session_id):
             return
         
-        epoch_no = self.get_epoch_no_from_header()
-        if epoch_no is None:
-            return
-
         remote_id = self.get_remote_file_id()
         if remote_id is None:
             return

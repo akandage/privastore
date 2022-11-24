@@ -44,9 +44,14 @@ class TestServer(unittest.TestCase):
         self.server.start()
         self.server.wait_started()
 
+    def stop_server(self):
+        if self.server:
+            self.server.stop()
+            self.server.join()
+            self.server = None
+
     def restart_server(self):
-        self.server.stop()
-        self.server.join()
+        self.stop_server()
         self.server = self.server_factory()
         self.server.start()
         self.server.wait_started()
