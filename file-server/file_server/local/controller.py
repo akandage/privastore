@@ -50,17 +50,29 @@ class LocalServerController(Controller):
             for file_id in self.store().files():
                 try:
                     file_metadata = file_dao.get_file_version_metadata(local_id=file_id)
-                    transfer_status = file_metadata.local_transfer_status
-                    if transfer_status == FileTransferStatus.SYNCED_DATA:
-                        continue
-                    logging.debug('File [{}] status is [{}]'.format(transfer_status.name))
-                    file_dao.remove_file_version(file_id)
                 except Exception as e:
-                    logging.error('Error cleaning up file [{}] in cache: {}'.format(file_id, str(e)))
-                    log_exception_stack()
+                    logging.warning('File [{}] metadata not found!'.format(file_id))
+                    try:
+                        self.store().remove_file_by_id(file_id)
+                    except:
+                        pass
+                    continue
 
-                self.store().remove_file_by_id(file_id)
-                num_files_removed += 1
+                transfer_status = file_metadata.local_transfer_status
+                remote_transfer_status = file_metadata.remote_transfer_status
+                if transfer_status != FileTransferStatus.SYNCED_DATA:
+                    logging.debug('File [{}] status is [{}]'.format(file_id, transfer_status.name))
+                    try:
+                        file_dao.remove_file_version(file_id)
+                        logging.debug('Removed in db')
+                    except:
+                        pass
+                    self.store().remove_file_by_id(file_id)
+                    num_files_removed += 1
+                    logging.debug('Removed in cache')
+                elif remote_transfer_status != FileTransferStatus.SYNCED_DATA:
+                    self.store().set_file_removable(file_id, False)
+                
             logging.debug('Cleaned up [{}] files in cache'.format(num_files_removed))
         finally:
             self.db_conn_mgr().db_close(conn)
