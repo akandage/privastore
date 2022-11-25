@@ -24,11 +24,16 @@ class AsyncWorker(Worker):
         self._io_timeout = io_timeout
         self._remote_client = RemoteClient(retry_interval=retry_interval)
 
-        #
-        # TODO: Configure this from db.
-        #
-        self._remote_client.add_remote_endpoint(RemoteEndpoint('localhost', '9090'))
-        self._remote_client.set_remote_credentials(RemoteCredentials('psadmin', 'psadmin'))
+        conn = self.db_conn_mgr().db_connect()
+        try:
+            remote_dao = self.dao_factory().remote_dao(conn)
+            servers = remote_dao.get_remote_servers('default-cluster')
+            creds = remote_dao.get_remote_credentials('default-cluster')
+            for server in servers:
+                self._remote_client.add_remote_endpoint(server)
+            self._remote_client.set_remote_credentials(creds)
+        finally:
+            self.db_conn_mgr().db_close(conn)
     
     def dao_factory(self) -> DAOFactory:
         return self._dao_factory

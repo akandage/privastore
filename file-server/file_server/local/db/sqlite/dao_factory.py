@@ -1,6 +1,7 @@
 from ..dao_factory import DAOFactory
 from .directory_dao import SqliteDirectoryDAO
 from .file_dao import SqliteFileDAO
+from .remote_dao import SqliteRemoteDAO
 from .user_dao import SqliteUserDAO
 
 class SqliteDAOFactory(DAOFactory):
@@ -16,3 +17,6 @@ class SqliteDAOFactory(DAOFactory):
     
     def directory_dao(self, conn):
         return SqliteDirectoryDAO(conn)
+    
+    def remote_dao(self, conn):
+        return SqliteRemoteDAO(conn)

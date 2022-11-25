@@ -90,6 +90,10 @@ class RemoteClientError(FileServerError):
     def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
         super().__init__(msg, error_code)
 
+class RemoteServerError(FileServerError):
+    def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
+        super().__init__(msg, error_code)
+
 class RemoteFileError(FileServerError):
     def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
         super().__init__(msg, error_code)

@@ -16,6 +16,7 @@ def setup_db(db_config):
         create_directory_table(conn)
         create_file_table(conn)
         create_file_version_table(conn)
+        create_remote_server_table(conn)
     finally:
         try:
             conn.close()
@@ -109,4 +110,34 @@ def create_file_version_table(conn):
         )
         '''
     )
+    conn.commit()
+
+def create_remote_server_table(conn):
+    logging.debug('Setting up ps_remote_cluster table')
+    conn.execute(
+        '''
+        CREATE TABLE ps_remote_cluster (
+            id INTEGER PRIMARY KEY NOT NULL,
+            name VARCHAR(256) NOT NULL,
+            username VARCHAR(50) NOT NULL,
+            password VARCHAR(50) NOT NULL
+        )
+        '''
+    )
+    # TODO: Don't store plaintext password.
+    conn.execute("INSERT INTO ps_remote_cluster (id, name, username, password) VALUES (1, 'default-cluster', 'psadmin', 'psadmin')")
+    logging.debug('Setting up ps_remote_server table')
+    conn.execute(
+        '''
+        CREATE TABLE ps_remote_server (
+            hostname VARCHAR(256) NOT NULL,
+            port INTEGER NOT NULL,
+            cluster_id INTEGER NOT NULL,
+            use_ssl BOOLEAN NOT NULL DEFAULT 0,
+            PRIMARY KEY (hostname, port),
+            FOREIGN KEY (cluster_id) REFERENCES ps_remote_cluster (id) ON DELETE CASCADE
+        )
+        '''
+    )
+    conn.execute("INSERT INTO ps_remote_server (hostname, port, cluster_id) VALUES ('localhost', 9090, 1)")
     conn.commit()
