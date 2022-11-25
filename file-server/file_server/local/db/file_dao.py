@@ -3,7 +3,7 @@ from ...db.dao import DataAccessObject
 from ..file_transfer_status import FileTransferStatus
 from typing import Optional
 
-FileVersionMetadata = namedtuple('FileVersionMetadata', ['file_type', 'version', 'local_id', 'remote_id', 'file_size', 'size_on_disk', 'total_chunks', 'local_transfer_status', 'remote_transfer_status'])
+FileVersionMetadata = namedtuple('FileVersionMetadata', ['file_type', 'version', 'local_id', 'remote_id', 'file_size', 'size_on_disk', 'total_chunks', 'uploaded_chunks', 'downloaded_chunks', 'local_transfer_status', 'remote_transfer_status'])
 
 class FileDAO(DataAccessObject):
 

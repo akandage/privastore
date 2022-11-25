@@ -469,7 +469,7 @@ class FileCache(object):
 
     def files(self):
         with self._index_lock:
-            files = self._index.files()
+            files = list(self._index.files())
         return files
 
     def create_cache_entry(self, file_id: str, alloc_space: int, writable: bool, removable: bool) -> 'FileCache.IndexNode':

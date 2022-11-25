@@ -45,6 +45,8 @@ class TestSqliteFileDAO(unittest.TestCase):
             0,
             0,
             0,
+            0,
+            0,
             FileTransferStatus.NONE,
             FileTransferStatus.NONE
         ))
@@ -53,6 +55,8 @@ class TestSqliteFileDAO(unittest.TestCase):
             1,
             None,
             None,
+            0,
+            0,
             0,
             0,
             0,
@@ -74,6 +78,8 @@ class TestSqliteFileDAO(unittest.TestCase):
             100,
             120,
             1,
+            0,
+            0,
             FileTransferStatus.TRANSFERRED_DATA,
             FileTransferStatus.NONE
         ))
@@ -82,6 +88,8 @@ class TestSqliteFileDAO(unittest.TestCase):
             1,
             None,
             None,
+            0,
+            0,
             0,
             0,
             0,
@@ -97,6 +105,8 @@ class TestSqliteFileDAO(unittest.TestCase):
             100,
             120,
             1,
+            0,
+            0,
             FileTransferStatus.TRANSFERRED_DATA,
             FileTransferStatus.NONE
         ))
@@ -108,6 +118,8 @@ class TestSqliteFileDAO(unittest.TestCase):
             2000,
             2200,
             2,
+            0,
+            0,
             FileTransferStatus.TRANSFERRED_DATA,
             FileTransferStatus.NONE
         ))
@@ -129,6 +141,8 @@ class TestSqliteFileDAO(unittest.TestCase):
             100,
             120,
             1,
+            0,
+            0,
             FileTransferStatus.TRANSFERRED_DATA,
             FileTransferStatus.TRANSFERRED_DATA
         ))
@@ -137,6 +151,8 @@ class TestSqliteFileDAO(unittest.TestCase):
             1,
             None,
             None,
+            0,
+            0,
             0,
             0,
             0,
@@ -153,6 +169,8 @@ class TestSqliteFileDAO(unittest.TestCase):
             100,
             120,
             1,
+            0,
+            0,
             FileTransferStatus.TRANSFERRED_DATA,
             FileTransferStatus.TRANSFERRED_DATA
         ))
@@ -164,6 +182,8 @@ class TestSqliteFileDAO(unittest.TestCase):
             120,
             140,
             1,
+            0,
+            0,
             FileTransferStatus.TRANSFERRED_DATA,
             FileTransferStatus.TRANSFERRING_DATA
         ))
@@ -176,6 +196,8 @@ class TestSqliteFileDAO(unittest.TestCase):
             100,
             120,
             1,
+            0,
+            0,
             FileTransferStatus.TRANSFERRED_DATA,
             FileTransferStatus.TRANSFERRED_DATA
         ))
@@ -187,6 +209,8 @@ class TestSqliteFileDAO(unittest.TestCase):
             120,
             140,
             1,
+            0,
+            0,
             FileTransferStatus.TRANSFERRED_DATA,
             FileTransferStatus.TRANSFERRED_DATA
         ))
@@ -204,6 +228,8 @@ class TestSqliteFileDAO(unittest.TestCase):
             0,
             0,
             0,
+            0,
+            0,
             FileTransferStatus.TRANSFERRING_DATA,
             FileTransferStatus.NONE
         ))
@@ -212,6 +238,8 @@ class TestSqliteFileDAO(unittest.TestCase):
             1,
             None,
             None,
+            0,
+            0,
             0,
             0,
             0,
@@ -227,6 +255,8 @@ class TestSqliteFileDAO(unittest.TestCase):
             100,
             100,
             1,
+            0,
+            0,
             FileTransferStatus.TRANSFERRED_DATA,
             FileTransferStatus.NONE
         ))
@@ -235,6 +265,8 @@ class TestSqliteFileDAO(unittest.TestCase):
             1,
             None,
             None,
+            0,
+            0,
             0,
             0,
             0,
@@ -251,6 +283,8 @@ class TestSqliteFileDAO(unittest.TestCase):
             100,
             100,
             1,
+            0,
+            0,
             FileTransferStatus.TRANSFERRED_DATA,
             FileTransferStatus.TRANSFERRING_DATA
         ))
@@ -259,6 +293,8 @@ class TestSqliteFileDAO(unittest.TestCase):
             1,
             None,
             None,
+            0,
+            0,
             0,
             0,
             0,

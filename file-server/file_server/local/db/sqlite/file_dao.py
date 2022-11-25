@@ -25,6 +25,7 @@ class SqliteFileDAO(FileDAO):
                     cur.execute('''
                         SELECT F.file_type, V.version, V.local_id, V.remote_id, 
                             V.file_size, V.size_on_disk, V.total_chunks, 
+                            V.uploaded_chunks, V.downloaded_chunks, 
                             V.local_transfer_status, V.remote_transfer_status 
                         FROM ps_file AS F INNER JOIN ps_file_version AS V ON F.id = V.file_id 
                         WHERE V.local_id = ?
@@ -39,6 +40,7 @@ class SqliteFileDAO(FileDAO):
                         cur.execute('''
                             SELECT F.file_type, V.version, V.local_id, V.remote_id, 
                                 V.file_size, V.size_on_disk, V.total_chunks, 
+                                V.uploaded_chunks, V.downloaded_chunks, 
                                 V.local_transfer_status, V.remote_transfer_status 
                             FROM ps_file AS F INNER JOIN ps_file_version AS V ON F.id = V.file_id 
                             WHERE F.id = ? AND V.version = ?
@@ -48,6 +50,7 @@ class SqliteFileDAO(FileDAO):
                         cur.execute('''
                             SELECT F.file_type, V.version, V.local_id, V.remote_id, 
                                 V.file_size, V.size_on_disk, V.total_chunks, 
+                                V.uploaded_chunks, V.downloaded_chunks, 
                                 V.local_transfer_status, V.remote_transfer_status 
                             FROM ps_file AS F INNER JOIN ps_file_version AS V ON F.id = V.file_id 
                             WHERE F.id = ? 
@@ -65,8 +68,10 @@ class SqliteFileDAO(FileDAO):
                     res[4],
                     res[5],
                     res[6],
-                    FileTransferStatus(res[7]),
-                    FileTransferStatus(res[8])
+                    res[7],
+                    res[8],
+                    FileTransferStatus(res[9]),
+                    FileTransferStatus(res[10])
                 )
             except DirectoryError as e:
                 logging.error('Directory error: {}'.format(str(e)))

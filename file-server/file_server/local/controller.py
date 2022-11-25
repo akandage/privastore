@@ -60,6 +60,8 @@ class LocalServerController(Controller):
 
                 transfer_status = file_metadata.local_transfer_status
                 remote_transfer_status = file_metadata.remote_transfer_status
+                downloaded_chunks = self.store().file_metadata(file_id).file_chunks
+                total_chunks = file_metadata.total_chunks
                 if transfer_status != FileTransferStatus.SYNCED_DATA:
                     logging.debug('File [{}] local transfer status is [{}]'.format(file_id, transfer_status.name))
                     try:
@@ -73,6 +75,9 @@ class LocalServerController(Controller):
                 elif remote_transfer_status != FileTransferStatus.SYNCED_DATA:
                     logging.debug('File [{}] remote transfer status is [{}]'.format(file_id, remote_transfer_status.name))
                     self.store().set_file_removable(file_id, False)
+                elif downloaded_chunks != total_chunks:
+                    logging.debug('File [{}] download incomplete'.format(file_id))
+                    self.store().remove_file_by_id(file_id)
                 
             logging.debug('Cleaned up [{}] files in cache'.format(num_files_removed))
         finally:

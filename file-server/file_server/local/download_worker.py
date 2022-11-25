@@ -39,29 +39,27 @@ class DownloadWorker(AsyncWorker):
         logging.debug('Opened file for appending')
 
         try:
-            try:
-                downloaded = False
-                for chunk_offset in range(total_chunks):
-                    if self.is_current_task_cancelled():
-                        raise FileDownloadError('File [{}] download cancelled', FileServerErrorCode.REMOTE_DOWNLOAD_CANCELLED)
-                    # Chunk numbers are 1-indexed.
-                    chunk = self.remote_client().read_file_chunk(remote_id, chunk_offset+1, timeout=self.io_timeout())
-                    file.append_chunk(chunk)
-                    self.update_file_download(task.local_file_id(), chunk_offset+1)
-                    logging.debug('Received chunk')
-                logging.debug('Received {} chunks'.format(total_chunks))
-                downloaded = True
-            finally:
-                if not downloaded:
-                    file.set_error()
-                self.store().close_file(file)
-                logging.debug('Closed file in cache')
-        except FileServerError as e:
-            try:
+            downloaded = False
+            for chunk_offset in range(total_chunks):
+                if self.is_current_task_cancelled():
+                    raise FileDownloadError('File [{}] download cancelled', FileServerErrorCode.REMOTE_DOWNLOAD_CANCELLED)
+                # Chunk numbers are 1-indexed.
+                chunk = self.remote_client().read_file_chunk(remote_id, chunk_offset+1, timeout=self.io_timeout())
+                file.append_chunk(chunk)
+                self.update_file_download(task.local_file_id(), chunk_offset+1)
+                logging.debug('Received chunk')
+            logging.debug('Received {} chunks'.format(total_chunks))
+            downloaded = True
+        finally:
+            if not downloaded:
+                file.set_error()
+            self.store().close_file(file)
+            logging.debug('Closed file in cache')
+            if not downloaded:
                 self.update_file_download(task.local_file_id(), 0)
-                self.store().remove_file(file)
-                logging.debug('Removed file from cache')
-            except:
-                logging.warn('Error removing file {} from cache: {}'.format(task.local_file_id(), str(e)))
-            raise e
+                try:
+                    self.store().remove_file(file)
+                    logging.debug('Removed file from cache')
+                except:
+                    pass
 

@@ -213,10 +213,15 @@ class AsyncController(Daemon):
             self.remove_download_task(local_file_id)
 
     def on_commit_file_completed(self, task: CommitFileTask):
-        self.remove_upload_task(task.local_file_id())
+        file_id = task.local_file_id()
+
+        self.remove_upload_task(file_id)
 
     def on_transfer_file_completed(self, task: TransferFileTask):
-        pass
+        file_id = task.local_file_id()
+
+        if self.has_download(file_id):
+            self.remove_download_task(file_id)
    
     def start_async_workers(self, workers: list[AsyncWorker]):
         for worker in workers:
