@@ -5,14 +5,17 @@ from ..db.db_conn_mgr import DbConnectionManager
 from ..error import FileDownloadError, FileServerErrorCode, FileUploadError
 from ..file import File
 from ..file_cache import FileCache
-from ..file_chunk import chunk_encoder, chunk_decoder
+from ..file_chunk import chunk_encoder, chunk_decoder, get_encrypted_chunk_encoder, get_encrypted_chunk_decoder
 from .file_task import FileTask
 from .file_transfer_status import FileTransferStatus
+from ..key import Key
 from ..session_mgr import SessionManager
 from ..util.file import chunked_copy, str_mem_size, str_path, write_all
+from ..util.crypto import get_encryptor_factory, get_decryptor_factory
 from ..util.logging import log_exception_stack
 import logging
-from typing import BinaryIO
+from threading import RLock
+from typing import BinaryIO, Optional
 
 class LocalServerController(Controller):
 
@@ -23,15 +26,15 @@ class LocalServerController(Controller):
         db_conn_mgr - database connection manager
         session_mgr - session store
         store - file store
-        encode_chunk - file chunk encoder
-        decode_chunk - file chunk decoder
     '''
-    def __init__(self, async_controller: AsyncController, dao_factory: DAOFactory, db_conn_mgr: DbConnectionManager, session_mgr: SessionManager, store: FileCache, encode_chunk: chunk_encoder, decode_chunk: chunk_decoder):
+    def __init__(self, async_controller: AsyncController, dao_factory: DAOFactory, db_conn_mgr: DbConnectionManager, session_mgr: SessionManager, store: FileCache):
         super().__init__(db_conn_mgr, session_mgr, store)
         self._async_controller = async_controller
         self._dao_factory = dao_factory
-        self._encode_chunk = encode_chunk
-        self._decode_chunk = decode_chunk
+        self._chunk_encryptors: dict[str, chunk_encoder] = dict()
+        self._chunk_enc_lock: RLock = RLock()
+        self._chunk_decryptors: dict[str, chunk_decoder] = dict()
+        self._chunk_dec_lock: RLock = RLock()
 
     def async_controller(self):
         return self._async_controller
@@ -41,6 +44,45 @@ class LocalServerController(Controller):
 
     def remote_enabled(self):
         return self._async_controller.remote_enabled()
+
+    def get_key(self, key_id: str) -> Key:
+        conn = self.db_conn_mgr().db_connect()
+        try:
+            return self.dao_factory().key_dao(conn).get_key(key_id)
+        finally:
+            self.db_conn_mgr().db_close(conn)
+
+    def chunk_encryptor(self, key_id: Optional[str]=None) -> chunk_encoder:
+        with self._chunk_enc_lock:
+            if key_id is None:
+                key_id = 'system'
+            chunk_enc = self._chunk_encryptors.get(key_id)
+            if chunk_enc is not None:
+                return chunk_enc
+
+            logging.debug('Initializing file encryption with key id [{}]'.format(key_id))
+            key = self.get_key(key_id)
+            enc_factory = get_encryptor_factory(key.algorithm(), key.key_bytes())
+            chunk_enc = get_encrypted_chunk_encoder(enc_factory)
+            self._chunk_encryptors[key_id] = chunk_enc
+            logging.debug('Initialized file encryption with {}'.format(str(key)))
+            return chunk_enc
+
+    def chunk_decryptor(self, key_id: Optional[str]=None) -> chunk_decoder:
+        with self._chunk_dec_lock:
+            if key_id is None:
+                key_id = 'system'
+            chunk_dec = self._chunk_decryptors.get(key_id)
+            if chunk_dec is not None:
+                return chunk_dec
+
+            logging.debug('Initializing file decryption with key id [{}]'.format(key_id))
+            key = self.get_key(key_id)
+            dec_factory = get_decryptor_factory(key.algorithm(), key.key_bytes())
+            chunk_dec = get_encrypted_chunk_decoder(dec_factory)
+            self._chunk_decryptors[key_id] = chunk_dec
+            logging.debug('Initialized file decryption with {}'.format(str(key)))
+            return chunk_dec
 
     def init_store(self):
         conn = self.db_conn_mgr().db_connect()
@@ -145,7 +187,7 @@ class LocalServerController(Controller):
             # or evicted from the cache until it has been synced to the remote
             # server.
             #
-            upload_file = self.store().write_file(local_file_id, alloc_space=file_size, encode_chunk=self._encode_chunk, decode_chunk=self._decode_chunk)
+            upload_file = self.store().write_file(local_file_id, alloc_space=file_size, encode_chunk=self.chunk_encryptor())
             logging.debug('Opened file for writing in cache [{}]'.format(upload_file.file_id()))
 
             if self.remote_enabled():
@@ -272,7 +314,7 @@ class LocalServerController(Controller):
         # First, try reading the file from the cache if it is already
         # present there.
         #
-        download_file = self.store().read_file(file_id, encode_chunk=self._encode_chunk, decode_chunk=self._decode_chunk)
+        download_file = self.store().read_file(file_id, decode_chunk=self.chunk_decryptor())
 
         if download_file is None:
             #
@@ -280,7 +322,7 @@ class LocalServerController(Controller):
             #
             logging.debug('Cache miss, starting download')
             self.async_controller().start_download(file_id, timeout=30)
-            download_file = self.store().read_file(file_id, encode_chunk=self._encode_chunk, decode_chunk=self._decode_chunk)
+            download_file = self.store().read_file(file_id, decode_chunk=self.chunk_decryptor())
 
         #
         # Cache hit, send the file to the client.

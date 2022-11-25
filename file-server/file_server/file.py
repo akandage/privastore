@@ -54,7 +54,7 @@ class File(object):
 
     @staticmethod
     def is_valid_file_id(file_id: str) -> bool:
-        if type(file_id) is str and len(file_id) < 38 or not file_id.startswith('F-'):
+        if type(file_id) is not str or len(file_id) < 38 or not file_id.startswith('F-'):
             return False
         try:
             uuid.UUID(file_id[2:])

@@ -1,6 +1,7 @@
 import logging
 import os
 import sqlite3
+from ....key import Key
 from ....util.crypto import hash_user_password
 
 def setup_db(db_config):
@@ -13,6 +14,7 @@ def setup_db(db_config):
     conn = sqlite3.connect(db_path)
     try:
         create_user_account_table(conn)
+        create_key_table(conn)
         create_directory_table(conn)
         create_file_table(conn)
         create_file_version_table(conn)
@@ -41,6 +43,24 @@ def create_user_account_table(conn):
         ''',
         ('psadmin', hash_user_password('psadmin'))
     )
+    conn.commit()
+
+def create_key_table(conn):
+    logging.debug('Setting up ps_key table')
+    conn.execute(
+        '''
+        CREATE TABLE ps_key (
+            id INTEGER PRIMARY KEY NOT NULL,
+            name VARCHAR(50) UNIQUE NOT NULL,
+            key_bytes VARCHAR(32) NOT NULL,
+            algorithm VARCHAR(50) NOT NULL,
+            is_system BOOLEAN NOT NULL DEFAULT 0
+        )
+        '''
+    )
+    algorithm = 'aes-256-cbc'
+    key_bytes = Key.generate_key_bytes(algorithm)
+    conn.execute("INSERT INTO ps_key (id, name, key_bytes, algorithm, is_system) VALUES (?, ?, ?, ?, ?)", (1, 'system', key_bytes, algorithm, True))
     conn.commit()
 
 def create_directory_table(conn):
@@ -96,6 +116,7 @@ def create_file_version_table(conn):
             file_id INTEGER NOT NULL,
             version INTEGER NOT NULL,
             created_timestamp INTEGER NOT NULL,
+            key_id INTEGER NOT NULL DEFAULT 1,
             local_id VARCHAR(38) UNIQUE NULL,
             remote_id VARCHAR(38) UNIQUE NULL,
             file_size INTEGER NOT NULL DEFAULT 0,
@@ -106,6 +127,7 @@ def create_file_version_table(conn):
             local_transfer_status INTEGER NOT NULL,
             remote_transfer_status INTEGER NOT NULL,
             FOREIGN KEY (file_id) REFERENCES ps_file (id) ON DELETE CASCADE,
+            FOREIGN KEY (key_id) REFERENCES ps_key (id) ON DELETE RESTRICT,
             PRIMARY KEY (file_id, version)
         )
         '''

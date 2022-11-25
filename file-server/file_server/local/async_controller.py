@@ -153,6 +153,10 @@ class AsyncController(Daemon):
         # TODO: Epoch handling.
         task = CommitFileTask(local_file_id, epoch_no=1)
         self.add_commit_task(local_file_id, task)
+        #
+        # We can send a commit task immediately as the worker will check the
+        # remote transfer state of the file before actually committing.
+        #
         self.get_upload_worker(local_file_id).send_task(task, timeout=timeout)
         return task
 

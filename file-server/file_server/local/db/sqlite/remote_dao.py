@@ -18,7 +18,7 @@ class SqliteRemoteDAO(RemoteDAO):
                 ''', (cluster_name,))
                 res = cur.fetchone()
                 if res is None:
-                    raise RemoteServerError('Cluster [{}] not found!'.format(cluster_name))
+                    raise RemoteServerError('Remote cluster [{}] not found!'.format(cluster_name), FileServerErrorCode.REMOTE_CLUSTER_NOT_FOUND)
                 # TODO: Don't use plaintext password.
                 username, password = res
                 self._conn.commit()

@@ -30,6 +30,7 @@ class FileServerErrorCode:
     INSUFFICIENT_SPACE = "INSUFFICIENT_SPACE"
     IO_ERROR = "IO_ERROR"
     IO_TIMEOUT = "IO_TIMEOUT"
+    KEY_NOT_FOUND = "KEY_NOT_FOUND"
     SESSION_NOT_FOUND = "SESSION_NOT_FOUND"
     INVALID_CHUNK_NUM = "INVALID_CHUNK_NUM"
     INVALID_EPOCH_NO = "INVALID_EPOCH_NO"
@@ -41,6 +42,7 @@ class FileServerErrorCode:
     INTERNAL_ERROR = "INTERNAL_ERROR"
     REMOTE_ERROR = "REMOTE_ERROR"
     REMOTE_AUTH_ERROR = "REMOTE_AUTH_ERROR"
+    REMOTE_CLUSTER_NOT_FOUND = "REMOTE_CLUSTER_NOT_FOUND"
     REMOTE_DOWNLOAD_ERROR = "REMOTE_DOWNLOAD_ERROR"
     REMOTE_UPLOAD_ERROR = "REMOTE_UPLOAD_ERROR"
     REMOTE_UPLOAD_CANCELLED = "REMOTE_UPLOAD_CANCELLED"
@@ -83,6 +85,10 @@ class FileDownloadError(FileServerError):
         super().__init__(msg, error_code)
 
 class FileUploadError(FileServerError):
+    def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
+        super().__init__(msg, error_code)
+
+class KeyError(FileServerError):
     def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
         super().__init__(msg, error_code)
 

@@ -1,4 +1,3 @@
-from collections import namedtuple
 from ...db.dao import DataAccessObject
 from ...remote_client import RemoteEndpoint, RemoteCredentials
 

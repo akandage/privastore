@@ -48,10 +48,6 @@ class TestLocalServer(TestServer):
                 'sqlite-db-path': os.path.join(self.get_test_dir(), 'local_server.db'),
                 'connection-pool-size': '1'
             },
-            'encryption': {
-                'key-algorithm': 'aes-128-cbc',
-                'key-bytes': '770A8A65DA156D24EE2A093277530142'
-            },
             'remote': {
                 'enable-remote-server': '0'
             },

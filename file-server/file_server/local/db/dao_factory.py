@@ -1,5 +1,6 @@
 from .directory_dao import DirectoryDAO
 from .file_dao import FileDAO
+from .key_dao import KeyDAO
 from .remote_dao import RemoteDAO
 from .user_dao import UserDAO
 import sqlite3
@@ -18,5 +19,8 @@ class DAOFactory(object):
     def directory_dao(self, conn: sqlite3.Connection) -> DirectoryDAO:
         raise Exception('Not implemented!')
     
+    def key_dao(self, conn: sqlite3.Connection) -> KeyDAO:
+        raise Exception('Not implemented!')
+
     def remote_dao(self, conn: sqlite3.Connection) -> RemoteDAO:
         raise Exception('Not implemented!')

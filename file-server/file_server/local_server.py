@@ -50,25 +50,10 @@ class LocalServer(Server):
         self.init_session()
         self.init_store()
 
-        encrypt_config = self.config('encryption')
-        key_alg = encrypt_config.get('key-algorithm', 'aes-128-cbc')
-        key_bytes = encrypt_config.get('key-bytes')
-        logging.info('Initializing file encryption (using [{}] algorithm)'.format(key_alg))
-
-        if key_bytes is not None:
-            key_bytes = bytes.fromhex(key_bytes)
-            enc_factory = get_encryptor_factory(key_alg, key_bytes)
-            dec_factory = get_decryptor_factory(key_alg, key_bytes)
-            encrypt_chunk = get_encrypted_chunk_encoder(enc_factory)
-            decrypt_chunk = get_encrypted_chunk_decoder(dec_factory)
-        else:
-            raise Exception('No encryption key!')
-
         logging.debug('Initializing controller')
         self.init_async_controller()
         self._controller = LocalServerController(self.async_controller(),
-            self.dao_factory(), self.db_conn_mgr(), self.session_mgr(), self.store(), 
-            encode_chunk=encrypt_chunk, decode_chunk=decrypt_chunk)
+            self.dao_factory(), self.db_conn_mgr(), self.session_mgr(), self.store())
         self._controller.init_auth(self.auth_config())
         self._controller.init_store()
         self.init_api()
