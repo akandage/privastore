@@ -112,9 +112,9 @@ class SqliteFileDAO(FileDAO):
                     raise FileError('File [{}] not found in path [{}]'.format(file_name, str_path(path)), FileServerErrorCode.FILE_NOT_FOUND)
                 cur.execute('''
                         UPDATE ps_file_version 
-                        SET local_id = ?, file_size = ?, size_on_disk = ?, total_chunks = ?, local_transfer_status = ? 
+                        SET local_id = ?, file_size = ?, size_on_disk = ?, downloaded_chunks = ?, total_chunks = ?, local_transfer_status = ? 
                         WHERE file_id = ? AND version = ?
-                    ''', (local_id, file_size, size_on_disk, total_chunks, transfer_status.value, file_id, version))
+                    ''', (local_id, file_size, size_on_disk, total_chunks, total_chunks, transfer_status.value, file_id, version))
                 if cur.rowcount != 1:
                     raise FileError('File [{}] version [{}] not found!'.format(str_path(path + [file_name]), version), FileServerErrorCode.FILE_VERSION_NOT_FOUND)
                 self._conn.commit()

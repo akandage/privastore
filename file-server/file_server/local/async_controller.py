@@ -86,6 +86,13 @@ class AsyncController(Daemon):
         finally:
             self.db_conn_mgr().db_close(conn)
 
+    def update_file_download(self, local_id: str, transferred_chunks: int=0):
+        conn = self.db_conn_mgr().db_connect()
+        try:
+            self.dao_factory().file_dao(conn).update_file_download(local_id, transferred_chunks)
+        finally:
+            self.db_conn_mgr().db_close(conn)
+
     def has_upload(self, local_file_id: str):
         with self._uploads_lock:
             return local_file_id in self._upload_tasks
@@ -160,6 +167,7 @@ class AsyncController(Daemon):
             if self.has_download(local_file_id):
                 logging.debug('File [{}] already being downloaded'.format(local_file_id))
                 return
+            self.update_file_download(local_file_id, 0)
             task = TransferFileTask(local_file_id, file_size)
             self.add_download_task(local_file_id, task)
             self.store().create_empty_file(local_file_id, file_size)

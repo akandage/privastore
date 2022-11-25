@@ -79,7 +79,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             120,
             1,
             0,
-            0,
+            1,
             FileTransferStatus.TRANSFERRED_DATA,
             FileTransferStatus.NONE
         ))
@@ -106,7 +106,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             120,
             1,
             0,
-            0,
+            1,
             FileTransferStatus.TRANSFERRED_DATA,
             FileTransferStatus.NONE
         ))
@@ -119,7 +119,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             2200,
             2,
             0,
-            0,
+            2,
             FileTransferStatus.TRANSFERRED_DATA,
             FileTransferStatus.NONE
         ))
@@ -142,7 +142,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             120,
             1,
             0,
-            0,
+            1,
             FileTransferStatus.TRANSFERRED_DATA,
             FileTransferStatus.TRANSFERRED_DATA
         ))
@@ -170,7 +170,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             120,
             1,
             0,
-            0,
+            1,
             FileTransferStatus.TRANSFERRED_DATA,
             FileTransferStatus.TRANSFERRED_DATA
         ))
@@ -183,7 +183,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             140,
             1,
             0,
-            0,
+            1,
             FileTransferStatus.TRANSFERRED_DATA,
             FileTransferStatus.TRANSFERRING_DATA
         ))
@@ -197,7 +197,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             120,
             1,
             0,
-            0,
+            1,
             FileTransferStatus.TRANSFERRED_DATA,
             FileTransferStatus.TRANSFERRED_DATA
         ))
@@ -210,7 +210,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             140,
             1,
             0,
-            0,
+            1,
             FileTransferStatus.TRANSFERRED_DATA,
             FileTransferStatus.TRANSFERRED_DATA
         ))
@@ -256,7 +256,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             100,
             1,
             0,
-            0,
+            1,
             FileTransferStatus.TRANSFERRED_DATA,
             FileTransferStatus.NONE
         ))
@@ -284,7 +284,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             100,
             1,
             0,
-            0,
+            1,
             FileTransferStatus.TRANSFERRED_DATA,
             FileTransferStatus.TRANSFERRING_DATA
         ))

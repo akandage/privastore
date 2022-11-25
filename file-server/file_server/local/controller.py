@@ -47,7 +47,8 @@ class LocalServerController(Controller):
         try:
             file_dao = self.dao_factory().file_dao(conn)
             num_files_removed = 0
-            for file_id in self.store().files():
+            files = self.store().files()
+            for file_id in files:
                 try:
                     file_metadata = file_dao.get_file_version_metadata(local_id=file_id)
                 except Exception as e:
@@ -60,7 +61,7 @@ class LocalServerController(Controller):
 
                 transfer_status = file_metadata.local_transfer_status
                 remote_transfer_status = file_metadata.remote_transfer_status
-                downloaded_chunks = self.store().file_metadata(file_id).file_chunks
+                downloaded_chunks = file_metadata.downloaded_chunks
                 total_chunks = file_metadata.total_chunks
                 if transfer_status != FileTransferStatus.SYNCED_DATA:
                     logging.debug('File [{}] local transfer status is [{}]'.format(file_id, transfer_status.name))
@@ -78,6 +79,7 @@ class LocalServerController(Controller):
                 elif downloaded_chunks != total_chunks:
                     logging.debug('File [{}] download incomplete'.format(file_id))
                     self.store().remove_file_by_id(file_id)
+                    file_dao.update_file_download(file_id, 0)
                 
             logging.debug('Cleaned up [{}] files in cache'.format(num_files_removed))
         finally:
