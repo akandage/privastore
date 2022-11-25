@@ -16,9 +16,12 @@ class FileDAO(DataAccessObject):
     def update_file_local(self, path: list[str], file_name: str, version: int, local_id: str, file_size: int, size_on_disk: int, total_chunks: int, transfer_status: FileTransferStatus=FileTransferStatus.NONE) -> None:
         raise Exception('Not implemented!')
 
-    def update_file_remote(self, local_id: str, remote_id: Optional[str]=None, transfer_status: FileTransferStatus=FileTransferStatus.NONE) -> None:
+    def update_file_remote(self, local_id: str, remote_id: Optional[str]=None, transfer_status: FileTransferStatus=FileTransferStatus.NONE, transferred_chunks: int=0) -> None:
         raise Exception('Not implemented!')
     
+    def update_file_download(self, local_id: str, transferred_chunks: int=0) -> None:
+        raise Exception('Not implemented!')
+
     def update_file_transfer_status(self, path: list[str], file_name: str, version: int, local_transfer_status: Optional[FileTransferStatus]=None, remote_transfer_status: Optional[FileTransferStatus]=None):
         raise Exception('Not implemented!')
     

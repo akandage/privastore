@@ -55,9 +55,16 @@ class AsyncWorker(Worker):
         finally:
             self.db_conn_mgr().db_close(conn)
 
-    def update_file_remote(self, local_id: str, remote_id: Optional[str]=None, transfer_status: FileTransferStatus=FileTransferStatus.NONE):
+    def update_file_remote(self, local_id: str, remote_id: Optional[str]=None, transfer_status: FileTransferStatus=FileTransferStatus.NONE, transferred_chunks: int=0):
         conn = self.db_conn_mgr().db_connect()
         try:
-            self.dao_factory().file_dao(conn).update_file_remote(local_id, remote_id, transfer_status)
+            self.dao_factory().file_dao(conn).update_file_remote(local_id, remote_id, transfer_status, transferred_chunks)
+        finally:
+            self.db_conn_mgr().db_close(conn)
+    
+    def update_file_download(self, local_id: str, transferred_chunks: int=0):
+        conn = self.db_conn_mgr().db_connect()
+        try:
+            self.dao_factory().file_dao(conn).update_file_download(local_id, transferred_chunks)
         finally:
             self.db_conn_mgr().db_close(conn)

@@ -61,7 +61,7 @@ class LocalServerController(Controller):
                 transfer_status = file_metadata.local_transfer_status
                 remote_transfer_status = file_metadata.remote_transfer_status
                 if transfer_status != FileTransferStatus.SYNCED_DATA:
-                    logging.debug('File [{}] status is [{}]'.format(file_id, transfer_status.name))
+                    logging.debug('File [{}] local transfer status is [{}]'.format(file_id, transfer_status.name))
                     try:
                         file_dao.remove_file_version(file_id)
                         logging.debug('Removed in db')
@@ -71,6 +71,7 @@ class LocalServerController(Controller):
                     num_files_removed += 1
                     logging.debug('Removed in cache')
                 elif remote_transfer_status != FileTransferStatus.SYNCED_DATA:
+                    logging.debug('File [{}] remote transfer status is [{}]'.format(file_id, remote_transfer_status.name))
                     self.store().set_file_removable(file_id, False)
                 
             logging.debug('Cleaned up [{}] files in cache'.format(num_files_removed))

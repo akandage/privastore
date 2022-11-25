@@ -86,10 +86,11 @@ class UploadWorker(AsyncWorker):
                 if len(chunk_data) == 0:
                     break
                 self.remote_client().send_file_chunk(remote_file_id, chunk_data, chunks_sent+1, timeout=self.io_timeout())
+                self.update_file_remote(task.local_file_id(), transfer_status=FileTransferStatus.TRANSFERRING_DATA, transferred_chunks=chunks_sent)
                 chunks_sent += 1
             logging.debug('Sent {} file chunks'.format(chunks_sent))
         except FileServerError as e:
-            self.update_file_remote(task.local_file_id(), transfer_status=FileTransferStatus.TRANSFER_DATA_FAILED)
+            self.update_file_remote(task.local_file_id(), transfer_status=FileTransferStatus.TRANSFER_DATA_FAILED, transferred_chunks=chunks_sent)
             raise e
         finally:
             self.store().close_file(file)

@@ -5,6 +5,7 @@ from ...file_transfer_status import FileTransferStatus
 from ...file_type import FileType
 from ....util.file import str_path
 import logging
+import time
 
 class SqliteDirectoryDAO(DirectoryDAO):
 
@@ -60,8 +61,8 @@ class SqliteDirectoryDAO(DirectoryDAO):
                     raise FileError('File [{}] exists in path [{}]'.format(file_name, str_path(path)), FileServerErrorCode.FILE_EXISTS)
                 cur.execute('INSERT INTO ps_file (name, file_type, parent_id, is_hidden) VALUES (?, ?, ?, ?)', (file_name, file_type.value, directory_id, is_hidden))
                 created_file_id = cur.lastrowid
-                cur.execute('INSERT INTO ps_file_version (file_id, version, local_transfer_status, remote_transfer_status) VALUES (?, ?, ?, ?)', 
-                    (created_file_id, 1, FileTransferStatus.NONE.value, FileTransferStatus.NONE.value))
+                cur.execute('INSERT INTO ps_file_version (file_id, version, created_timestamp, local_transfer_status, remote_transfer_status) VALUES (?, ?, ?, ?, ?)', 
+                    (created_file_id, 1, round(time.time()), FileTransferStatus.NONE.value, FileTransferStatus.NONE.value))
                 self._conn.commit()
                 return created_file_id
             except DirectoryError as e:

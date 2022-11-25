@@ -47,6 +47,7 @@ class DownloadWorker(AsyncWorker):
                     # Chunk numbers are 1-indexed.
                     chunk = self.remote_client().read_file_chunk(remote_id, chunk_offset+1, timeout=self.io_timeout())
                     file.append_chunk(chunk)
+                    self.update_file_download(task.local_file_id(), chunk_offset+1)
                     logging.debug('Received chunk')
                 logging.debug('Received {} chunks'.format(total_chunks))
                 downloaded = True
@@ -57,6 +58,7 @@ class DownloadWorker(AsyncWorker):
                 logging.debug('Closed file in cache')
         except FileServerError as e:
             try:
+                self.update_file_download(task.local_file_id(), 0)
                 self.store().remove_file(file)
                 logging.debug('Removed file from cache')
             except:

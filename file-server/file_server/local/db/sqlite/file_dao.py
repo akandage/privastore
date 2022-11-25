@@ -131,7 +131,7 @@ class SqliteFileDAO(FileDAO):
             except:
                 pass
     
-    def update_file_remote(self, local_id, remote_id = None, transfer_status = FileTransferStatus.NONE):
+    def update_file_remote(self, local_id, remote_id = None, transfer_status = FileTransferStatus.NONE, transferred_chunks=0):
         if not File.is_valid_file_id(local_id):
             raise FileError('Invalid local file id!', FileServerErrorCode.INVALID_FILE_ID)
         if remote_id is not None and not File.is_valid_file_id(remote_id):
@@ -148,9 +148,9 @@ class SqliteFileDAO(FileDAO):
                 else:
                     cur.execute('''
                             UPDATE ps_file_version 
-                            SET remote_transfer_status = ? 
+                            SET remote_transfer_status = ?, uploaded_chunks = ?  
                             WHERE local_id = ?
-                        ''', (transfer_status.value, local_id))
+                        ''', (transfer_status.value, transferred_chunks, local_id))
                 if cur.rowcount != 1:
                     raise FileError('File [{}] not found!'.format(local_id), FileServerErrorCode.FILE_VERSION_NOT_FOUND)
                 self._conn.commit()
@@ -172,6 +172,38 @@ class SqliteFileDAO(FileDAO):
             except:
                 pass
     
+    def update_file_download(self, local_id, transferred_chunks=0):
+        if not File.is_valid_file_id(local_id):
+            raise FileError('Invalid local file id!', FileServerErrorCode.INVALID_FILE_ID)
+        cur = self._conn.cursor()
+        try:
+            try:
+                cur.execute('''
+                        UPDATE ps_file_version 
+                        SET downloaded_chunks = ?  
+                        WHERE local_id = ?
+                    ''', (transferred_chunks, local_id))
+                if cur.rowcount != 1:
+                    raise FileError('File [{}] not found!'.format(local_id), FileServerErrorCode.FILE_VERSION_NOT_FOUND)
+                self._conn.commit()
+            except DirectoryError as e:
+                logging.error('Directory error: {}'.format(str(e)))
+                self.rollback_nothrow()
+                raise e
+            except FileError as e:
+                logging.error('File error: {}'.format(str(e)))
+                self.rollback_nothrow()
+                raise e
+            except Exception as e:
+                logging.error('Query error {}'.format(str(e)))
+                self.rollback_nothrow()
+                raise e
+        finally:
+            try:
+                cur.close()
+            except:
+                pass
+
     def update_file_transfer_status(self, path, file_name, version, local_transfer_status=None, remote_transfer_status=None):
         if len(file_name) == 0:
             raise FileError('File name can\'t be empty!', FileServerErrorCode.FILE_NAME_EMPTY)
