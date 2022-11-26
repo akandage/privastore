@@ -42,6 +42,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             1,
             None,
             None,
+            'null',
             0,
             0,
             0,
@@ -55,6 +56,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             1,
             None,
             None,
+            'null',
             0,
             0,
             0,
@@ -69,12 +71,13 @@ class TestSqliteFileDAO(unittest.TestCase):
         f2_local_id = 'F-{}'.format(uuid.uuid4())
         self.dir_dao.create_file([], 'file_1')
         self.dir_dao.create_file([], 'file_2')
-        self.dao.update_file_local([], 'file_1', 1, f1_local_id, 100, 120, 1, FileTransferStatus.TRANSFERRED_DATA)
+        self.dao.update_file_local([], 'file_1', 1, f1_local_id, 'null', 100, 120, 1, FileTransferStatus.TRANSFERRED_DATA)
         self.assertEqual(self.dao.get_file_version_metadata([], 'file_1'), (
             FileType.BINARY_DATA,
             1,
             f1_local_id,
             None,
+            'null',
             100,
             120,
             1,
@@ -88,6 +91,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             1,
             None,
             None,
+            'null',
             0,
             0,
             0,
@@ -96,12 +100,13 @@ class TestSqliteFileDAO(unittest.TestCase):
             FileTransferStatus.NONE,
             FileTransferStatus.NONE
         ))
-        self.dao.update_file_local([], 'file_2', 1, f2_local_id, 2000, 2200, 2, FileTransferStatus.TRANSFERRED_DATA)
+        self.dao.update_file_local([], 'file_2', 1, f2_local_id, 'system', 2000, 2200, 2, FileTransferStatus.TRANSFERRED_DATA)
         self.assertEqual(self.dao.get_file_version_metadata([], 'file_1'), (
             FileType.BINARY_DATA,
             1,
             f1_local_id,
             None,
+            'null',
             100,
             120,
             1,
@@ -115,6 +120,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             1,
             f2_local_id,
             None,
+            'system',
             2000,
             2200,
             2,
@@ -131,13 +137,14 @@ class TestSqliteFileDAO(unittest.TestCase):
         f2_remote_id = 'F-{}'.format(uuid.uuid4())
         self.dir_dao.create_file([], 'file_1')
         self.dir_dao.create_file([], 'file_2')
-        self.dao.update_file_local([], 'file_1', 1, f1_local_id, 100, 120, 1, FileTransferStatus.TRANSFERRED_DATA)
+        self.dao.update_file_local([], 'file_1', 1, f1_local_id, 'null', 100, 120, 1, FileTransferStatus.TRANSFERRED_DATA)
         self.dao.update_file_remote(f1_local_id, f1_remote_id, FileTransferStatus.TRANSFERRED_DATA)
         self.assertEqual(self.dao.get_file_version_metadata([], 'file_1'), (
             FileType.BINARY_DATA,
             1,
             f1_local_id,
             f1_remote_id,
+            'null',
             100,
             120,
             1,
@@ -151,6 +158,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             1,
             None,
             None,
+            'null',
             0,
             0,
             0,
@@ -159,13 +167,14 @@ class TestSqliteFileDAO(unittest.TestCase):
             FileTransferStatus.NONE,
             FileTransferStatus.NONE
         ))
-        self.dao.update_file_local([], 'file_2', 1, f2_local_id, 120, 140, 1, FileTransferStatus.TRANSFERRED_DATA)
+        self.dao.update_file_local([], 'file_2', 1, f2_local_id, 'null', 120, 140, 1, FileTransferStatus.TRANSFERRED_DATA)
         self.dao.update_file_remote(f2_local_id, f2_remote_id, FileTransferStatus.TRANSFERRING_DATA)
         self.assertEqual(self.dao.get_file_version_metadata([], 'file_1'), (
             FileType.BINARY_DATA,
             1,
             f1_local_id,
             f1_remote_id,
+            'null',
             100,
             120,
             1,
@@ -179,6 +188,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             1,
             f2_local_id,
             f2_remote_id,
+            'null',
             120,
             140,
             1,
@@ -193,6 +203,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             1,
             f1_local_id,
             f1_remote_id,
+            'null',
             100,
             120,
             1,
@@ -206,6 +217,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             1,
             f2_local_id,
             f2_remote_id,
+            'null',
             120,
             140,
             1,
@@ -225,6 +237,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             1,
             None,
             None,
+            'null',
             0,
             0,
             0,
@@ -238,6 +251,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             1,
             None,
             None,
+            'null',
             0,
             0,
             0,
@@ -246,12 +260,13 @@ class TestSqliteFileDAO(unittest.TestCase):
             FileTransferStatus.NONE,
             FileTransferStatus.NONE
         ))
-        self.dao.update_file_local([], 'file_1', 1, f1_local_id, 100, 100, 1, FileTransferStatus.TRANSFERRED_DATA)
+        self.dao.update_file_local([], 'file_1', 1, f1_local_id, 'null', 100, 100, 1, FileTransferStatus.TRANSFERRED_DATA)
         self.assertEqual(self.dao.get_file_version_metadata([], 'file_1'), (
             FileType.BINARY_DATA,
             1,
             f1_local_id,
             None,
+            'null',
             100,
             100,
             1,
@@ -265,6 +280,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             1,
             None,
             None,
+            'null',
             0,
             0,
             0,
@@ -280,6 +296,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             1,
             f1_local_id,
             None,
+            'null',
             100,
             100,
             1,
@@ -293,6 +310,7 @@ class TestSqliteFileDAO(unittest.TestCase):
             1,
             None,
             None,
+            'null',
             0,
             0,
             0,

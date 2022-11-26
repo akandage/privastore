@@ -4,6 +4,7 @@ from http import HTTPStatus
 from ....api.http.http_request_handler import BaseHttpApiRequestHandler
 from ....api.http.http_request_handler import CONNECTION_HEADER, CONNECTION_CLOSE, CONTENT_TYPE_HEADER, CONTENT_TYPE_JSON, CONTENT_LENGTH_HEADER
 import json
+from ....key import Key
 import logging
 import urllib.parse
 from ....util.logging import log_exception_stack
@@ -267,7 +268,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             Handle upload file API.
 
             Method: POST
-            Path: /1/upload/<path>
+            Path: /1/upload/<path>[?key=<key-id>]
             Request Headers:
                 Content-Length: <file-size (bytes)>
                 Content-Type: <mime-type>
@@ -299,7 +300,23 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             return
 
         try:
-            self.controller().upload_file(path, file_name, self.rfile, self.content_len)
+            key_id = self.url_query.get('key')
+            if key_id is not None:
+                key_id = key_id[-1]
+
+                if not Key.is_valid_key_id(key_id):
+                    self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid encryption key!')
+                    return
+            else:
+                # Default to encrypting using system key.
+                key_id = 'system'
+        except:
+            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid encryption key!')
+            return
+
+        try:
+            # TODO: Upload a new file version.
+            self.controller().upload_file(path, file_name, self.rfile, self.content_len, 1, key_id)
         except DirectoryError as e:
             self.handle_directory_error(e)
             return

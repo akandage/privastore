@@ -58,6 +58,7 @@ def create_key_table(conn):
         )
         '''
     )
+    conn.execute("INSERT INTO ps_key (id, name, key_bytes, algorithm, is_system) VALUES (?, ?, ?, ?, ?)", (0, 'null', bytes(), 'null', False))
     algorithm = 'aes-256-cbc'
     key_bytes = Key.generate_key_bytes(algorithm)
     conn.execute("INSERT INTO ps_key (id, name, key_bytes, algorithm, is_system) VALUES (?, ?, ?, ?, ?)", (1, 'system', key_bytes, algorithm, True))
@@ -116,7 +117,7 @@ def create_file_version_table(conn):
             file_id INTEGER NOT NULL,
             version INTEGER NOT NULL,
             created_timestamp INTEGER NOT NULL,
-            key_id INTEGER NOT NULL DEFAULT 1,
+            key_id INTEGER NOT NULL DEFAULT 0,
             local_id VARCHAR(38) UNIQUE NULL,
             remote_id VARCHAR(38) UNIQUE NULL,
             file_size INTEGER NOT NULL DEFAULT 0,

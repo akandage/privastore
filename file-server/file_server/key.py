@@ -7,7 +7,7 @@ class Key(object):
     def __init__(self, key_id: str, key_bytes: bytes, algorithm: str, is_system: bool):
         if type(key_bytes) != bytes or len(key_bytes) == 0:
             raise KeyError('Invalid key bytes!')
-        if not is_system and not self.is_valid_key_id(key_id):
+        if not self.is_valid_key_id(key_id):
             raise KeyError('Invalid key id!')
 
         self._key_id = key_id
@@ -33,7 +33,11 @@ class Key(object):
 
     @staticmethod
     def is_valid_key_id(key_id: str) -> bool:
-        if type(key_id) is not str or len(key_id) < 38 or not key_id.startswith('K-'):
+        if type(key_id) is not str:
+            return False
+        if key_id == 'system':
+            return True
+        if len(key_id) < 38 or not key_id.startswith('K-'):
             return False
         try:
             uuid.UUID(key_id[2:])

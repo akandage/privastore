@@ -1,9 +1,10 @@
 from ..file_dao import FileDAO, FileVersionMetadata
-from ....error import DirectoryError, FileError, FileServerErrorCode
+from ....error import DirectoryError, FileError, FileServerErrorCode, KeyError
 from .directory_util import query_file_id, traverse_path
 from ....file import File
 from ...file_type import FileType
 from ...file_transfer_status import FileTransferStatus
+from ....key import Key
 from ....util.file import str_path
 import logging
 
@@ -21,44 +22,32 @@ class SqliteFileDAO(FileDAO):
         try:
             try:
                 cur.execute('BEGIN')
+                query = '''
+                    SELECT F.file_type, V.version, V.local_id, V.remote_id, 
+                        K.name, V.file_size, V.size_on_disk, V.total_chunks, 
+                        V.uploaded_chunks, V.downloaded_chunks, 
+                        V.local_transfer_status, V.remote_transfer_status 
+                    FROM ps_file AS F INNER JOIN ps_file_version AS V ON F.id = V.file_id 
+                        INNER JOIN ps_key AS K on K.id = V.key_id
+                '''
                 if local_id is not None:
-                    cur.execute('''
-                        SELECT F.file_type, V.version, V.local_id, V.remote_id, 
-                            V.file_size, V.size_on_disk, V.total_chunks, 
-                            V.uploaded_chunks, V.downloaded_chunks, 
-                            V.local_transfer_status, V.remote_transfer_status 
-                        FROM ps_file AS F INNER JOIN ps_file_version AS V ON F.id = V.file_id 
-                        WHERE V.local_id = ?
-                    ''', (local_id,))
-                    res = cur.fetchone()
+                    query += ' WHERE V.local_id = ?'
+                    cur.execute(query, (local_id,))
                 else:
                     directory_id = traverse_path(cur, path)
                     file_id = query_file_id(cur, directory_id, file_name)
                     if file_id is None:
                         raise FileError('File [{}] not found in path [{}]'.format(file_name, str_path(path)), FileServerErrorCode.FILE_NOT_FOUND)
                     if version is not None:
-                        cur.execute('''
-                            SELECT F.file_type, V.version, V.local_id, V.remote_id, 
-                                V.file_size, V.size_on_disk, V.total_chunks, 
-                                V.uploaded_chunks, V.downloaded_chunks, 
-                                V.local_transfer_status, V.remote_transfer_status 
-                            FROM ps_file AS F INNER JOIN ps_file_version AS V ON F.id = V.file_id 
-                            WHERE F.id = ? AND V.version = ?
-                        ''', (file_id, version))
-                        res = cur.fetchone()
+                        query += ' WHERE F.id = ? AND V.version = ?'
+                        cur.execute(query, (file_id, version))
                     else:
-                        cur.execute('''
-                            SELECT F.file_type, V.version, V.local_id, V.remote_id, 
-                                V.file_size, V.size_on_disk, V.total_chunks, 
-                                V.uploaded_chunks, V.downloaded_chunks, 
-                                V.local_transfer_status, V.remote_transfer_status 
-                            FROM ps_file AS F INNER JOIN ps_file_version AS V ON F.id = V.file_id 
-                            WHERE F.id = ? 
-                            ORDER BY V.version DESC
-                        ''', (file_id,))
-                        res = cur.fetchone()
+                        query += ' WHERE F.id = ?'
+                        query += ' ORDER BY V.version DESC'
+                        cur.execute(query, (file_id,))
+                res = cur.fetchone()
                 if res is None:
-                    raise FileError('File [{}] version [{}] not found!'.format(str_path(path + [file_name]), version), FileServerErrorCode.FILE_VERSION_NOT_FOUND)
+                    raise FileError('File version not found!', FileServerErrorCode.FILE_VERSION_NOT_FOUND)
                 self._conn.commit()
                 return FileVersionMetadata(
                     FileType(res[0]),
@@ -70,8 +59,9 @@ class SqliteFileDAO(FileDAO):
                     res[6],
                     res[7],
                     res[8],
-                    FileTransferStatus(res[9]),
-                    FileTransferStatus(res[10])
+                    res[9],
+                    FileTransferStatus(res[10]),
+                    FileTransferStatus(res[11])
                 )
             except DirectoryError as e:
                 logging.error('Directory error: {}'.format(str(e)))
@@ -91,11 +81,13 @@ class SqliteFileDAO(FileDAO):
             except:
                 pass
     
-    def update_file_local(self, path, file_name, version, local_id, file_size, size_on_disk, total_chunks, transfer_status = FileTransferStatus.NONE):
+    def update_file_local(self, path, file_name, version, local_id, key_id, file_size, size_on_disk, total_chunks, transfer_status = FileTransferStatus.NONE):
         if len(file_name) == 0:
             raise FileError('File name can\'t be empty!', FileServerErrorCode.FILE_NAME_EMPTY)
         if not File.is_valid_file_id(local_id):
             raise FileError('Invalid local file id!', FileServerErrorCode.INVALID_FILE_ID)
+        if key_id != 'null' and not Key.is_valid_key_id(key_id):
+            raise KeyError('Invalid key id!', FileServerErrorCode.INVALID_KEY_ID)
         if file_size <= 0:
             raise FileError('File size must be >= 0', FileServerErrorCode.INVALID_FILE_SIZE)
         if size_on_disk < 0:
@@ -110,11 +102,16 @@ class SqliteFileDAO(FileDAO):
                 file_id = query_file_id(cur, directory_id, file_name)
                 if file_id is None:
                     raise FileError('File [{}] not found in path [{}]'.format(file_name, str_path(path)), FileServerErrorCode.FILE_NOT_FOUND)
+                cur.execute('SELECT id FROM ps_key WHERE name = ?', (key_id,))
+                res = cur.fetchone()
+                if res is None:
+                    raise KeyError('Key [{}] not found!'.format(key_id), FileServerErrorCode.KEY_NOT_FOUND)
+                key_id, = res
                 cur.execute('''
                         UPDATE ps_file_version 
-                        SET local_id = ?, file_size = ?, size_on_disk = ?, downloaded_chunks = ?, total_chunks = ?, local_transfer_status = ? 
+                        SET local_id = ?, key_id = ?, file_size = ?, size_on_disk = ?, downloaded_chunks = ?, total_chunks = ?, local_transfer_status = ? 
                         WHERE file_id = ? AND version = ?
-                    ''', (local_id, file_size, size_on_disk, total_chunks, total_chunks, transfer_status.value, file_id, version))
+                    ''', (local_id, key_id, file_size, size_on_disk, total_chunks, total_chunks, transfer_status.value, file_id, version))
                 if cur.rowcount != 1:
                     raise FileError('File [{}] version [{}] not found!'.format(str_path(path + [file_name]), version), FileServerErrorCode.FILE_VERSION_NOT_FOUND)
                 self._conn.commit()

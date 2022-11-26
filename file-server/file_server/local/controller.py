@@ -5,7 +5,7 @@ from ..db.db_conn_mgr import DbConnectionManager
 from ..error import FileDownloadError, FileServerErrorCode, FileUploadError
 from ..file import File
 from ..file_cache import FileCache
-from ..file_chunk import chunk_encoder, chunk_decoder, get_encrypted_chunk_encoder, get_encrypted_chunk_decoder
+from ..file_chunk import chunk_encoder, chunk_decoder, default_chunk_encoder, default_chunk_decoder, get_encrypted_chunk_encoder, get_encrypted_chunk_decoder
 from .file_task import FileTask
 from .file_transfer_status import FileTransferStatus
 from ..key import Key
@@ -54,8 +54,9 @@ class LocalServerController(Controller):
 
     def chunk_encryptor(self, key_id: Optional[str]=None) -> chunk_encoder:
         with self._chunk_enc_lock:
-            if key_id is None:
-                key_id = 'system'
+            if key_id is None or key_id == 'null':
+                # Default key is the "null" key or no encryption.
+                return default_chunk_encoder
             chunk_enc = self._chunk_encryptors.get(key_id)
             if chunk_enc is not None:
                 return chunk_enc
@@ -70,8 +71,9 @@ class LocalServerController(Controller):
 
     def chunk_decryptor(self, key_id: Optional[str]=None) -> chunk_decoder:
         with self._chunk_dec_lock:
-            if key_id is None:
-                key_id = 'system'
+            if key_id is None or key_id == 'null':
+                # Default key is the "null" key or no encryption.
+                return default_chunk_decoder
             chunk_dec = self._chunk_decryptors.get(key_id)
             if chunk_dec is not None:
                 return chunk_dec
@@ -151,7 +153,7 @@ class LocalServerController(Controller):
         finally:
             self.db_conn_mgr().db_close(conn)
 
-    def upload_file(self, path: list[str], file_name: str, file: BinaryIO, file_size: int, file_version: int=1, sync: bool = True):
+    def upload_file(self, path: list[str], file_name: str, file: BinaryIO, file_size: int, file_version: int, key_id: str, sync: bool=True):
         logging.debug('Upload file [{}] version [{}] size [{}]'.format(str_path(path + [file_name]), file_version, file_size))
 
         if file_version == 1:
@@ -168,6 +170,7 @@ class LocalServerController(Controller):
             raise Exception('Not implemented!')
 
         upload_file: File = None
+        chunk_encryptor: chunk_encoder = self.chunk_encryptor(key_id)
         file_uploaded: bool = False
 
         try:
@@ -178,7 +181,7 @@ class LocalServerController(Controller):
 
             conn = self.db_conn_mgr().db_connect()
             try:
-                self.dao_factory().file_dao(conn).update_file_local(path, file_name, file_version, local_file_id, file_size, size_on_disk=0, total_chunks=0, transfer_status=FileTransferStatus.TRANSFERRING_DATA)
+                self.dao_factory().file_dao(conn).update_file_local(path, file_name, file_version, local_file_id, key_id, file_size, size_on_disk=0, total_chunks=0, transfer_status=FileTransferStatus.TRANSFERRING_DATA)
             finally:
                 self.db_conn_mgr().db_close(conn)
 
@@ -187,7 +190,7 @@ class LocalServerController(Controller):
             # or evicted from the cache until it has been synced to the remote
             # server.
             #
-            upload_file = self.store().write_file(local_file_id, alloc_space=file_size, encode_chunk=self.chunk_encryptor())
+            upload_file = self.store().write_file(local_file_id, alloc_space=file_size, encode_chunk=chunk_encryptor)
             logging.debug('Opened file for writing in cache [{}]'.format(upload_file.file_id()))
 
             if self.remote_enabled():
@@ -229,7 +232,7 @@ class LocalServerController(Controller):
             #
             conn = self.db_conn_mgr().db_connect()
             try:
-                self.dao_factory().file_dao(conn).update_file_local(path, file_name, file_version, upload_file.file_id(), file_size, size_on_disk, total_chunks, transfer_status=FileTransferStatus.SYNCED_DATA)
+                self.dao_factory().file_dao(conn).update_file_local(path, file_name, file_version, upload_file.file_id(), key_id, file_size, size_on_disk, total_chunks, transfer_status=FileTransferStatus.SYNCED_DATA)
             finally:
                 self.db_conn_mgr().db_close(conn)
             
@@ -301,6 +304,7 @@ class LocalServerController(Controller):
         logging.debug('Retrieved file metadata')
         file_type = file_metadata.file_type
         file_id = file_metadata.local_id
+        key_id = file_metadata.key_id
         file_size = file_metadata.file_size
         transfer_status = file_metadata.local_transfer_status
         total_chunks = file_metadata.total_chunks
@@ -310,11 +314,13 @@ class LocalServerController(Controller):
         elif transfer_status == FileTransferStatus.TRANSFER_DATA_FAILED:
             raise FileDownloadError('File upload failed!')
         
+        chunk_decryptor = self.chunk_decryptor(key_id)
+
         #
         # First, try reading the file from the cache if it is already
         # present there.
         #
-        download_file = self.store().read_file(file_id, decode_chunk=self.chunk_decryptor())
+        download_file = self.store().read_file(file_id, decode_chunk=chunk_decryptor)
 
         if download_file is None:
             #
@@ -322,7 +328,7 @@ class LocalServerController(Controller):
             #
             logging.debug('Cache miss, starting download')
             self.async_controller().start_download(file_id, timeout=30)
-            download_file = self.store().read_file(file_id, decode_chunk=self.chunk_decryptor())
+            download_file = self.store().read_file(file_id, decode_chunk=chunk_decryptor)
 
         #
         # Cache hit, send the file to the client.
