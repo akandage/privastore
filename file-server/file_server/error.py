@@ -81,6 +81,10 @@ class FileChunkError(FileServerError):
     def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
         super().__init__(msg, error_code)
 
+class FileDeleteError(FileServerError):
+    def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
+        super().__init__(msg, error_code)
+
 class FileDownloadError(FileServerError):
     def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
         super().__init__(msg, error_code)

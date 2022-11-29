@@ -1,6 +1,7 @@
 from ..directory_dao import DirectoryDAO
 from .directory_util import query_directory_id, query_file_id, traverse_path
 from ....error import DirectoryError, FileError, FileServerErrorCode
+from ....file import File
 from ...file_transfer_status import FileTransferStatus
 from ...file_type import FileType
 from ....util.file import str_path
@@ -83,8 +84,8 @@ class SqliteDirectoryDAO(DirectoryDAO):
             except:
                 pass
 
-    def remove_file(self, path, file_name, delete=False, is_hidden=False):
-        if len(file_name) == 0:
+    def remove_file(self, path, file_name, delete=False, remove_file_cb=None, is_hidden=False):
+        if file_name is not None and len(file_name) == 0:
             raise FileError('File name can\'t be empty!', FileServerErrorCode.FILE_NAME_EMPTY)
         cur = self._conn.cursor()
         try:
@@ -93,20 +94,27 @@ class SqliteDirectoryDAO(DirectoryDAO):
                 directory_id = traverse_path(cur, path)
                 if query_directory_id(cur, directory_id, file_name, is_hidden) is not None:
                     raise DirectoryError('[{}] in path [{}] is a directory'.format(file_name, str_path(path)), FileServerErrorCode.FILE_IS_DIRECTORY)
+                where = ' WHERE name = ? and parent_id = ?'
+                query_params = (file_name, directory_id)
+
+                if remove_file_cb is not None:
+                    query = 'SELECT local_id, remote_id FROM ps_file_version'
+                    query += where
+                    cur.execute(query, query_params)
+                    for local_id, remote_id in cur.fetchall():
+                        remove_file_cb(local_id, remote_id)
+
                 if delete:
-                    cur.execute('''
-                        DELETE FROM ps_file
-                        WHERE name = ? AND parent_id = ?
-                    ''', (file_name, directory_id))
+                    query = 'DELETE FROM ps_file'
+                    query += where
+                    cur.execute(query, query_params)
                     logging.debug('Remove file [{}] affected {} rows'.format(str_path(path + [file_name]), cur.rowcount))
-                    if cur.rowcount == 0:
+                    if cur.rowcount != 1:
                         raise FileError('File [{}] not found!'.format(str_path(path + [file_name])), FileServerErrorCode.FILE_NOT_FOUND)
                 else:
-                    cur.execute('''
-                        UPDATE ps_file
-                        SET is_removed = 1
-                        WHERE name = ? AND parent_id = ?
-                    ''', (file_name, directory_id))
+                    query = 'UPDATE ps_file SET is_removed = 1'
+                    query += where
+                    cur.execute(query, query_params)
                     if cur.rowcount != 1:
                         raise FileError('File [{}] not found!'.format(str_path(path + [file_name])), FileServerErrorCode.FILE_NOT_FOUND)
                 self._conn.commit()

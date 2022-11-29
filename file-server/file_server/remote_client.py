@@ -88,6 +88,9 @@ class RemoteClient(object):
             return f'/1/file?size={file_size}'
         return f'/1/file'
 
+    def file_path(self, file_id: str):
+        return f'/1/file/{file_id}'
+
     def file_chunk_path(self, file_id: str, chunk_offset: int):
         return f'/1/file/{file_id}?chunk={chunk_offset}'
 
@@ -191,6 +194,17 @@ class RemoteClient(object):
         else:
             logging.error('Create file error {}'.format(res))
             raise RemoteClientError('Create file error {}'.format(res), res)
+
+    def remove_file(self, file_id: str, timeout: int = 90) -> str:
+        path = self.file_path(file_id)
+
+        logging.debug('Removing file [{}]'.format(file_id))
+        res = self.send_remote_request(path, method=requests.delete, renew_session=True, timeout=timeout)
+        if isinstance(res, requests.Response):
+            logging.debug('Removed file [{}]'.format(file_id))
+        else:
+            logging.error('Remove file [{}] error {}'.format(file_id, res))
+            raise RemoteClientError('Remove file [{}] error {}'.format(file_id, res), res)
 
     def read_file_chunk(self, remote_file_id: str, chunk_offset: int, timeout: int = 90) -> bytes:
         path = self.file_chunk_path(remote_file_id, chunk_offset)

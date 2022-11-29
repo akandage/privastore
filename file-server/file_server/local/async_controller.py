@@ -5,8 +5,9 @@ from ..daemon import Daemon
 from .db.dao_factory import DAOFactory
 from .db.file_dao import FileVersionMetadata
 from ..db.db_conn_mgr import DbConnectionManager
+from .delete_file_task import DeleteFileTask
 from .download_worker import DownloadWorker
-from ..error import FileDownloadError, FileServerErrorCode, FileUploadError
+from ..error import FileDeleteError, FileDownloadError, FileServerErrorCode, FileUploadError
 from ..file import File
 from ..file_cache import FileCache
 from .file_task import FileTask
@@ -59,10 +60,10 @@ class AsyncController(Daemon):
                 retry_interval=worker_retry_interval, 
                 io_timeout=worker_io_timeout))
         
+        self._async_lock = RLock()
         self._upload_tasks: dict[str, list[FileTask]] = dict()
-        self._uploads_lock: RLock = RLock()
         self._download_tasks: dict[str, TransferFileTask] = dict()
-        self._downloads_lock: RLock = RLock()
+        self._delete_tasks: dict[str, DeleteFileTask] = dict()
     
     def dao_factory(self):
         return self._dao_factory
@@ -94,46 +95,56 @@ class AsyncController(Daemon):
             self.db_conn_mgr().db_close(conn)
 
     def has_upload(self, local_file_id: str):
-        with self._uploads_lock:
+        with self._async_lock:
             return local_file_id in self._upload_tasks
     
     def has_download(self, local_file_id: str):
-        with self._downloads_lock:
+        with self._async_lock:
             return local_file_id in self._download_tasks
 
+    def has_delete(self, local_file_id: str):
+        with self._async_lock:
+            return local_file_id in self._delete_tasks
+
     def add_upload_task(self, local_file_id: str, task: TransferFileTask):
-        with self._uploads_lock:
+        with self._async_lock:
             if self.has_upload(local_file_id):
                 raise FileUploadError('File [{}] already being uploaded'.format(local_file_id))
             self._upload_tasks[local_file_id] = [task]
 
     def add_commit_task(self, local_file_id: str, task: CommitFileTask):
-        with self._uploads_lock:
+        with self._async_lock:
             if not self.has_upload(local_file_id):
                 raise FileUploadError('File [{}] not being uploaded'.format(local_file_id))
             self._upload_tasks[local_file_id].append(task)
 
+    def add_delete_task(self, local_file_id: str, task: DeleteFileTask):
+        with self._async_lock:
+            if self.has_delete(local_file_id):
+                raise FileDeleteError('File [{}] already being deleted'.format(local_file_id))
+            self._delete_tasks[local_file_id] = task
+
     def add_download_task(self, local_file_id: str, task: TransferFileTask):
-        with self._downloads_lock:
+        with self._async_lock:
             if self.has_download(local_file_id):
-                raise FileUploadError('File [{}] already being downloaded'.format(local_file_id))
+                raise FileDownloadError('File [{}] already being downloaded'.format(local_file_id))
             self._download_tasks[local_file_id] = task
 
-    def get_upload_task(self, local_file_id: str) -> list[FileTask]:
-        with self._uploads_lock:
+    def get_upload_tasks(self, local_file_id: str) -> list[FileTask]:
+        with self._async_lock:
             return self._upload_tasks.get(local_file_id)
 
     def get_download_task(self, local_file_id: str) -> TransferFileTask:
-        with self._downloads_lock:
+        with self._async_lock:
             return self._download_tasks.get(local_file_id)
 
     def remove_upload_task(self, local_file_id: str):
-        with self._uploads_lock:
+        with self._async_lock:
             if local_file_id in self._upload_tasks:
                 self._upload_tasks.pop(local_file_id)
 
     def remove_download_task(self, local_file_id: str):
-        with self._downloads_lock:
+        with self._async_lock:
             if local_file_id in self._download_tasks:
                 self._download_tasks.pop(local_file_id)
 
@@ -144,13 +155,16 @@ class AsyncController(Daemon):
         return self._download_workers[hash(local_file_id) % self._num_download_workers]
 
     def start_upload(self, local_file_id: str, file_size: int, timeout: float=None):
+        logging.debug('Starting async upload file [{}]'.format(local_file_id))
         task = TransferFileTask(local_file_id, file_size, is_commit=False)
         self.add_upload_task(local_file_id, task)
         self.get_upload_worker(local_file_id).send_task(task, timeout=timeout)
+        logging.debug('Started async upload file [{}]'.format(local_file_id))
         return task
 
     def commit_upload(self, local_file_id: str, timeout: float=None):
         # TODO: Epoch handling.
+        logging.debug('Starting async commit file [{}]'.format(local_file_id))
         task = CommitFileTask(local_file_id, epoch_no=1)
         self.add_commit_task(local_file_id, task)
         #
@@ -158,7 +172,19 @@ class AsyncController(Daemon):
         # remote transfer state of the file before actually committing.
         #
         self.get_upload_worker(local_file_id).send_task(task, timeout=timeout)
+        logging.debug('Started async commit file [{}]'.format(local_file_id))
         return task
+
+    def delete(self, local_file_id: str, timeout: float=None):
+        logging.debug('Starting async delete file [{}]'.format(local_file_id))
+        task = DeleteFileTask(local_file_id)
+        with self._async_lock:
+            # TODO: Add a force option.
+            if self.has_download(local_file_id):
+                raise FileDeleteError('Cannot delete file [{}]. File is being downloaded'.format(local_file_id))
+            self.add_delete_task(local_file_id, task)
+        self.get_upload_worker(local_file_id).send_task(task, timeout=timeout)
+        logging.debug('Started async delete file [{}]'.format(local_file_id))
 
     def start_download(self, local_file_id: str, timeout: float=None):
         file_metadata = self.get_file_metadata(local_file_id)
@@ -167,24 +193,28 @@ class AsyncController(Daemon):
         if transfer_status != FileTransferStatus.SYNCED_DATA:
             raise FileDownloadError('Cannot download file [{}] not fully synced on remote server'.format(local_file_id), FileServerErrorCode.REMOTE_DOWNLOAD_ERROR)
         
-        with self._downloads_lock:
+        with self._async_lock:
+            if self.has_delete(local_file_id):
+                raise FileDownloadError('File [{}] being deleted'.format(local_file_id), FileServerErrorCode.FILE_NOT_FOUND)
             if self.has_download(local_file_id):
                 logging.debug('File [{}] already being downloaded'.format(local_file_id))
                 return
+            logging.debug('Starting async download file [{}]'.format(local_file_id))
             self.update_file_download(local_file_id, 0)
             task = TransferFileTask(local_file_id, file_size)
             self.add_download_task(local_file_id, task)
             self.store().create_empty_file(local_file_id, file_size)
         
         self.get_download_worker(local_file_id).send_task(task, timeout=timeout)
+        logging.debug('Started async download file [{}]'.format(local_file_id))
     
     def wait_for_upload(self, local_file_id: str, timeout: float=None) -> FileTask:
         # TODO
         pass
 
     def cancel_upload(self, local_file_id: str) -> list[FileTask]:
-        with self._uploads_lock:
-            tasks = self.get_upload_task(local_file_id)
+        with self._async_lock:
+            tasks = self.get_upload_tasks(local_file_id)
             if tasks is None:
                 return
             for task in tasks:
@@ -192,7 +222,7 @@ class AsyncController(Daemon):
             return tasks
 
     def cancel_download(self, local_file_id: str) -> TransferFileTask:
-        with self._downloads_lock:
+        with self._async_lock:
             task = self.get_download_task(local_file_id)
             if task is None:
                 return
