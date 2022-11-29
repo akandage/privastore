@@ -5,6 +5,7 @@ from ..daemon import Daemon
 from .db.dao_factory import DAOFactory
 from .db.file_dao import FileVersionMetadata
 from ..db.db_conn_mgr import DbConnectionManager
+from .database import DbWrapper
 from .delete_file_task import DeleteFileTask
 from .download_worker import DownloadWorker
 from ..error import FileDeleteError, FileDownloadError, FileServerErrorCode, FileUploadError
@@ -27,8 +28,7 @@ class AsyncController(Daemon):
     def __init__(self, remote_config: Union[dict, configparser.ConfigParser], dao_factory: DAOFactory, db_conn_mgr: DbConnectionManager, store: FileCache):
         super().__init__('async-controller')
 
-        self._dao_factory = dao_factory
-        self._db_conn_mgr = db_conn_mgr
+        self._db = DbWrapper(dao_factory, db_conn_mgr)
         self._store = store
 
         self._remote_enabled = config_bool(remote_config.get('enable-remote-server', '1'))
@@ -65,11 +65,8 @@ class AsyncController(Daemon):
         self._download_tasks: dict[str, TransferFileTask] = dict()
         self._delete_tasks: dict[str, DeleteFileTask] = dict()
     
-    def dao_factory(self):
-        return self._dao_factory
-
-    def db_conn_mgr(self):
-        return self._db_conn_mgr
+    def db(self):
+        return self._db
     
     def store(self):
         return self._store
@@ -79,20 +76,6 @@ class AsyncController(Daemon):
 
     def worker_io_timeout(self):
         return self._worker_io_timeout
-
-    def get_file_metadata(self, local_id: str) -> 'FileVersionMetadata':
-        conn = self.db_conn_mgr().db_connect()
-        try:
-            return self.dao_factory().file_dao(conn).get_file_version_metadata(local_id=local_id)
-        finally:
-            self.db_conn_mgr().db_close(conn)
-
-    def update_file_download(self, local_id: str, transferred_chunks: int=0):
-        conn = self.db_conn_mgr().db_connect()
-        try:
-            self.dao_factory().file_dao(conn).update_file_download(local_id, transferred_chunks)
-        finally:
-            self.db_conn_mgr().db_close(conn)
 
     def has_upload(self, local_file_id: str):
         with self._async_lock:
@@ -187,7 +170,7 @@ class AsyncController(Daemon):
         logging.debug('Started async delete file [{}]'.format(local_file_id))
 
     def start_download(self, local_file_id: str, timeout: float=None):
-        file_metadata = self.get_file_metadata(local_file_id)
+        file_metadata = self.db().get_local_file_metadata(local_file_id)
         file_size = file_metadata.file_size
         transfer_status = file_metadata.remote_transfer_status
         if transfer_status != FileTransferStatus.SYNCED_DATA:
@@ -200,7 +183,7 @@ class AsyncController(Daemon):
                 logging.debug('File [{}] already being downloaded'.format(local_file_id))
                 return
             logging.debug('Starting async download file [{}]'.format(local_file_id))
-            self.update_file_download(local_file_id, 0)
+            self.db().update_file_download(local_file_id, 0)
             task = TransferFileTask(local_file_id, file_size)
             self.add_download_task(local_file_id, task)
             self.store().create_empty_file(local_file_id, file_size)

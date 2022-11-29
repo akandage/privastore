@@ -8,6 +8,7 @@ from ..file_cache import FileCache
 from ..file_chunk import chunk_encoder, chunk_decoder, default_chunk_encoder, default_chunk_decoder, get_encrypted_chunk_encoder, get_encrypted_chunk_decoder
 from .file_task import FileTask
 from .file_transfer_status import FileTransferStatus
+from .file_type import FileType
 from ..key import Key
 from ..session_mgr import SessionManager
 from ..util.file import chunked_copy, str_mem_size, str_path, write_all
@@ -15,7 +16,7 @@ from ..util.crypto import get_encryptor_factory, get_decryptor_factory
 from ..util.logging import log_exception_stack
 import logging
 from threading import RLock
-from typing import BinaryIO, Optional
+from typing import BinaryIO, Callable, Optional
 
 class LocalServerController(Controller):
 
@@ -292,7 +293,7 @@ class LocalServerController(Controller):
 
         logging.debug('Uploaded file [{}]'.format(str_path(path + [file_name])))
 
-    def download_file(self, path, file_name, file, file_version=None, api_callback=None):
+    def download_file(self, path: list[str], file_name: str, file: BinaryIO, file_version: Optional[int]=None, api_callback: Optional[Callable[[str, FileType, int], None]]=None):
         logging.debug('Download file [{}] version [{}]'.format(str_path(path + [file_name]), file_version))
 
         conn = self.db_conn_mgr().db_connect()
@@ -362,7 +363,7 @@ class LocalServerController(Controller):
         
         logging.debug('File data downloaded [{}]'.format(str_mem_size(bytes_transferred)))
 
-    def list_directory(self, path, show_hidden=False):
+    def list_directory(self, path: list[str], show_hidden: bool=False):
         logging.debug('List directory [{}]'.format(str_path(path)))
         conn = self.db_conn_mgr().db_connect()
         try:
@@ -374,7 +375,7 @@ class LocalServerController(Controller):
         finally:
             self.db_conn_mgr().db_close(conn)
     
-    def get_file_metadata(self, path, file_name, show_hidden=False):
+    def get_file_metadata(self, path: list[str], file_name: str, show_hidden: bool=False):
         logging.debug('Get file metadata [{}]'.format(str_path(path + [file_name])))
         conn = self.db_conn_mgr().db_connect()
         try:
@@ -383,15 +384,21 @@ class LocalServerController(Controller):
             # TODO: Return metadata for multiple file versions.
             file_metadata = file_dao.get_file_version_metadata(path, file_name)
             logging.debug('Retrieved file metadata [{}]'.format(str_path(path + [file_name])))
+            # TODO: Retrieve mime-type.
             return {
-                "version": file_metadata.version,
-                "file-size": file_metadata.file_size,
-                "size-on-disk": file_metadata.size_on_disk,
-                "total-chunks": file_metadata.total_chunks,
-                "local-file-id": file_metadata.local_id,
-                "remote-file-id": file_metadata.remote_id,
-                "local-transfer-status": file_metadata.local_transfer_status.name,
-                "remote-transfer-status": file_metadata.remote_transfer_status.name
+                "mime-type": "application/octet-stream",
+                "versions":[
+                    {
+                        "version": file_metadata.version,
+                        "file-size": file_metadata.file_size,
+                        "size-on-disk": file_metadata.size_on_disk,
+                        "total-chunks": file_metadata.total_chunks,
+                        "local-file-id": file_metadata.local_id,
+                        "remote-file-id": file_metadata.remote_id,
+                        "local-transfer-status": file_metadata.local_transfer_status.name,
+                        "remote-transfer-status": file_metadata.remote_transfer_status.name
+                    }
+                ]
             }
         finally:
             self.db_conn_mgr().db_close(conn)

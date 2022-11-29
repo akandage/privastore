@@ -103,8 +103,7 @@ class SqliteDirectoryDAO(DirectoryDAO):
                         FROM ps_file_version AS V INNER JOIN ps_file AS F ON V.file_id = F.id
                         WHERE F.name = ? and F.parent_id = ?
                     ''', query_params)
-                    for local_id, remote_id in cur.fetchall():
-                        remove_file_cb(local_id, remote_id)
+                    remove_file_cb_args = cur.fetchall()
 
                 if delete:
                     query = 'DELETE FROM ps_file'
@@ -119,6 +118,9 @@ class SqliteDirectoryDAO(DirectoryDAO):
                     cur.execute(query, query_params)
                     if cur.rowcount != 1:
                         raise FileError('File [{}] not found!'.format(str_path(path + [file_name])), FileServerErrorCode.FILE_NOT_FOUND)
+                if remove_file_cb is not None:
+                    for local_id, remote_id in remove_file_cb_args:
+                        remove_file_cb(local_id, remote_id)
                 self._conn.commit()
             except DirectoryError as e:
                 logging.error('Directory error: {}'.format(str(e)))

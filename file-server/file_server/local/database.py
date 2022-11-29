@@ -21,7 +21,7 @@ class DbWrapper(object):
     def db_conn_mgr(self):
         return self._db_conn_mgr
 
-    def get_file_metadata(self, local_id: str) -> 'FileVersionMetadata':
+    def get_local_file_metadata(self, local_id: str) -> 'FileVersionMetadata':
         conn = self.db_conn_mgr().db_connect()
         try:
             return self.dao_factory().file_dao(conn).get_file_version_metadata(local_id=local_id)

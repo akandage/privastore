@@ -32,7 +32,7 @@ class UploadWorker(AsyncWorker):
             raise WorkerError('Unrecognized task code [{}]'.format(task.task_code()))
 
     def do_commit_file(self, task: CommitFileTask) -> None:
-        file_metadata = self.db().get_file_metadata(task.local_file_id())
+        file_metadata = self.db().get_local_file_metadata(task.local_file_id())
         remote_id = file_metadata.remote_id
         remote_transfer_status = file_metadata.remote_transfer_status
 
@@ -60,7 +60,7 @@ class UploadWorker(AsyncWorker):
 
     def do_delete_file(self, task: DeleteFileTask) -> None:
         try:
-            file_metadata = self.db().get_file_metadata(task.local_file_id())
+            file_metadata = self.db().get_local_file_metadata(task.local_file_id())
             remote_id = file_metadata.remote_id
         except FileError as e:
             if e.error_code() == FileServerErrorCode.FILE_NOT_FOUND:
@@ -89,7 +89,7 @@ class UploadWorker(AsyncWorker):
         pass
 
     def do_transfer_file(self, task: TransferFileTask) -> None:
-        file_metadata = self.db().get_file_metadata(task.local_file_id())
+        file_metadata = self.db().get_local_file_metadata(task.local_file_id())
         remote_transfer_status = file_metadata.remote_transfer_status
 
         if remote_transfer_status == FileTransferStatus.SYNCING_DATA or remote_transfer_status == FileTransferStatus.SYNCED_DATA or remote_transfer_status == FileTransferStatus.SYNC_DATA_FAILED:

@@ -467,6 +467,20 @@ class FileCache(object):
         with self._index_lock:
             return self._index.has_node(file_id)
 
+    def file_has_readers(self, file_id: str) -> bool:
+        with self._index_lock:
+            node = self._index.get_node(file_id)
+            if node is None:
+                raise FileCacheError('File [{}] not found in cache'.format(file_id), FileServerErrorCode.FILE_NOT_FOUND)
+            return node.num_readers() != 0
+
+    def file_has_writers(self, file_id: str) -> bool:
+        with self._index_lock:
+            node = self._index.get_node(file_id)
+            if node is None:
+                raise FileCacheError('File [{}] not found in cache'.format(file_id), FileServerErrorCode.FILE_NOT_FOUND)
+            return node.num_writers() != 0
+
     def files(self):
         with self._index_lock:
             files = list(self._index.files())

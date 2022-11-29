@@ -25,7 +25,7 @@ class DownloadWorker(AsyncWorker):
             raise WorkerError('Unrecognized task code [{}]'.format(task.task_code()))
 
     def do_download_file(self, task: TransferFileTask) -> None:
-        file_metadata = self.db().get_file_metadata(task.local_file_id())
+        file_metadata = self.db().get_local_file_metadata(task.local_file_id())
         remote_id = file_metadata.remote_id
         transfer_status = file_metadata.remote_transfer_status
         total_chunks = file_metadata.total_chunks
