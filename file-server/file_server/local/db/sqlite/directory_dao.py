@@ -98,9 +98,11 @@ class SqliteDirectoryDAO(DirectoryDAO):
                 query_params = (file_name, directory_id)
 
                 if remove_file_cb is not None:
-                    query = 'SELECT local_id, remote_id FROM ps_file_version'
-                    query += where
-                    cur.execute(query, query_params)
+                    cur.execute('''
+                        SELECT V.local_id, V.remote_id 
+                        FROM ps_file_version AS V INNER JOIN ps_file AS F ON V.file_id = F.id
+                        WHERE F.name = ? and F.parent_id = ?
+                    ''', query_params)
                     for local_id, remote_id in cur.fetchall():
                         remove_file_cb(local_id, remote_id)
 
