@@ -1,4 +1,5 @@
 from ...db.dao import DataAccessObject
+from ..file_type import FileType
 from typing import Callable, Optional
 
 class DirectoryDAO(DataAccessObject):
@@ -31,7 +32,7 @@ class DirectoryDAO(DataAccessObject):
         that name exists in the path. 
         Throws FileError if file with that name exists in the path.
     '''
-    def create_file(self, path: list[str], file_name: str, is_hidden: bool=False) -> None:
+    def create_file(self, path: list[str], file_name: str, file_type=FileType.BINARY_DATA, is_hidden: bool=False) -> None:
         raise Exception('Not implemented')
     
     '''

@@ -2,6 +2,7 @@ from .async_controller import AsyncController
 from ..controller import Controller
 from .db.dao_factory import DAOFactory
 from ..db.db_conn_mgr import DbConnectionManager
+from .database import DbWrapper
 from ..error import FileDownloadError, FileServerErrorCode, FileUploadError
 from ..file import File
 from ..file_cache import FileCache
@@ -32,6 +33,7 @@ class LocalServerController(Controller):
         super().__init__(db_conn_mgr, session_mgr, store)
         self._async_controller = async_controller
         self._dao_factory = dao_factory
+        self._db = DbWrapper(dao_factory, db_conn_mgr)
         self._chunk_encryptors: dict[str, chunk_encoder] = dict()
         self._chunk_enc_lock: RLock = RLock()
         self._chunk_decryptors: dict[str, chunk_decoder] = dict()
@@ -41,7 +43,10 @@ class LocalServerController(Controller):
         return self._async_controller
 
     def dao_factory(self):
-        return self._dao_factory
+        return self.db().dao_factory()
+
+    def db(self):
+        return self._db
 
     def remote_enabled(self):
         return self._async_controller.remote_enabled()
@@ -161,11 +166,7 @@ class LocalServerController(Controller):
             #
             # Register a new file in the database with a single version.
             #
-            conn = self.db_conn_mgr().db_connect()
-            try:
-                self.dao_factory().directory_dao(conn).create_file(path, file_name)
-            finally:
-                self.db_conn_mgr().db_close(conn)
+            self.db().create_file(path, file_name)
         else:
             # TODO
             raise Exception('Not implemented!')
@@ -179,12 +180,8 @@ class LocalServerController(Controller):
             # Set a unique id (UUID) for the file and record its size.
             #
             local_file_id = File.generate_file_id()
-
-            conn = self.db_conn_mgr().db_connect()
-            try:
-                self.dao_factory().file_dao(conn).update_file_local(path, file_name, file_version, local_file_id, key_id, file_size, size_on_disk=0, total_chunks=0, transfer_status=FileTransferStatus.TRANSFERRING_DATA)
-            finally:
-                self.db_conn_mgr().db_close(conn)
+            self.db().update_file_local(path, file_name, file_version, local_file_id, key_id, file_size, size_on_disk=0, total_chunks=0, transfer_status=FileTransferStatus.TRANSFERRING_DATA)
+            logging.debug('Set local file id [{}]'.format(local_file_id))
 
             #
             # Uploaded file data is stored in the cache and cannot be removed
@@ -231,12 +228,7 @@ class LocalServerController(Controller):
             # Update the status of the file in the database to received and
             # record the local file id and file size.
             #
-            conn = self.db_conn_mgr().db_connect()
-            try:
-                self.dao_factory().file_dao(conn).update_file_local(path, file_name, file_version, upload_file.file_id(), key_id, file_size, size_on_disk, total_chunks, transfer_status=FileTransferStatus.SYNCED_DATA)
-            finally:
-                self.db_conn_mgr().db_close(conn)
-            
+            self.db().update_file_local(path, file_name, file_version, upload_file.file_id(), key_id, file_size, size_on_disk, total_chunks, transfer_status=FileTransferStatus.SYNCED_DATA)
             logging.debug('File metadata updated')
 
             #
@@ -280,14 +272,11 @@ class LocalServerController(Controller):
                 except Exception as e1:
                     logging.error('Could not remove uploaded file from cache: {}'.format(str(e1)))
 
-            conn = self.db_conn_mgr().db_connect()
             try:
-                self.dao_factory().directory_dao(conn).remove_file(path, file_name)
+                self.db().remove_file(path, file_name)
                 logging.debug('Removed uploaded file from db')
             except Exception as e1:
                 logging.error('Could not cleanup uploaded file in db: {}'.format(str(e1)))
-            finally:
-                self.db_conn_mgr().db_close(conn)
 
             raise e
 
@@ -296,13 +285,9 @@ class LocalServerController(Controller):
     def download_file(self, path: list[str], file_name: str, file: BinaryIO, file_version: Optional[int]=None, api_callback: Optional[Callable[[str, FileType, int], None]]=None):
         logging.debug('Download file [{}] version [{}]'.format(str_path(path + [file_name]), file_version))
 
-        conn = self.db_conn_mgr().db_connect()
-        try:
-            file_metadata = self.dao_factory().file_dao(conn).get_file_version_metadata(path, file_name, file_version)
-        finally:
-            self.db_conn_mgr().db_close(conn)
-
+        file_metadata = self.db().get_file_version_metadata(path, file_name, file_version)
         logging.debug('Retrieved file metadata')
+        
         file_type = file_metadata.file_type
         file_id = file_metadata.local_id
         key_id = file_metadata.key_id
