@@ -94,14 +94,14 @@ class SqliteDirectoryDAO(DirectoryDAO):
                 directory_id = traverse_path(cur, path)
                 if query_directory_id(cur, directory_id, file_name, is_hidden) is not None:
                     raise DirectoryError('[{}] in path [{}] is a directory'.format(file_name, str_path(path)), FileServerErrorCode.FILE_IS_DIRECTORY)
-                where = ' WHERE name = ? and parent_id = ?'
+                where = ' WHERE name = ? AND parent_id = ?'
                 query_params = (file_name, directory_id)
 
                 if remove_file_cb is not None:
                     cur.execute('''
-                        SELECT V.local_id, V.remote_id 
+                        SELECT V.version, V.local_id, V.remote_id 
                         FROM ps_file_version AS V INNER JOIN ps_file AS F ON V.file_id = F.id
-                        WHERE F.name = ? and F.parent_id = ?
+                        WHERE F.name = ? AND F.parent_id = ?
                     ''', query_params)
                     remove_file_cb_args = cur.fetchall()
 
@@ -119,8 +119,8 @@ class SqliteDirectoryDAO(DirectoryDAO):
                     if cur.rowcount != 1:
                         raise FileError('File [{}] not found!'.format(str_path(path + [file_name])), FileServerErrorCode.FILE_NOT_FOUND)
                 if remove_file_cb is not None:
-                    for local_id, remote_id in remove_file_cb_args:
-                        remove_file_cb(local_id, remote_id)
+                    for version, local_id, remote_id in remove_file_cb_args:
+                        remove_file_cb(path, file_name, version, local_id, remote_id)
                 self._conn.commit()
             except DirectoryError as e:
                 logging.error('Directory error: {}'.format(str(e)))

@@ -160,7 +160,8 @@ class AsyncController(Daemon):
 
     def delete(self, local_file_id: str, timeout: float=None):
         logging.debug('Starting async delete file [{}]'.format(local_file_id))
-        task = DeleteFileTask(local_file_id)
+        # TODO: Epoch handling.
+        task = DeleteFileTask(local_file_id, epoch_no=1)
         with self._async_lock:
             # TODO: Add a force option.
             if self.has_download(local_file_id):

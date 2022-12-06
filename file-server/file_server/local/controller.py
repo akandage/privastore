@@ -3,7 +3,7 @@ from ..controller import Controller
 from .db.dao_factory import DAOFactory
 from ..db.db_conn_mgr import DbConnectionManager
 from .database import DbWrapper
-from ..error import FileDownloadError, FileServerErrorCode, FileUploadError
+from ..error import FileDeleteError, FileDownloadError, FileServerErrorCode, FileUploadError
 from ..file import File
 from ..file_cache import FileCache
 from ..file_chunk import chunk_encoder, chunk_decoder, default_chunk_encoder, default_chunk_decoder, get_encrypted_chunk_encoder, get_encrypted_chunk_decoder
@@ -282,12 +282,12 @@ class LocalServerController(Controller):
 
         logging.debug('Uploaded file [{}]'.format(str_path(path + [file_name])))
 
-    def download_file(self, path: list[str], file_name: str, file: BinaryIO, file_version: Optional[int]=None, api_callback: Optional[Callable[[str, FileType, int], None]]=None):
+    def download_file(self, path: list[str], file_name: str, file: BinaryIO, file_version: Optional[int]=None, api_callback: Optional[Callable[[str, FileType, int], None]]=None, metadata_only: bool=False):
         logging.debug('Download file [{}] version [{}]'.format(str_path(path + [file_name]), file_version))
 
         file_metadata = self.db().get_file_version_metadata(path, file_name, file_version)
         logging.debug('Retrieved file metadata')
-        
+
         file_type = file_metadata.file_type
         file_id = file_metadata.local_id
         key_id = file_metadata.key_id
@@ -295,10 +295,9 @@ class LocalServerController(Controller):
         transfer_status = file_metadata.local_transfer_status
         total_chunks = file_metadata.total_chunks
 
-        if transfer_status == FileTransferStatus.NONE or transfer_status == FileTransferStatus.TRANSFERRING_DATA:
-            raise FileDownloadError('File upload not complete!')
-        elif transfer_status == FileTransferStatus.TRANSFER_DATA_FAILED:
-            raise FileDownloadError('File upload failed!')
+        logging.debug('File local transfer status [{}]'.format(transfer_status.name))
+        if transfer_status != FileTransferStatus.SYNCED_DATA:
+            raise FileDownloadError('Cannot download file [{}]. File is not fully uploaded'.format(file_id), FileServerErrorCode.FILE_NOT_READABLE)
         
         chunk_decryptor = self.chunk_decryptor(key_id)
 
@@ -329,6 +328,10 @@ class LocalServerController(Controller):
                 #
                 api_callback(file_id, file_type, file_size)
 
+            if metadata_only:
+                logging.debug('Metadata sent. Done')
+                return
+
             bytes_transferred = 0
             try:
                 for _ in range(total_chunks):
@@ -347,6 +350,36 @@ class LocalServerController(Controller):
                 logging.warn('Could not close download file in cache: {}'.format(str(e)))
         
         logging.debug('File data downloaded [{}]'.format(str_mem_size(bytes_transferred)))
+
+    def remove_file_check_readers_cb(self, path: list[str], file_name: str, version: Optional[int], local_id: str, remote_id: str):
+        if self.store().file_has_readers(local_id):
+            raise FileDeleteError('Cannot delete file [{}] version [{}]. File has readers!'.format(str_path(path + [file_name]), version))
+
+    def remove_file_version_cb(self, path: list[str], file_name: str, version: Optional[int], local_id: str, remote_id: str):
+        # TODO: Configure timeout.
+        self.async_controller().delete(local_id, timeout=30)
+
+    def remove_file(self, path: list[str], file_name: str, file_version: Optional[int]=None):
+        logging.debug('Remove file [{}] version [{}]'.format(str_path(path + [file_name]), file_version))
+
+        file_metadata = self.db().get_file_version_metadata(path, file_name, file_version)
+        logging.debug('Retrieved file metadata')
+
+        file_id = file_metadata.local_id
+        transfer_status = file_metadata.local_transfer_status
+
+        logging.debug('File local transfer status [{}]'.format(transfer_status.name))
+        if transfer_status != FileTransferStatus.SYNCED_DATA:
+            raise FileDeleteError('Cannot remove file [{}]. File is not fully uploaded'.format(file_id), FileServerErrorCode.FILE_NOT_REMOVABLE)
+
+        if file_version is not None:
+            raise FileDeleteError('Not implemented!')
+        else:
+            self.db().remove_file(path, file_name, remove_file_cb=self.remove_file_check_readers_cb)
+            logging.debug('Removed file')
+
+            self.db().remove_file(path, file_name, remove_file_cb=self.remove_file_version_cb)
+            logging.debug('Removed file versions')
 
     def list_directory(self, path: list[str], show_hidden: bool=False):
         logging.debug('List directory [{}]'.format(str_path(path)))

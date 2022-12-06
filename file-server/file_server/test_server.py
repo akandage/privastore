@@ -2,6 +2,7 @@ import os
 import requests
 from .server import Server
 import shutil
+import time
 import unittest
 from .util.logging import config_logging
 
@@ -67,3 +68,18 @@ class TestServer(unittest.TestCase):
                     if content_type is not None and content_type.startswith('application/json'):
                         return r.json()
         return r
+    
+    def wait_for(self, cb, args=list(), kwargs=dict(), timeout=90, interval=0.1):
+        start_t = now = time.time()
+        end_t = start_t + timeout
+
+        while now < end_t:
+            kwargs['timeout'] = max(0, end_t - now)
+
+            if cb(*args, **kwargs):
+                return True
+
+            time.sleep(interval)
+            now = time.time()
+
+        return False

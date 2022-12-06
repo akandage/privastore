@@ -72,7 +72,7 @@ class UploadWorker(AsyncWorker):
         if remote_id is not None:
             logging.debug('File [{}] remote id [{}]'.format(task.local_file_id(), remote_id))
             try:
-                self.remote_client().remove_file(remote_id, timeout=self.io_timeout())
+                self.remote_client().remove_file(remote_id, task.epoch_no(), timeout=self.io_timeout())
                 logging.debug('Removed file [{}] on remote server'.format(task.local_file_id()))
             except RemoteClientError as e:
                 if e.error_code() != FileServerErrorCode.FILE_NOT_FOUND:

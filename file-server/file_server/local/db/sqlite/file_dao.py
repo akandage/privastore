@@ -282,7 +282,7 @@ class SqliteFileDAO(FileDAO):
                     '''
                         DELETE 
                         FROM ps_file_version 
-                        WHERE file_id = ?, version = ?
+                        WHERE file_id = ? AND version = ?
                     ''', (file_id, version)
                 )
                 if cur.rowcount != 1:
@@ -292,7 +292,7 @@ class SqliteFileDAO(FileDAO):
                         '''
                             DELETE 
                             FROM ps_file
-                            WHERE file_id = ?
+                            WHERE id = ?
                         ''', (file_id,)
                     )
                     if cur.rowcount != 1:

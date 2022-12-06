@@ -42,7 +42,14 @@ class BaseHttpApiRequestHandler(BaseHTTPRequestHandler):
 
         logging.error('Invalid path: [{}]'.format(self.url_path))
         self.send_error_response(HTTPStatus.NOT_FOUND)
-        
+
+    def do_HEAD(self):
+        if not self.parse_path():
+            return
+
+        logging.error('Invalid path: [{}]'.format(self.url_path))
+        self.send_error_response(HTTPStatus.NOT_FOUND)
+
     def do_POST(self):
         if not self.parse_path():
             return

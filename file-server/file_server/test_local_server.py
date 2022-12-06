@@ -12,6 +12,7 @@ import time
 from .test_server import TestServer, HOSTNAME, PORT, URL
 
 REMOTE_PORT = 9090
+REMOTE_URL = "http://{}:{}{{}}".format(HOSTNAME, REMOTE_PORT)
 
 class TestLocalServer(TestServer):
     
@@ -95,6 +96,16 @@ class TestLocalServer(TestServer):
         }
         return self.remote_config
 
+    def enable_remote(self):
+        self.config['remote'] = {
+            'enable-remote-server': '1',
+            'worker-io-timeout': '90',
+            'worker-queue-size': '100',
+            'worker-retry-interval': '30',
+            'num-download-workers': '2',
+            'num-upload-workers': '2'
+        }
+
     def setUp(self):
         super().setUp()
         os.mkdir(os.path.join(self.get_test_dir(), 'remote'))
@@ -117,22 +128,45 @@ class TestLocalServer(TestServer):
         self.remote_server.start()
         self.remote_server.wait_started()
 
-    def wait_file_synced(self, file_path: str, headers: dict(), timeout: float=30, synced_local: bool=True, synced_remote: bool=True):
-        start_t = time.time()
-        end_t = start_t + timeout
+    def check_file_remote(self, file_id: str, file_size: int, headers: dict, check_removed: bool=False, timeout: float=30):
+        r = requests.get(REMOTE_URL.format('/1/file/{}/metadata'.format(file_id)), headers=headers, timeout=timeout)
 
-        while time.time() < end_t:
-            r = requests.get(URL.format('/1/file{}'.format(file_path)), headers=headers, timeout=max(0, end_t - time.time()))
-            if r.status_code != HTTPStatus.OK:
+        if check_removed:
+            if r.status_code != HTTPStatus.OK and r.status_code != HTTPStatus.NOT_FOUND:
                 self.fail('Unexpected file metadata response code {}'.format(str(r.status_code)))
-            r = r.json()
-            local_transfer_status = r['versions'][0]['local-transfer-status']
-            remote_transfer_status = r['versions'][0]['remote-transfer-status']
-            if local_transfer_status == 'SYNCED_DATA' and remote_transfer_status == 'SYNCED_DATA':
-                return True
+            return r.status_code == HTTPStatus.NOT_FOUND
+
+        if r.status_code != HTTPStatus.OK:
+            self.fail('Unexpected file metadata response code {}'.format(str(r.status_code)))
+        r = r.json()
+        return r['file-size'] == file_size
+
+    def check_file_synced(self, file_path: str, headers: dict(), timeout: float=30, synced_local: bool=True, synced_remote: bool=True):
+        r = requests.get(URL.format('/1/file{}'.format(file_path)), headers=headers, timeout=timeout)
+        if r.status_code != HTTPStatus.OK:
+            self.fail('Unexpected file metadata response code {}'.format(str(r.status_code)))
+        r = r.json()
+        local_transfer_status = r['versions'][0]['local-transfer-status']
+        remote_transfer_status = r['versions'][0]['remote-transfer-status']
+        if synced_remote:
+            if remote_transfer_status != 'SYNCED_DATA':
+                return False
+        if synced_local:
+            if local_transfer_status != 'SYNCED_DATA':
+                return False
         
-        return False
+        return True
     
+    def send_login(self):
+        r = requests.post(URL.format('/1/login'), auth=('psadmin', 'psadmin'))
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        return r.headers.get('x-privastore-session-id')
+
+    def send_remote_login(self):
+        r = requests.post(REMOTE_URL.format('/1/login'), auth=('psadmin', 'psadmin'))
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        return r.headers.get('x-privastore-session-id')
+
     def test_session_api(self):
         self.start_server()
 
@@ -168,9 +202,7 @@ class TestLocalServer(TestServer):
     def test_directory_api(self):
         self.start_server()
 
-        r = requests.post(URL.format('/1/login'), auth=('psadmin', 'psadmin'))
-        self.assertEqual(r.status_code, HTTPStatus.OK)
-        session_id = r.headers.get('x-privastore-session-id')
+        session_id = self.send_login()
         inv_session_id = 'S-{}'.format(str(uuid.uuid4()))
         req_headers = {
             'x-privastore-session-id': session_id
@@ -224,24 +256,19 @@ class TestLocalServer(TestServer):
         self.assertEqual(r, [])
 
     def test_file_api(self):
-        self.config['remote'] = {
-            'enable-remote-server': '1',
-            'worker-io-timeout': '90',
-            'worker-queue-size': '100',
-            'worker-retry-interval': '1',
-            'num-download-workers': '1',
-            'num-upload-workers': '1'
-        }
-
+        self.enable_remote()
         self.start_server()
         self.start_remote_server()
 
-        r = requests.post(URL.format('/1/login'), auth=('psadmin', 'psadmin'))
-        self.assertEqual(r.status_code, HTTPStatus.OK)
-        session_id = r.headers.get('x-privastore-session-id')
+        session_id = self.send_login()
         inv_session_id = 'S-{}'.format(str(uuid.uuid4()))
         req_headers = {
             'x-privastore-session-id': session_id
+        }
+
+        remote_session_id = self.send_remote_login()
+        remote_req_headers = {
+            'x-privastore-session-id': remote_session_id
         }
 
         r = self.send_request(URL.format('/1/directory/dir_1'), req_headers, method=requests.put)
@@ -267,10 +294,13 @@ class TestLocalServer(TestServer):
         r = self.send_request(URL.format('/1/file/file_1'), headers=req_headers, method=requests.get)
         self.assertEqual(r['versions'][0]['version'], 1)
         self.assertEqual(r['versions'][0]['file-size'], len(small_file))
-        self.assertTrue(r['versions'][0]['size-on-disk'] >= len(small_file))
+        file_1_size = r['versions'][0]['size-on-disk']
+        self.assertTrue(file_1_size >= len(small_file))
         self.assertEqual(r['versions'][0]['total-chunks'], 1)
         file_1_id = r['versions'][0]['local-file-id']
-        self.assertTrue(self.wait_file_synced('/file_1', headers=req_headers))
+        file_1_remote_id = r['versions'][0]['remote-file-id']
+        self.assertTrue(self.wait_for(self.check_file_synced, args=['/file_1', req_headers]))
+        self.assertTrue(self.check_file_remote(file_1_remote_id, file_1_size, headers=remote_req_headers))
         r = self.send_request(URL.format('/1/upload/file_1'), data=small_file, headers=req_headers, method=requests.post)
         self.assertEqual(r.status_code, HTTPStatus.CONFLICT)
 
@@ -291,19 +321,25 @@ class TestLocalServer(TestServer):
         r = self.send_request(URL.format('/1/file/file_2'), headers=req_headers, method=requests.get)
         self.assertEqual(r['versions'][0]['version'], 1)
         self.assertEqual(r['versions'][0]['file-size'], len(chunk_file))
-        self.assertTrue(r['versions'][0]['size-on-disk'] >= len(chunk_file))
+        file_2_size = r['versions'][0]['size-on-disk']
+        self.assertTrue(file_2_size >= len(chunk_file))
         self.assertEqual(r['versions'][0]['total-chunks'], 1)
         file_2_id = r['versions'][0]['local-file-id']
-        self.assertTrue(self.wait_file_synced('/file_2', headers=req_headers))
+        file_2_remote_id = r['versions'][0]['remote-file-id']
+        self.assertTrue(self.wait_for(self.check_file_synced, args=['/file_2', req_headers]))
+        self.assertTrue(self.check_file_remote(file_2_remote_id, file_2_size, headers=remote_req_headers))
         r = self.send_request(URL.format('/1/upload/file_3'), data=large_file, headers=req_headers, method=requests.post)
         self.assertEqual(r.status_code, HTTPStatus.OK)
         r = self.send_request(URL.format('/1/file/file_3'), headers=req_headers, method=requests.get)
         self.assertEqual(r['versions'][0]['version'], 1)
         self.assertEqual(r['versions'][0]['file-size'], len(large_file))
-        self.assertTrue(r['versions'][0]['size-on-disk'] >= len(large_file))
+        file_3_size = r['versions'][0]['size-on-disk']
+        self.assertTrue(file_3_size >= len(large_file))
         self.assertEqual(r['versions'][0]['total-chunks'], 5)
         file_3_id = r['versions'][0]['local-file-id']
-        self.assertTrue(self.wait_file_synced('/file_3', headers=req_headers))
+        file_3_remote_id = r['versions'][0]['remote-file-id']
+        self.assertTrue(self.wait_for(self.check_file_synced, args=['/file_3', req_headers]))
+        self.assertTrue(self.check_file_remote(file_3_remote_id, file_3_size, headers=remote_req_headers))
         r = self.send_request(URL.format('/1/upload/dir_1/file_1'), data=small_file, headers=req_headers, method=requests.post)
         self.assertEqual(r.status_code, HTTPStatus.OK)
         r = self.send_request(URL.format('/1/upload/dir_1/dir_1a/file_1'), data=small_file, headers=req_headers, method=requests.post)
@@ -323,9 +359,7 @@ class TestLocalServer(TestServer):
 
         self.restart_server()
 
-        r = requests.post(URL.format('/1/login'), auth=('psadmin', 'psadmin'))
-        self.assertEqual(r.status_code, HTTPStatus.OK)
-        session_id = r.headers.get('x-privastore-session-id')
+        session_id = self.send_login()
         req_headers = {
             'x-privastore-session-id': session_id
         }
@@ -351,9 +385,7 @@ class TestLocalServer(TestServer):
         shutil.rmtree(os.path.join(self.get_test_dir(), 'cache', file_3_id))
         self.restart_server()
 
-        r = requests.post(URL.format('/1/login'), auth=('psadmin', 'psadmin'))
-        self.assertEqual(r.status_code, HTTPStatus.OK)
-        session_id = r.headers.get('x-privastore-session-id')
+        session_id = self.send_login()
         req_headers = {
             'x-privastore-session-id': session_id
         }
@@ -367,3 +399,41 @@ class TestLocalServer(TestServer):
         r = self.send_request(URL.format('/1/download/file_3'), headers=req_headers, method=requests.get)
         self.assertEqual(r.status_code, HTTPStatus.OK)
         self.assertEqual(r.content, large_file)
+
+        r = self.send_request(URL.format('/1/file/file_1'), headers=req_headers, method=requests.delete)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = self.send_request(URL.format('/1/download/file_1'), headers=req_headers, method=requests.head)
+        self.assertEqual(r.status_code, HTTPStatus.NOT_FOUND)
+        self.assertTrue(self.wait_for(self.check_file_remote, args=[file_1_remote_id, file_1_size, remote_req_headers], kwargs={'check_removed':True}, timeout=1))
+
+        r = self.send_request(URL.format('/1/file/dir_1/file_1'), headers=req_headers, method=requests.get)
+        file_1_remote_id = r['versions'][0]['remote-file-id']
+        r = self.send_request(URL.format('/1/file/dir_1/file_1'), headers=req_headers, method=requests.delete)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = self.send_request(URL.format('/1/download/dir_1/file_1'), headers=req_headers, method=requests.head)
+        self.assertEqual(r.status_code, HTTPStatus.NOT_FOUND)
+        self.assertTrue(self.wait_for(self.check_file_remote, args=[file_1_remote_id, file_1_size, remote_req_headers], kwargs={'check_removed':True}, timeout=1))
+
+        self.stop_server()
+        # Clear the cache to force downloads from the remote server.
+        shutil.rmtree(os.path.join(self.get_test_dir(), 'cache'))
+        self.restart_server()
+
+        session_id = self.send_login()
+        req_headers = {
+            'x-privastore-session-id': session_id
+        }
+
+        r = self.send_request(URL.format('/1/download/file_1'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.NOT_FOUND)
+        r = self.send_request(URL.format('/1/download/file_2'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        self.assertEqual(r.content, chunk_file)
+        r = self.send_request(URL.format('/1/download/file_3'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        self.assertEqual(r.content, large_file)
+        r = self.send_request(URL.format('/1/download/dir_1/file_1'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.NOT_FOUND)
+        r = self.send_request(URL.format('/1/download/dir_1/dir_1a/file_1'), headers=req_headers, method=requests.get)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        self.assertEqual(r.content, small_file)

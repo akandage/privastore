@@ -6,6 +6,7 @@ from ....api.http.http_request_handler import CONNECTION_HEADER, CONNECTION_CLOS
 import json
 from ....key import Key
 import logging
+from typing import Optional
 import urllib.parse
 from ....util.logging import log_exception_stack
 
@@ -38,7 +39,16 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             self.handle_get_file_metadata()
         else:
             super().do_GET()
-        
+    
+    def do_HEAD(self):
+        if not self.parse_path():
+            return
+
+        if self.url_path.startswith(DOWNLOAD_PATH):
+            self.handle_download_file()
+        else:
+            super().do_HEAD()
+
     def do_POST(self):
         if not self.parse_path():
             return
@@ -56,6 +66,29 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             self.handle_create_directory()
         else:
             super().do_PUT()
+
+    def do_DELETE(self):
+        if not self.parse_path():
+            return
+
+        if self.url_path.startswith(FILE_PATH):
+            self.handle_remove_file()
+        else:
+            super().do_DELETE()
+
+    def get_file_version(self) -> Optional[int]:
+        try:
+            file_version = self.url_query.get('version')
+            if file_version is not None:
+                file_version = int(file_version[-1])
+
+                if file_version < 1:
+                    self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid file version')
+                    return
+            return file_version
+        except:
+            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid file version')
+            return
 
     def parse_directory_path(self, path: str) -> list[str]:
         if len(path) == 0:
@@ -339,7 +372,7 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             Handle download file API.
             Optionally provide a version of file to download in query-string.
 
-            Method: GET
+            Method: GET / HEAD
             Path: /1/download/<path>[?version=<v>]
             Request Headers:
                 x-privastore-session-id: <session-id>
@@ -367,31 +400,79 @@ class HttpApiRequestHandler(BaseHttpApiRequestHandler):
             self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid directory path or filename')
             return
         
-        try:
-            file_version = self.url_query.get('version')
-            if file_version is not None:
-                file_version = int(file_version[-1])
+        file_version = self.get_file_version()
+        metadata_only = False
 
-                if file_version < 1:
-                    self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid file version')
-                    return
-        except:
-            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid file version')
-            return
+        if self.command == 'HEAD':
+            metadata_only = True
         
         try:
-            self.controller().download_file(path, file_name, self.wfile, file_version, api_callback=self.send_download_file_headers)
+            self.controller().download_file(path, file_name, self.wfile, file_version, api_callback=self.send_download_file_headers, metadata_only=metadata_only)
         except DirectoryError as e:
             self.handle_directory_error(e)
+            return
         except FileError as e:
             self.handle_file_error(e)
+            return
         except Exception as e:
             self.handle_internal_error(e)
             log_exception_stack()
+            return
     
     def send_download_file_headers(self, file_id, file_type, file_size):
         logging.debug('Send download file headers [{}] [{}] [{}]'.format(file_id, file_type.mime_type, file_size))
         self.send_response(HTTPStatus.OK)
         self.send_header(CONTENT_TYPE_HEADER, file_type.mime_type)
-        self.send_header(CONTENT_LENGTH_HEADER, str(file_size))
+        if self.command == 'GET':
+            self.send_header(CONTENT_LENGTH_HEADER, str(file_size))
+        else:
+            self.send_header(CONTENT_LENGTH_HEADER, '0')
+        self.end_headers()
+    
+    def handle_remove_file(self):
+        '''
+
+            Handle remove file API.
+            Optionally provide a version of file to download in query-string.
+
+            Method: DELETE
+            Path: /1/file/<path>[?version=<v>]
+            Request Headers:
+                x-privastore-session-id: <session-id>
+
+        '''
+        logging.debug('Remove file')
+        self.wrap_sockets()
+        session_id = self.get_session_id()
+        if session_id is None:
+            return
+        
+        if not self.heartbeat_session(session_id):
+            return
+
+        try:
+            path = self.parse_directory_path(self.url_path[FILE_PATH_LEN:])
+            file_name = path.pop()
+        except:
+            self.send_error_response(HTTPStatus.BAD_REQUEST, 'Invalid directory path or filename')
+            return
+        
+        file_version = self.get_file_version()
+
+        try:
+            self.controller().remove_file(path, file_name, file_version)
+        except DirectoryError as e:
+            self.handle_directory_error(e)
+            return
+        except FileError as e:
+            self.handle_file_error(e)
+            return
+        except Exception as e:
+            self.handle_internal_error(e)
+            log_exception_stack()
+            return
+
+        self.send_response(HTTPStatus.OK)
+        self.send_header(CONTENT_LENGTH_HEADER, '0')
+        self.send_header(CONNECTION_HEADER, CONNECTION_CLOSE)
         self.end_headers()

@@ -195,16 +195,19 @@ class RemoteClient(object):
             logging.error('Create file error {}'.format(res))
             raise RemoteClientError('Create file error {}'.format(res), res)
 
-    def remove_file(self, file_id: str, timeout: int = 90) -> str:
+    def remove_file(self, file_id: str, epoch_no: int, timeout: int = 90) -> str:
         path = self.file_path(file_id)
 
-        logging.debug('Removing file [{}]'.format(file_id))
-        res = self.send_remote_request(path, method=requests.delete, renew_session=True, timeout=timeout)
+        headers = dict()
+        headers[EPOCH_NO_HEADER] = str(epoch_no)
+
+        logging.debug('Removing file [{}] epoch-no [{}]'.format(file_id, epoch_no))
+        res = self.send_remote_request(path, method=requests.delete, headers=headers, renew_session=True, timeout=timeout)
         if isinstance(res, requests.Response):
-            logging.debug('Removed file [{}]'.format(file_id))
+            logging.debug('Removed file [{}] epoch-no [{}]'.format(file_id, epoch_no))
         else:
-            logging.error('Remove file [{}] error {}'.format(file_id, res))
-            raise RemoteClientError('Remove file [{}] error {}'.format(file_id, res), res)
+            logging.error('Remove file [{}] epoch-no [{}] error {}'.format(file_id, epoch_no, res))
+            raise RemoteClientError('Remove file [{}] epoch-no [{}] error {}'.format(file_id, epoch_no, res), res)
 
     def read_file_chunk(self, remote_file_id: str, chunk_offset: int, timeout: int = 90) -> bytes:
         path = self.file_chunk_path(remote_file_id, chunk_offset)

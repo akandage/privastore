@@ -48,7 +48,7 @@ class DirectoryDAO(DataAccessObject):
         Throws FileError if file is not found or file is hidden and is_hidden
         flag is not set.
     '''
-    def remove_file(self, path: list[str], file_name: str, delete: bool=False, remove_file_cb: Optional[Callable[[str, str], None]]=None, is_hidden: bool=False) -> None:
+    def remove_file(self, path: list[str], file_name: str, delete: bool=False, remove_file_cb: Optional[Callable[[list[str], str, Optional[int], str, str], None]]=None, is_hidden: bool=False) -> None:
         raise Exception('Not implemented')
 
     '''
