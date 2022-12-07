@@ -17,6 +17,7 @@ def setup_db(db_config):
         create_key_table(conn)
         create_directory_table(conn)
         create_file_table(conn)
+        create_file_data_table(conn)
         create_file_version_table(conn)
         create_remote_server_table(conn)
     finally:
@@ -71,8 +72,7 @@ def create_directory_table(conn):
         CREATE TABLE ps_directory (
             id INTEGER PRIMARY KEY NOT NULL,
             name VARCHAR(256) NOT NULL,
-            is_hidden BOOLEAN NOT NULL DEFAULT 0,
-            is_removed BOOLEAN NOT NULL DEFAULT 0
+            is_hidden BOOLEAN NOT NULL DEFAULT 0
         )
         '''
     )
@@ -101,7 +101,6 @@ def create_file_table(conn):
             file_type INTEGER NOT NULL,
             parent_id INTEGER NOT NULL,
             is_hidden BOOLEAN NOT NULL DEFAULT 0,
-            is_removed BOOLEAN NOT NULL DEFAULT 0,
             UNIQUE (name, parent_id),
             FOREIGN KEY (parent_id) REFERENCES ps_directory (id) ON DELETE CASCADE
         )
@@ -117,6 +116,22 @@ def create_file_version_table(conn):
             file_id INTEGER NOT NULL,
             version INTEGER NOT NULL,
             created_timestamp INTEGER NOT NULL,
+            file_data_id INTEGER NOT NULL,
+            FOREIGN KEY (file_id) REFERENCES ps_file (id) ON DELETE CASCADE,
+            FOREIGN KEY (file_data_id) REFERENCES ps_file_data (id) ON DELETE RESTRICT,
+            PRIMARY KEY (file_id, version)
+        )
+        '''
+    )
+    conn.commit()
+
+def create_file_data_table(conn):
+    logging.debug('Setting up ps_file_data table')
+    conn.execute(
+        '''
+        CREATE TABLE ps_file_data (
+            id INTEGER PRIMARY KEY NOT NULL,
+            created_timestamp INTEGER NOT NULL,
             key_id INTEGER NOT NULL DEFAULT 0,
             local_id VARCHAR(38) UNIQUE NULL,
             remote_id VARCHAR(38) UNIQUE NULL,
@@ -127,9 +142,7 @@ def create_file_version_table(conn):
             downloaded_chunks INTEGER NOT NULL DEFAULT 0,
             local_transfer_status INTEGER NOT NULL,
             remote_transfer_status INTEGER NOT NULL,
-            FOREIGN KEY (file_id) REFERENCES ps_file (id) ON DELETE CASCADE,
-            FOREIGN KEY (key_id) REFERENCES ps_key (id) ON DELETE RESTRICT,
-            PRIMARY KEY (file_id, version)
+            FOREIGN KEY (key_id) REFERENCES ps_key (id) ON DELETE RESTRICT
         )
         '''
     )

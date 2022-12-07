@@ -131,6 +131,11 @@ class AsyncController(Daemon):
             if local_file_id in self._download_tasks:
                 self._download_tasks.pop(local_file_id)
 
+    def remove_delete_task(self, local_file_id: str):
+        with self._async_lock:
+            if local_file_id in self._delete_tasks:
+                self._delete_tasks.pop(local_file_id)
+
     def get_upload_worker(self, local_file_id: str) -> UploadWorker:
         return self._upload_workers[hash(local_file_id) % self._num_upload_workers]
 
@@ -170,8 +175,14 @@ class AsyncController(Daemon):
         self.get_upload_worker(local_file_id).send_task(task, timeout=timeout)
         logging.debug('Started async delete file [{}]'.format(local_file_id))
 
+    def remove_orphaned_files(self):
+        orphaned_files = self.db().list_orphaned_file_data()
+        for file in orphaned_files:
+            logging.debug('Removing orphaned file [{}]'.format(file.local_id))
+            self.delete(file.local_id)
+
     def start_download(self, local_file_id: str, timeout: float=None):
-        file_metadata = self.db().get_local_file_metadata(local_file_id)
+        file_metadata = self.db().get_file_metadata(local_file_id)
         file_size = file_metadata.file_size
         transfer_status = file_metadata.remote_transfer_status
         if transfer_status != FileTransferStatus.SYNCED_DATA:
@@ -242,6 +253,11 @@ class AsyncController(Daemon):
         file_id = task.local_file_id()
 
         self.remove_upload_task(file_id)
+
+    def on_delete_file_completed(self, task: DeleteFileTask):
+        file_id = task.local_file_id()
+
+        self.remove_delete_task(file_id)
 
     def on_transfer_file_completed(self, task: TransferFileTask):
         file_id = task.local_file_id()
@@ -322,6 +338,9 @@ class AsyncController(Daemon):
                 continue
             if completed_task.task_code() == TransferFileTask.TASK_CODE:
                 self.on_transfer_file_completed(completed_task)
+                continue
+            if completed_task.task_code() == DeleteFileTask.TASK_CODE:
+                self.on_delete_file_completed(completed_task)
                 continue
 
             if self._stop.is_set():

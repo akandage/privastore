@@ -3,7 +3,7 @@ from ..controller import Controller
 from .db.dao_factory import DAOFactory
 from ..db.db_conn_mgr import DbConnectionManager
 from .database import DbWrapper
-from ..error import FileDeleteError, FileDownloadError, FileServerErrorCode, FileUploadError
+from ..error import FileCacheError, FileDeleteError, FileDownloadError, FileServerErrorCode, FileUploadError
 from ..file import File
 from ..file_cache import FileCache
 from ..file_chunk import chunk_encoder, chunk_decoder, default_chunk_encoder, default_chunk_decoder, get_encrypted_chunk_encoder, get_encrypted_chunk_decoder
@@ -352,12 +352,13 @@ class LocalServerController(Controller):
         logging.debug('File data downloaded [{}]'.format(str_mem_size(bytes_transferred)))
 
     def remove_file_check_readers_cb(self, path: list[str], file_name: str, version: Optional[int], local_id: str, remote_id: str):
-        if self.store().file_has_readers(local_id):
-            raise FileDeleteError('Cannot delete file [{}] version [{}]. File has readers!'.format(str_path(path + [file_name]), version))
-
-    def remove_file_version_cb(self, path: list[str], file_name: str, version: Optional[int], local_id: str, remote_id: str):
-        # TODO: Configure timeout.
-        self.async_controller().delete(local_id, timeout=30)
+        try:
+            if self.store().file_has_readers(local_id):
+                raise FileDeleteError('Cannot delete file [{}] version [{}]. File has readers!'.format(str_path(path + [file_name]), version))
+        except FileCacheError as e:
+            if e.error_code() == FileServerErrorCode.FILE_NOT_FOUND:
+                return
+            raise e
 
     def remove_file(self, path: list[str], file_name: str, file_version: Optional[int]=None):
         logging.debug('Remove file [{}] version [{}]'.format(str_path(path + [file_name]), file_version))
@@ -378,8 +379,8 @@ class LocalServerController(Controller):
             self.db().remove_file(path, file_name, remove_file_cb=self.remove_file_check_readers_cb)
             logging.debug('Removed file')
 
-            self.db().remove_file(path, file_name, remove_file_cb=self.remove_file_version_cb)
-            logging.debug('Removed file versions')
+            # TODO: Done asynchronously by the async controller.
+            self.async_controller().remove_orphaned_files()
 
     def list_directory(self, path: list[str], show_hidden: bool=False):
         logging.debug('List directory [{}]'.format(str_path(path)))

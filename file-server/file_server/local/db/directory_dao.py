@@ -41,14 +41,12 @@ class DirectoryDAO(DataAccessObject):
         path - Path to file.
         directory_name - Name of the file.
         is_hidden - Hidden directory flag.
-        delete - If true actually delete the file from db, otherwise set the
-                 "removed" flag.
 
         Throws DirectoryError if path doesn't exist or if file is a directory.
         Throws FileError if file is not found or file is hidden and is_hidden
         flag is not set.
     '''
-    def remove_file(self, path: list[str], file_name: str, delete: bool=False, remove_file_cb: Optional[Callable[[list[str], str, Optional[int], str, str], None]]=None, is_hidden: bool=False) -> None:
+    def remove_file(self, path: list[str], file_name: str, remove_file_cb: Optional[Callable[[list[str], str, Optional[int], str, str], None]]=None, is_hidden: bool=False) -> None:
         raise Exception('Not implemented')
 
     '''
