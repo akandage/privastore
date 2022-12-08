@@ -96,40 +96,28 @@ class LocalServerController(Controller):
         conn = self.db_conn_mgr().db_connect()
         try:
             file_dao = self.dao_factory().file_dao(conn)
+            unsynced_local_files = file_dao.list_unsynced_files(local=True)
             num_files_removed = 0
-            files = self.store().files()
-            for file_id in files:
-                try:
-                    file_metadata = file_dao.get_file_version_metadata(local_id=file_id)
-                except Exception as e:
-                    logging.warning('File [{}] metadata not found!'.format(file_id))
-                    try:
-                        self.store().remove_file_by_id(file_id)
-                    except:
-                        pass
-                    continue
 
-                transfer_status = file_metadata.local_transfer_status
-                remote_transfer_status = file_metadata.remote_transfer_status
-                downloaded_chunks = file_metadata.downloaded_chunks
-                total_chunks = file_metadata.total_chunks
-                if transfer_status != FileTransferStatus.SYNCED_DATA:
-                    logging.debug('File [{}] local transfer status is [{}]'.format(file_id, transfer_status.name))
+            for file in unsynced_local_files:
+                file_id = file.file_id
+                version = file.version
+                local_id = file.local_id
+
+                file_dao.remove_file_version(file_id, version)
+
+                if local_id is not None:
+                    file_dao.remove_file_data(local_id)
+
                     try:
-                        file_dao.remove_file_version(file_id)
-                        logging.debug('Removed in db')
-                    except:
-                        pass
-                    self.store().remove_file_by_id(file_id)
-                    num_files_removed += 1
-                    logging.debug('Removed in cache')
-                elif remote_transfer_status != FileTransferStatus.SYNCED_DATA:
-                    logging.debug('File [{}] remote transfer status is [{}]'.format(file_id, remote_transfer_status.name))
-                    self.store().set_file_removable(file_id, False)
-                elif downloaded_chunks != total_chunks:
-                    logging.debug('File [{}] download incomplete'.format(file_id))
-                    self.store().remove_file_by_id(file_id)
-                    file_dao.update_file_download(file_id, 0)
+                        self.store().remove_file_by_id(local_id)
+                        num_files_removed += 1
+                    except Exception as e:
+                        logging.warning('Could not remove file [{}] from cache: {}'.format(local_id, str(e)))
+
+            unsynced_remote_files = file_dao.list_unsynced_files(remote=True)
+            for file in unsynced_remote_files:
+                self.store().set_file_removable(file.local_id, False)
                 
             logging.debug('Cleaned up [{}] files in cache'.format(num_files_removed))
         finally:

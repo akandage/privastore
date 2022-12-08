@@ -47,6 +47,7 @@ class SqliteFileDAO(FileDAO):
                     raise FileError('File version not found!', FileServerErrorCode.FILE_VERSION_NOT_FOUND)
                 self._conn.commit()
                 return FileVersionMetadata(
+                    file_id,
                     FileType(res[0]),
                     res[1],
                     res[2],
@@ -123,6 +124,70 @@ class SqliteFileDAO(FileDAO):
             except:
                 pass
 
+    def list_unsynced_files(self, local=False, remote=False):
+        cur = self._conn.cursor()
+        try:
+            try:
+                unsynced = list()
+                query = '''
+                        SELECT V.file_id, V.version, D.local_id, D.remote_id, D.local_transfer_status, 
+                            D.remote_transfer_status 
+                        FROM ps_file_version AS V INNER JOIN ps_file_data AS D ON V.file_data_id = D.id
+                        WHERE D.{} <> ?
+                    '''
+                cur.execute('BEGIN')
+                if local:
+                    cur.execute(query.format('local_transfer_status'), (FileTransferStatus.SYNCED_DATA.value,))
+                    for file_id, version, local_id, remote_id, local_transfer_status, remote_transfer_status in cur.fetchall():
+                        # TODO: Return other fields if required.
+                        unsynced.append(FileVersionMetadata(
+                            file_id,
+                            None,
+                            version,
+                            local_id,
+                            remote_id,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                            FileTransferStatus(local_transfer_status),
+                            FileTransferStatus(remote_transfer_status)
+                        ))
+                
+                if remote:
+                    cur.execute(query.format('remote_transfer_status'), (FileTransferStatus.SYNCED_DATA.value,))
+                    for file_id, version, local_id, remote_id, local_transfer_status, remote_transfer_status in cur.fetchall():
+                        # TODO: Return other fields if required.
+                        unsynced.append(FileVersionMetadata(
+                            file_id,
+                            None,
+                            version,
+                            local_id,
+                            remote_id,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                            None,
+                            FileTransferStatus(local_transfer_status),
+                            FileTransferStatus(remote_transfer_status)
+                        ))
+                
+                self._conn.commit()
+                return unsynced
+            except Exception as e:
+                logging.error('Query error {}'.format(str(e)))
+                self.rollback_nothrow()
+                raise e
+        finally:
+            try:
+                cur.close()
+            except:
+                pass
+
     def list_orphaned_file_data(self) -> list['FileMetadata']:
         cur = self._conn.cursor()
         try:
@@ -154,10 +219,6 @@ class SqliteFileDAO(FileDAO):
                     ))
                 self._conn.commit()
                 return orphaned
-            except FileError as e:
-                logging.error('File error: {}'.format(str(e)))
-                self.rollback_nothrow()
-                raise e
             except Exception as e:
                 logging.error('Query error {}'.format(str(e)))
                 self.rollback_nothrow()
@@ -329,7 +390,7 @@ class SqliteFileDAO(FileDAO):
             except:
                 pass
     
-    def remove_file_data(self, local_id: str) -> None:
+    def remove_file_data(self, local_id) -> None:
         if not File.is_valid_file_id(local_id):
             raise FileError('Invalid file id!')
         cur = self._conn.cursor()
@@ -345,6 +406,54 @@ class SqliteFileDAO(FileDAO):
                 )
                 if cur.rowcount != 1:
                     raise FileError('Could not delete file [{}] data!'.format(local_id))
+                self._conn.commit()
+            except FileError as e:
+                logging.error('File error: {}'.format(str(e)))
+                self.rollback_nothrow()
+                raise e
+            except Exception as e:
+                logging.error('Query error {}'.format(str(e)))
+                self.rollback_nothrow()
+                raise e
+        finally:
+            try:
+                cur.close()
+            except:
+                pass
+    
+    def remove_file_version(self, file_id, version) -> None:
+        cur = self._conn.cursor()
+        try:
+            try:
+                cur.execute('BEGIN')
+                cur.execute(
+                    '''
+                        DELETE 
+                        FROM ps_file_version
+                        WHERE file_id = ? AND version = ?
+                    ''', (file_id, version)
+                )
+                if cur.rowcount != 1:
+                    raise FileError('File id [{}] version [{}] not found!'.format(file_id, version), FileServerErrorCode.FILE_VERSION_NOT_FOUND)
+                cur.execute(
+                    '''
+                        SELECT count(*)
+                        FROM ps_file_version
+                        WHERE file_id = ?
+                    ''', (file_id,)
+                )
+                res = cur.fetchone()
+                if res is None or res[0] == 0:
+                    logging.debug('No file versions remaining, removing file')
+                    cur.execute(
+                        '''
+                            DELETE
+                            FROM ps_file
+                            WHERE id = ?
+                        ''', (file_id,)
+                    )
+                    if cur.rowcount != 1:
+                        raise FileError('File id [{}] not found!'.format(version), FileServerErrorCode.FILE_NOT_FOUND)
                 self._conn.commit()
             except FileError as e:
                 logging.error('File error: {}'.format(str(e)))

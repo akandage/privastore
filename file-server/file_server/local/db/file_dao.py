@@ -4,7 +4,7 @@ from ..file_transfer_status import FileTransferStatus
 from typing import Optional
 
 FileMetadata = namedtuple('FileVersionMetadata', ['local_id', 'remote_id', 'key_id', 'file_size', 'size_on_disk', 'total_chunks', 'uploaded_chunks', 'downloaded_chunks', 'local_transfer_status', 'remote_transfer_status'])
-FileVersionMetadata = namedtuple('FileVersionMetadata', ['file_type', 'version', 'local_id', 'remote_id', 'key_id', 'file_size', 'size_on_disk', 'total_chunks', 'uploaded_chunks', 'downloaded_chunks', 'local_transfer_status', 'remote_transfer_status'])
+FileVersionMetadata = namedtuple('FileVersionMetadata', ['file_id', 'file_type', 'version', 'local_id', 'remote_id', 'key_id', 'file_size', 'size_on_disk', 'total_chunks', 'uploaded_chunks', 'downloaded_chunks', 'local_transfer_status', 'remote_transfer_status'])
 
 class FileDAO(DataAccessObject):
 
@@ -15,6 +15,9 @@ class FileDAO(DataAccessObject):
         raise Exception('Not implemented!')
     
     def get_file_metadata(self, local_id: str) -> 'FileMetadata':
+        raise Exception('Not implemented!')
+
+    def list_unsynced_files(self, local: bool, remote: bool) -> list['FileVersionMetadata']:
         raise Exception('Not implemented!')
 
     def list_orphaned_file_data(self) -> list['FileMetadata']:
@@ -33,4 +36,7 @@ class FileDAO(DataAccessObject):
         raise Exception('Not implemented!')
 
     def remove_file_data(self, local_id: str) -> None:
+        raise Exception('Not implemented!')
+    
+    def remove_file_version(self, file_id: int, version: int) -> None:
         raise Exception('Not implemented!')
