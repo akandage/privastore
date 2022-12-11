@@ -32,7 +32,7 @@ def create_user_account_table(conn):
         '''
         CREATE TABLE ps_user_account (
             username VARCHAR(50) PRIMARY KEY NOT NULL,
-            password_hash VARCHAR(32) NOT NULL
+            password_hash BLOB(32) NOT NULL
         )
         '''
     )
@@ -53,7 +53,7 @@ def create_key_table(conn):
         CREATE TABLE ps_key (
             id INTEGER PRIMARY KEY NOT NULL,
             name VARCHAR(50) UNIQUE NOT NULL,
-            key_bytes VARCHAR(32) NOT NULL,
+            key_bytes BLOB(32) NOT NULL,
             algorithm VARCHAR(50) NOT NULL,
             is_system BOOLEAN NOT NULL DEFAULT 0
         )
