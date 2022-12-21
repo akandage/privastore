@@ -20,6 +20,7 @@ def setup_db(db_config):
         create_file_data_table(conn)
         create_file_version_table(conn)
         create_remote_server_table(conn)
+        create_log_table(conn)
     finally:
         try:
             conn.close()
@@ -177,3 +178,18 @@ def create_remote_server_table(conn):
     )
     conn.execute("INSERT INTO ps_remote_server (hostname, port, cluster_id) VALUES ('localhost', 9090, 1)")
     conn.commit()
+
+def create_log_table(conn):
+    logging.debug('Setting up ps_log table')
+    conn.execute(
+        '''
+        CREATE TABLE ps_log (
+            seq_no INTEGER PRIMARY KEY NOT NULL,
+            epoch_no INTEGER NOT NULL,
+            entry_type INTEGER NOT NULL,
+            entry BLOB NULL
+        )
+        '''
+    )
+    # Create start epoch 1 log entry.
+    conn.execute('INSERT INTO ps_log (seq_no, epoch_no, entry_type) VALUES (?, ?, ?)', (1, 1, 1))

@@ -97,6 +97,10 @@ class KeyError(FileServerError):
     def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
         super().__init__(msg, error_code)
 
+class LogError(FileServerError):
+    def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
+        super().__init__(msg, error_code)
+
 class RemoteClientError(FileServerError):
     def __init__(self, msg: str, error_code: str=FileServerErrorCode.INTERNAL_ERROR):
         super().__init__(msg, error_code)
