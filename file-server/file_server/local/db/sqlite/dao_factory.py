@@ -2,6 +2,7 @@ from ..dao_factory import DAOFactory
 from .directory_dao import SqliteDirectoryDAO
 from .file_dao import SqliteFileDAO
 from .key_dao import SqliteKeyDAO
+from .log_dao import SqliteLogDAO
 from .remote_dao import SqliteRemoteDAO
 from .user_dao import SqliteUserDAO
 
@@ -22,5 +23,8 @@ class SqliteDAOFactory(DAOFactory):
     def key_dao(self, conn):
         return SqliteKeyDAO(conn)
     
+    def log_dao(self, conn):
+        return SqliteLogDAO(conn)
+
     def remote_dao(self, conn):
         return SqliteRemoteDAO(conn)

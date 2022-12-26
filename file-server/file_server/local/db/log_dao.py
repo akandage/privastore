@@ -13,16 +13,13 @@ class LogDAO(DataAccessObject):
     def get_current_epoch(self) -> int:
         raise Exception('Not implemented!')
     
-    def get_last_epoch(self) -> int:
+    def add_log_entry(self, type: LogEntryType, entry: bytes) -> int:
         raise Exception('Not implemented!')
     
-    def add_log_entry(self, type: LogEntryType, entry: dict) -> None:
+    def get_log_entry(self, seq_no: int) -> Optional[bytes]:
         raise Exception('Not implemented!')
     
-    def get_log_entry(self, seq_no: int) -> Optional[dict]:
-        raise Exception('Not implemented!')
-    
-    def get_epoch_log_entries(self, epoch_no: int) -> list[dict]:
+    def get_epoch_log_entries(self, epoch_no: int) -> list[bytes]:
         raise Exception('Not implemented!')
     
     def truncate_log(self, low_watermark: int) -> None:
