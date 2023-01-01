@@ -13,14 +13,14 @@ def get_first_epoch(cur: sqlite3.Cursor) -> int:
     cur.execute('SELECT min(epoch_no) FROM ps_log')
     res = cur.fetchone()
     if res is None or res[0] is None:
-        raise LogError('Log has no entries!')
+        raise LogError('Log has no entries!', FileServerErrorCode.LOG_IS_EMPTY)
     return res[0]
 
 def get_current_epoch(cur: sqlite3.Cursor) -> int:
     cur.execute('SELECT max(epoch_no) FROM ps_log')
     res = cur.fetchone()
     if res is None or res[0] is None:
-        raise LogError('Log has no entries!')
+        raise LogError('Log has no entries!', FileServerErrorCode.LOG_IS_EMPTY)
     return res[0]
 
 def end_current_epoch(cur: sqlite3.Cursor) -> int:
@@ -45,7 +45,7 @@ def get_log_entry(cur: sqlite3.Cursor, seq_no: int) -> bytes:
     cur.execute('SELECT entry FROM ps_log WHERE seq_no = ?', (seq_no,))
     res = cur.fetchone()
     if res is None:
-        raise LogError('Log entry [{}] not found!'.format(seq_no))
+        raise LogError('Log entry [{}] not found!'.format(seq_no), FileServerErrorCode.LOG_ENTRY_NOT_FOUND)
     return res[0]
 
 def get_epoch_log_entries(cur: sqlite3.Cursor, epoch_no: int) -> list[bytes]:
@@ -66,7 +66,7 @@ def truncate_log(cur: sqlite3.Cursor, epoch_no: int):
     if epoch_no == curr_epoch:
         return
     elif epoch_no > curr_epoch:
-        raise EpochError('Cannot truncate log to epoch [{}]. Epoch number is higher than current epoch'.format(epoch_no))
+        raise EpochError('Cannot truncate log to epoch [{}]. Epoch number is higher than current epoch'.format(epoch_no), FileServerErrorCode.INVALID_EPOCH_NO)
     cur.execute('DELETE FROM ps_log WHERE epoch_no < ?', (epoch_no,))
     if cur.rowcount != 1:
         raise LogError('Could not truncate log to epoch [{}]'.format(epoch_no))
