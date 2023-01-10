@@ -1,1 +1,5 @@
+node_modules/
+ui-server/dist/
+__pycache__/
+.venv/
 *.db
