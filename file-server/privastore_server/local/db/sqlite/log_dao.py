@@ -1,7 +1,7 @@
 import logging
 from ....error import EpochError, FileServerErrorCode, LogError
 from ..log_dao import LogDAO
-import log_util
+from .log_util import *
 
 class SqliteLogDAO(LogDAO):
 
@@ -12,7 +12,7 @@ class SqliteLogDAO(LogDAO):
         cur = self._conn.cursor()
         try:
             try:
-                return log_util.get_first_epoch(cur)
+                return get_first_epoch(cur)
             except EpochError as e:
                 logging.error('Epoch error {}'.format(str(e)))
                 self.rollback_nothrow()
@@ -35,7 +35,7 @@ class SqliteLogDAO(LogDAO):
         cur = self._conn.cursor()
         try:
             try:
-                return log_util.get_current_epoch(cur)
+                return get_current_epoch(cur)
             except EpochError as e:
                 logging.error('Epoch error {}'.format(str(e)))
                 self.rollback_nothrow()
@@ -58,7 +58,7 @@ class SqliteLogDAO(LogDAO):
         cur = self._conn.cursor()
         try:
             try:
-                log_util.end_current_epoch(cur)
+                end_current_epoch(cur)
             except EpochError as e:
                 logging.error('Epoch error {}'.format(str(e)))
                 self.rollback_nothrow()
@@ -81,7 +81,7 @@ class SqliteLogDAO(LogDAO):
         cur = self._conn.cursor()
         try:
             try:
-                return log_util.add_log_entry(cur, type, entry)
+                return add_log_entry(cur, type, entry)
             except EpochError as e:
                 logging.error('Epoch error {}'.format(str(e)))
                 self.rollback_nothrow()
@@ -104,7 +104,7 @@ class SqliteLogDAO(LogDAO):
         cur = self._conn.cursor()
         try:
             try:
-                return log_util.get_log_entry(cur, seq_no)
+                return get_log_entry(cur, seq_no)
             except EpochError as e:
                 logging.error('Epoch error {}'.format(str(e)))
                 self.rollback_nothrow()
