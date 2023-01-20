@@ -1,0 +1,23 @@
+.header {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    border-bottom: 1px solid #dadce0;
+    padding: 3px 0 5px 5px;
+}
+
+.header-search {
+    margin: 0;
+    width: 25%;
+}
+
+.header-controls {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    width: fit-content;
+    margin: 0 25px 0 0;
+}

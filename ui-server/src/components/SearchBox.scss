@@ -1,0 +1,21 @@
+.search-box {
+    width: 100%;
+    min-width: 600px;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    background-color: #f1f3f4;
+    border-radius: 10px;
+}
+
+.search-box > input {
+    font-size: 12pt;
+    border: none;
+    background: none;
+    width: 100%;
+    flex: 1;
+}
+
+.search-box > input:focus {
+    outline: none;
+}

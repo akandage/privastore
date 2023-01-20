@@ -1,9 +1,6 @@
-$font-stack: Roboto, sans-serif;
-$font-color: rgb(0, 102, 255);
+$fonts: "Roboto", Arial, sans-serif;
 
-.test {
-    font-size: 24pt;
-    font-family: $font-stack;
-    font-weight: bold;
-    color: $font-color;
+.app {
+    font-family: $fonts;
+    font-size: 1em;
 }
