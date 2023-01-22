@@ -4,3 +4,15 @@ $fonts: "Roboto", Arial, sans-serif;
     font-family: $fonts;
     font-size: 1em;
 }
+
+.app-body {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: flex-start;
+}
+
+.app-body-main {
+    width: 90%;
+    margin: 0 0 0 25px;
+}
