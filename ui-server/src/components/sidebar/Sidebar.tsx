@@ -2,6 +2,8 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import * as styles from './Sidebar.scss';
 
+import StorageUse from './StorageUse';
+
 export namespace Sidebar {
     export function Sidebar() {
         return <div className={styles.sidebar}>
@@ -12,6 +14,7 @@ export namespace Sidebar {
                 <NavItem name="Trash" href="/trash" icon="images/icons/trash.svg" />
                 <NavItem name="Settings" href="/settings" icon="images/icons/settings.svg" />
             </Nav>
+            <StorageUse used={7.39} total={15} unit="GB" />
         </div>
     }
 

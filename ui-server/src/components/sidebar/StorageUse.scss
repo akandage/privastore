@@ -1,0 +1,34 @@
+$font-color: rgb(95,99,104);
+
+.storage-use {
+    width: 100%;
+    max-width: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    margin: 15px 0 0 15px;
+
+    .label {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        margin: 0 0 5px 0;
+
+        img {
+            width: 24px;
+        }
+
+        span {
+            font-size: 10pt;
+            font-weight: bold;
+            color: $font-color;
+            margin: 0 0 0 5px;
+        }
+    }
+
+    .details {
+        font-size: 10pt;
+        color: $font-color;
+        margin: 5px 0 0 0;
+    }
+}

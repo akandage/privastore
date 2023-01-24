@@ -12,57 +12,58 @@ $padding: 10px;
     width: fit-content;
     margin: 0;
     padding: 0;
-}
 
-.round-button > button {
-    background-color: $button-background-color;
-    border: none;
-    width: $img-size + $padding;
-    height: $img-size + $padding;
-    padding: 0;
-    border-radius: $img-size + $padding;
-    cursor: pointer;
-    transition: background-color 0.25s;
-}
+    button {
+        background-color: $button-background-color;
+        border: none;
+        width: $img-size + $padding;
+        height: $img-size + $padding;
+        padding: 0;
+        border-radius: $img-size + $padding;
+        cursor: pointer;
+        transition: background-color 0.25s;
 
-.round-button > button > img {
-    width: $img-size;
-    height: $img-size;
-    object-fit: contain;
-    padding: 0;
-    margin: 0;
-}
+        img {
+            width: $img-size;
+            height: $img-size;
+            object-fit: contain;
+            padding: 0;
+            margin: 0;
+        }
+    }
 
-.round-button > p {
-    display: none;
-}
+    p {
+        display: none;
+    }
 
-.round-button > button:hover {
-    background-color: $button-background-hover;
-}
+    button:hover {
+        background-color: $button-background-hover;
 
-.round-button > button:active {
-    background-color: $button-background-click;
-    transition: background-color 0s;
-}
+        ~ p {
+            display: block;
+            position: absolute;
+            width: fit-content;
+            margin: 3px 0 0 0;
+            padding: 0;
+            left: 0;
+            top: 100%;
 
-.round-button > button:hover ~ p {
-    display: block;
-    position: absolute;
-    width: fit-content;
-    margin: 3px 0 0 0;
-    padding: 0;
-    left: 0;
-    top: 100%;
-}
+            span {
+                margin: 0 0 0 calc(($img-size + $padding) - 50%);
+                padding: 3px;
+                border-radius: 2px;
+                font-size: 10pt;
+                font-weight: 500;
+                white-space: nowrap;
+                color: #ffffff;
+                background-color: $tooltip-background-color;
+            }
+        }
+    }
+    
+    button:active {
+        background-color: $button-background-click;
+        transition: background-color 0s;
+    }
 
-.round-button > button:hover ~ p > span {
-    margin: 0 0 0 calc(($img-size + $padding) - 50%);
-    padding: 3px;
-    border-radius: 2px;
-    font-size: 10pt;
-    font-weight: 500;
-    white-space: nowrap;
-    color: #ffffff;
-    background-color: $tooltip-background-color;
 }
