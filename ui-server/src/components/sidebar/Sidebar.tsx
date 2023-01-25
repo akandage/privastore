@@ -3,10 +3,14 @@ import { NavLink } from 'react-router-dom';
 import * as styles from './Sidebar.scss';
 
 import StorageUse from './StorageUse';
+import UploadButton from '../UploadButton';
 
 export namespace Sidebar {
     export function Sidebar() {
         return <div className={styles.sidebar}>
+            <div className={styles.uploadButton}>
+                <UploadButton />
+            </div>
             <Nav>
                 <NavItem name="File System" href="/" icon="images/icons/filesystem.svg" />
                 <NavItem name="Recent" href="/recent" icon="images/icons/clock.svg" />

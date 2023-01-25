@@ -5,6 +5,11 @@
     justify-content: flex-start;
     width: 10%;
     min-width: 250px;
+
+    .upload-button {
+        width: 100%;
+        margin: 15px 0 15px 15px;
+    }
 }
 
 .sidebar-nav {

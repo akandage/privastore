@@ -1,0 +1,30 @@
+.upload-button {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    background-color: #e8f0fe;
+    border-radius: 6.25rem;
+    box-shadow: 0 1px 4px 0 rgba(60,64,67,.3);
+    border: none;
+    margin: 0;
+    padding: 1em;
+    transition: background-color 0.25s, box-shadow 0.25s;
+    cursor: pointer;
+    
+    img {
+        width: 24px;
+        opacity: 0.6;
+    }
+
+    span {
+        font-size: 10pt;
+        font-weight: bold;
+        color: rgb(60,64,67);
+        margin: 0 0 0 10px;
+    }
+}
+
+.upload-button:hover {
+    background-color: #cfdef8;
+    box-shadow: 0 1px 8px 0 rgba(60,64,67,.5);
+}

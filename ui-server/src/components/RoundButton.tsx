@@ -4,12 +4,12 @@ import * as styles from './RoundButton.scss';
 type RoundButtonProps = {
     img: string,
     tooltip?: string,
-    onClick?: (e: MouseEvent) => void
+    onClick?: (e: React.MouseEvent) => void
 }
 
 export default function RoundButton({ img, tooltip = 'Tooltip', onClick = (e) => {} }: RoundButtonProps) {
     return <div className={styles.roundButton}>
-        <button>
+        <button onClick={onClick}>
             <img src={ img } alt={ tooltip }></img>
         </button>
         <p>
