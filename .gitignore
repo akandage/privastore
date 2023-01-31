@@ -1,5 +1,6 @@
 node_modules/
 ui-server/dist/
+ui-server/public/images/icons/
 __pycache__/
 .venv/
 *.db
