@@ -4,8 +4,11 @@ import shutil
 import os
 import requests
 import unittest
+import uuid
 
 from ..error import AuthenticationError
+from ..local.api.flask_http import SESSION_ID_HEADER
+from ..local.server import clear_local_server
 from ..server import config_logging, get_local_server, setup_local_db
 from ..session import Sessions
 from .test_util import get_error_code
@@ -16,6 +19,10 @@ TEST_DIR = os.environ.get('TEST_DIRECTORY', 'test_local_server')
 API_VERSION = 1
 ADMIN_USERNAME = 'psadmin'
 ADMIN_PASSWORD = 'psadmin'
+SERVER_URL = 'http://{}:{}'.format(HOSTNAME, LOCALS_PORT)
+LOGIN_URL = '{}/{}/login'.format(SERVER_URL, API_VERSION)
+LOGOUT_URL = '{}/{}/logout'.format(SERVER_URL, API_VERSION)
+HEARTBEAT_URL = '{}/{}/heartbeat'.format(SERVER_URL, API_VERSION)
 
 class TestLocalServer(unittest.TestCase):
 
@@ -54,6 +61,7 @@ class TestLocalServer(unittest.TestCase):
     def setUp(self):
         self.config = None
         self.local_server = None
+        clear_local_server()
         self.cleanup_test_dir()
         os.mkdir(TEST_DIR)
         config = self.get_config()
@@ -70,14 +78,36 @@ class TestLocalServer(unittest.TestCase):
         self.cleanup_test_dir()
     
     def test_login_user(self):
-        LOGIN_URL = 'http://{}:{}/{}/login'.format(HOSTNAME, LOCALS_PORT, API_VERSION)
-
+        print(LOGIN_URL)
         r = requests.post(LOGIN_URL, auth=(ADMIN_USERNAME, ADMIN_PASSWORD))
         self.assertEqual(r.status_code, HTTPStatus.OK)
-        Sessions.validate_session(r.headers.get('x-privastore-session-id'))
+        Sessions.validate_session(r.headers.get(SESSION_ID_HEADER))
         r = requests.post(LOGIN_URL, auth=('baduser', ADMIN_PASSWORD))
         self.assertEqual(r.status_code, HTTPStatus.UNAUTHORIZED)
         self.assertEqual(get_error_code(r), AuthenticationError.USER_NOT_FOUND)
         r = requests.post(LOGIN_URL, auth=(ADMIN_USERNAME, 'badpass'))
         self.assertEqual(r.status_code, HTTPStatus.UNAUTHORIZED)
         self.assertEqual(get_error_code(r), AuthenticationError.INCORRECT_PASSWORD)
+    
+    def do_login(self, username, password):
+        r = requests.post(LOGIN_URL, auth=(username, password))
+        return r.headers.get(SESSION_ID_HEADER)
+
+    def test_session(self):
+        r = requests.put(HEARTBEAT_URL)
+        self.assertEqual(r.status_code, HTTPStatus.BAD_REQUEST)
+        session_id = self.do_login(ADMIN_USERNAME, ADMIN_PASSWORD)
+        headers = {SESSION_ID_HEADER: session_id}
+        inv_headers = {SESSION_ID_HEADER: 'S-'+str(uuid.uuid4())}
+        r = requests.put(HEARTBEAT_URL, headers=headers)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = requests.put(HEARTBEAT_URL, headers=inv_headers)
+        self.assertEqual(r.status_code, HTTPStatus.UNAUTHORIZED)
+        r = requests.post(LOGOUT_URL)
+        self.assertEqual(r.status_code, HTTPStatus.BAD_REQUEST)
+        r = requests.post(LOGOUT_URL, headers=inv_headers)
+        self.assertEqual(r.status_code, HTTPStatus.UNAUTHORIZED)
+        r = requests.post(LOGOUT_URL, headers=headers)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = requests.put(HEARTBEAT_URL, headers=headers)
+        self.assertEqual(r.status_code, HTTPStatus.UNAUTHORIZED)

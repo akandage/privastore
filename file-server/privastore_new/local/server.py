@@ -94,3 +94,7 @@ def get_local_server(config: Optional[dict]=None):
         local_server = LocalServer(config)
     
     return local_server
+
+def clear_local_server():
+    global local_server
+    local_server = None

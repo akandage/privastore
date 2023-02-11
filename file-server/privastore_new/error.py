@@ -52,6 +52,17 @@ class HttpError(FileServerError):
     def __init__(self, msg: str, error_code: str=BAD_REQUEST):
         super().__init__(msg, error_code)
 
+class KeyError(FileServerError):
+
+    '''
+        Key error codes.
+    '''
+
+    INVALID_ALGORITHM = "INVALID_ALGORITHM"
+
+    def __init__(self, msg: str, error_code: str=FileServerError.INTERNAL_ERROR):
+        super().__init__(msg, error_code)
+
 class NotImplementedError(FileServerError):
 
     def __init__(self, msg: str='Method not implemented!', error_code: str=FileServerError.INTERNAL_ERROR):

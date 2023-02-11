@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, request
+from functools import wraps
 from http import HTTPStatus
 import logging
 
@@ -30,6 +31,15 @@ def http_error_handler(e: SessionError):
 
     return jsonify(e.to_dict()), code
 
+def session_id_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        session_id = request.headers.get(SESSION_ID_HEADER)
+        if not session_id:
+            raise HttpError(f'Missing required {SESSION_ID_HEADER} header')
+        return f(*args, **kwargs)
+    return wrapper
+
 @app.route(f'/{API_VERSION}/login', methods=['POST'])
 def login_user():
     if not request.authorization:
@@ -49,5 +59,20 @@ def login_user():
         server.conn_pool().release(conn)
 
     session_id = server.session_mgr().start_session(username)
-
     return {'session-id': session_id}, HTTPStatus.OK, {SESSION_ID_HEADER: session_id}
+
+@app.route(f'/{API_VERSION}/heartbeat', methods=['PUT'])
+@session_id_required
+def heartbeat():
+    session_id = request.headers.get(SESSION_ID_HEADER)
+    server = get_local_server()
+    server.session_mgr().renew_session(session_id)
+    return '', HTTPStatus.OK
+
+@app.route(f'/{API_VERSION}/logout', methods=['POST'])
+@session_id_required
+def logout_user():
+    session_id = request.headers.get(SESSION_ID_HEADER)
+    server = get_local_server()
+    server.session_mgr().end_session(session_id)
+    return '', HTTPStatus.OK
