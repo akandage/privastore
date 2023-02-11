@@ -38,7 +38,7 @@ class DatabaseError(FileServerError):
 
     CONNECTION_POOL_TIMEOUT = "CONNECTION_POOL_TIMEOUT"
 
-    def __init__(self, msg: str, error_code: str=CONNECTION_POOL_TIMEOUT):
+    def __init__(self, msg: str, error_code: str=FileServerError.INTERNAL_ERROR):
         super().__init__(msg, error_code)
 
 class HttpError(FileServerError):
@@ -55,4 +55,16 @@ class HttpError(FileServerError):
 class NotImplementedError(FileServerError):
 
     def __init__(self, msg: str='Method not implemented!', error_code: str=FileServerError.INTERNAL_ERROR):
+        super().__init__(msg, error_code)
+
+class SessionError(FileServerError):
+
+    '''
+        Session error codes.
+    '''
+
+    INVALID_SESSION_ID = "INVALID_SESSION_ID"
+    SESSION_NOT_FOUND = "SESSION_NOT_FOUND"
+
+    def __init__(self, msg: str, error_code: str=FileServerError.INTERNAL_ERROR):
         super().__init__(msg, error_code)

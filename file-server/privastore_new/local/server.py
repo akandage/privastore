@@ -7,6 +7,7 @@ from ..daemon import Daemon
 from ..db.conn_pool import DbConnectionPool
 from .db.dao_factory import DAOFactory
 from ..error import DatabaseError, FileServerError
+from ..session_mgr import SessionManager
 
 class LocalServer(Daemon):
 
@@ -30,7 +31,11 @@ class LocalServer(Daemon):
             raise FileServerError('Invalid database type [{}]'.format(db_type))
         
         conn_pool_size = int(db_config.get('connection-pool-size', 1))
-        self._conn_pool = conn_pool = DbConnectionPool(conn_factory, conn_pool_size)
+        conn_pool_timeout = float(db_config.get('connection-pool-timeout', 30))
+        self._conn_pool = conn_pool = DbConnectionPool(conn_factory, conn_pool_size, conn_pool_timeout)
+
+        session_config = config['session']
+        self._session_mgr = SessionManager(session_config)
 
         from .api.flask_http import app
 
@@ -43,8 +48,13 @@ class LocalServer(Daemon):
     def dao_factory(self) -> DAOFactory:
         return self._dao_factory
 
+    def session_mgr(self) -> SessionManager:
+        return self._session_mgr
+
     def do_start(self):
         logging.debug('Starting local server')
+        self._session_mgr.start()
+        self._session_mgr.wait_started()
         self._httpd.start()
         self._httpd.wait_started()
         logging.debug('Started local server')
@@ -64,6 +74,7 @@ class LocalServer(Daemon):
             self._stopped.set()
             return
         
+        self._started.set()
         self._stop.wait()
 
         try:

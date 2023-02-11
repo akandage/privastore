@@ -11,6 +11,7 @@ class FlaskDaemon(Daemon):
         hostname: str = http_config.get('api-hostname', 'localhost')
         port: int = int(http_config.get('api-port', 8080))
         self._server = wsgiref.simple_server.make_server(hostname, port, app)
+        logging.debug('Flask server listening on {}:{}'.format(hostname, port))
         self._server.timeout = 0.1
 
         # TODO: SSL.

@@ -1,18 +1,53 @@
 from flask import Flask, jsonify, request
+from http import HTTPStatus
+import logging
 
-from ...error import AuthenticationError, HttpError
+from ...error import AuthenticationError, HttpError, SessionError
+from ..server import get_local_server
+
+API_VERSION = 1
+SESSION_ID_HEADER = 'x-privastore-session-id'
 
 app = Flask(__name__)
 
 @app.errorhandler(AuthenticationError)
 def http_error_handler(e: AuthenticationError):
-    return jsonify(e.to_dict()), 401
+    return jsonify(e.to_dict()), HTTPStatus.UNAUTHORIZED
 
 @app.errorhandler(HttpError)
 def http_error_handler(e: HttpError):
-    return jsonify(e.to_dict()), 400
+    return jsonify(e.to_dict()), HTTPStatus.BAD_REQUEST
 
-@app.route("/login")
+@app.errorhandler(SessionError)
+def http_error_handler(e: SessionError):
+    ec = e.error_code()
+    code = HTTPStatus.INTERNAL_SERVER_ERROR
+
+    if ec == SessionError.INVALID_SESSION_ID:
+        code = HTTPStatus.BAD_REQUEST
+    elif ec == SessionError.SESSION_NOT_FOUND:
+        code = HTTPStatus.UNAUTHORIZED
+
+    return jsonify(e.to_dict()), code
+
+@app.route(f'/{API_VERSION}/login', methods=['POST'])
 def login_user():
     if not request.authorization:
         raise HttpError('Missing HTTP basic auth')
+    
+    username = request.authorization.username
+    password = request.authorization.password
+    logging.debug('User [{}] login'.format(username))
+
+    server = get_local_server()
+    conn = server.conn_pool().acquire()
+    try:
+        user_dao = server.dao_factory().user_dao(conn)
+        user_dao.login_user(username, password)
+        logging.debug('User [{}] logged in'.format(username))
+    finally:
+        server.conn_pool().release(conn)
+
+    session_id = server.session_mgr().start_session(username)
+
+    return {'session-id': session_id}, HTTPStatus.OK, {SESSION_ID_HEADER: session_id}
