@@ -2,9 +2,13 @@ import argparse
 import configparser
 import logging
 import os
+import signal
+from threading import Event
 
+from .api.flask_daemon import FlaskDaemon
 from .db.conn_pool import DbConnectionPool
 from .error import DatabaseError, FileServerError
+from .local.server import get_local_server
 
 def config_logging(log_level):
     if log_level == 'CRITICAL':
@@ -34,20 +38,13 @@ def setup_local_db(config):
     logging.info('Set up local server database')
 
 def start_local_server(config):
-    logging.info('Starting local server')
-
-    db_config = config['db']
-    db_type = db_config.get('db-type', 'sqlite')
-    if db_type == 'sqlite':
-        from .db.conn_factory import sqlite_conn_factory
-        db_path = db_config.get('sqlite-db-path', 'local_server.db')
-        if not os.path.exists(db_path):
-            raise DatabaseError('SQLite database [{}] not found!'.format(db_path))
-        conn_factory = sqlite_conn_factory(db_path)
-    else:
-        raise FileServerError('Invalid database type [{}]'.format(db_type))
-    conn_pool_size = int(db_config.get('connection-pool-size', 1))
-    conn_pool = DbConnectionPool(conn_factory, conn_pool_size)
+    server = get_local_server(config)
+    server.start()
+    def handle_ctrl_c(signum, frame):
+        print('Stopping...')
+        server.stop()
+    signal.signal(signal.SIGINT, handle_ctrl_c)
+    server.join()
 
 def setup_remote_db(config):
     logging.info('Setting up remote server database')

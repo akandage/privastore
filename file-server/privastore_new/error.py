@@ -13,6 +13,22 @@ class FileServerError(Exception):
 
     def error_code(self) -> str:
         return self._error_code
+    
+    def to_dict(self) -> dict:
+        return {'error-code': self.error_code(), 'message': str(self)}
+
+class AuthenticationError(FileServerError):
+
+    '''
+        Authentication error codes.
+    '''
+
+    USER_NOT_FOUND = "USER_NOT_FOUND"
+    INCORRECT_PASSWORD = "INCORRECT_PASSWORD"
+
+    def __init__(self, msg: str, error_code: str=FileServerError.INTERNAL_ERROR):
+        super().__init__(msg, error_code)
+
 
 class DatabaseError(FileServerError):
 
@@ -23,6 +39,17 @@ class DatabaseError(FileServerError):
     CONNECTION_POOL_TIMEOUT = "CONNECTION_POOL_TIMEOUT"
 
     def __init__(self, msg: str, error_code: str=CONNECTION_POOL_TIMEOUT):
+        super().__init__(msg, error_code)
+
+class HttpError(FileServerError):
+
+    '''
+        HTTP error codes.
+    '''
+
+    BAD_REQUEST = "BAD_REQUEST"
+
+    def __init__(self, msg: str, error_code: str=BAD_REQUEST):
         super().__init__(msg, error_code)
 
 class NotImplementedError(FileServerError):

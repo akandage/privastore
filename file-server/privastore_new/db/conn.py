@@ -33,7 +33,11 @@ class SqliteConnection(DbConnection):
         super().__init__()
         self._conn = conn
     
+    def cursor(self):
+        return self._conn.cursor()
+
     def begin_transaction(self):
+        logging.debug('Begin transaction')
         self._conn.execute('BEGIN')
     
     def commit(self):

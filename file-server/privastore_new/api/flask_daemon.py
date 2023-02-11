@@ -1,6 +1,6 @@
 from flask import Flask
 import logging
-from ...privastore_server.daemon import Daemon
+from ..daemon import Daemon
 import wsgiref.simple_server
 
 class FlaskDaemon(Daemon):
@@ -11,6 +11,7 @@ class FlaskDaemon(Daemon):
         hostname: str = http_config.get('api-hostname', 'localhost')
         port: int = int(http_config.get('api-port', 8080))
         self._server = wsgiref.simple_server.make_server(hostname, port, app)
+        self._server.timeout = 0.1
 
         # TODO: SSL.
     
