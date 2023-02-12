@@ -14,8 +14,8 @@ class SqliteUserDAO(UserDAO):
         return super().conn()
 
     def login_user(self, username: str, password: str) -> None:
-        logging.debug('Login user')
-        self.conn().begin_transaction()
+        logging.debug('Login user [{}]'.format(username))
+        self.begin_transaction()
         cur = self.conn().cursor()
         try:
             try:

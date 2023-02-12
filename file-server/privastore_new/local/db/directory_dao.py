@@ -2,7 +2,7 @@ from typing import Optional
 
 from ...db.conn import DbConnection
 from ...db.dao import DataAccessObject
-from ...directory import Directory
+from ...directory import Directory, DirectoryEntry
 from ...error import NotImplementedError
 
 class DirectoryDAO(DataAccessObject):
@@ -10,11 +10,17 @@ class DirectoryDAO(DataAccessObject):
     def __init__(self, conn: DbConnection):
         super().__init__(conn)
     
-    def create_directory(self, path: list[str], name: str, owner: str) -> None:
+    def get_root_directory(self, owner: str) -> Directory:
+        raise NotImplementedError()
+
+    def path_to_directory(self, dir_uid: str, owner: str) -> list[str]:
+        raise NotImplementedError()
+
+    def create_directory(self, parent_uid: str, name: str, owner: str) -> None:
         raise NotImplementedError()
     
-    def list_directory(self, path: list[str], owner: str, limit: Optional[int]=None, offset: Optional[int]=None, sort: Optional[str]=None) -> list[Directory]:
+    def list_directory(self, dir_uid: str, owner: str, limit: Optional[int]=None, offset: Optional[int]=None, sort: Optional[str]=None) -> list[DirectoryEntry]:
         raise NotImplementedError()
     
-    def remove_directory(self, path: list[str], name: str, owner: str) -> None:
+    def remove_directory(self, dir_uid: str, owner: str) -> None:
         raise NotImplementedError()

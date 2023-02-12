@@ -19,19 +19,6 @@ class DirectoryEntry(object):
     def uid(self):
         return self._uid
 
-    @staticmethod
-    def generate_uid():
-        return 'D-' + str(uuid.uuid4())
-
-    @staticmethod
-    def validate_uuid(uid: str):
-        if not uid.startswith('D-'):
-            raise DirectoryError('Invalid directory id [{}]'.format(uid), DirectoryError.INVALID_DIRECTORY_ID)
-        try:
-            uuid.UUID(uid[2:])
-        except:
-            raise DirectoryError('Invalid directory id [{}]'.format(uid), DirectoryError.INVALID_DIRECTORY_ID)
-
     def created_timestamp(self):
         return self._created_timestamp
     
@@ -50,6 +37,7 @@ class DirectoryEntry(object):
     def to_dict(self):
         return {
             'name': self.name(),
+            'uid:': self.uid(),
             'created_timestamp': self.created_timestamp(),
             'created_time': format_datetime(self.created_time()),
             'modified_timestamp': self.created_timestamp(),
@@ -61,3 +49,16 @@ class Directory(DirectoryEntry):
 
     def __init__(self, *args):
         super().__init__(*args)
+    
+    @staticmethod
+    def generate_uid():
+        return 'D-' + str(uuid.uuid4())
+
+    @staticmethod
+    def validate_uuid(uid: str):
+        if not uid.startswith('D-'):
+            raise DirectoryError('Invalid directory id [{}]'.format(uid), DirectoryError.INVALID_DIRECTORY_ID)
+        try:
+            uuid.UUID(uid[2:])
+        except:
+            raise DirectoryError('Invalid directory id [{}]'.format(uid), DirectoryError.INVALID_DIRECTORY_ID)

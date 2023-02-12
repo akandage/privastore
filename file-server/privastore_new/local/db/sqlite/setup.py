@@ -20,6 +20,7 @@ def setup_db(db_config):
         create_user_account_table(conn)
         create_key_table(conn)
         create_directory_table(conn)
+        create_file_table(conn)
     finally:
         try:
             conn.close()
@@ -92,6 +93,37 @@ def create_directory_table(conn: sqlite3.Connection):
             FOREIGN KEY (parent_id) REFERENCES ps_directory (id) ON DELETE CASCADE,
             FOREIGN KEY (child_id) REFERENCES ps_directory (id) ON DELETE CASCADE,
             PRIMARY KEY (parent_id, child_id)
+        )
+        '''
+    )
+    conn.commit()
+
+def create_file_table(conn: sqlite3.Connection):
+    logging.debug('Setting up ps_file table')
+    conn.execute(
+        '''
+        CREATE TABLE ps_file (
+            id INTEGER PRIMARY KEY NOT NULL,
+            parent_id INTEGER NOT NULL,
+            name VARCHAR(256) NOT NULL,
+            uid VARCHAR(38) UNIQUE NOT NULL,
+            mime_type VARCHAR(100) NOT NULL,
+            created_timestamp INTEGER NOT NULL,
+            modified_timestamp INTEGER NOT NULL,
+            owner VARCHAR(50) NOT NULL,
+            FOREIGN KEY (parent_id) REFERENCES ps_directory (id) ON DELETE CASCADE,
+            FOREIGN KEY (owner) REFERENCES ps_user_account (username) ON DELETE CASCADE
+        )
+        '''
+    )
+    conn.execute(
+        '''
+        CREATE TABLE ps_file_data (
+            id INTEGER PRIMARY KEY NOT NULL,
+            uid VARCHAR(39) UNIQUE NOT NULL,
+            file_id INTEGER NULL,
+            version INTEGER NULL,
+            FOREIGN KEY (file_id) REFERENCES ps_file (id) ON DELETE SET NULL
         )
         '''
     )
