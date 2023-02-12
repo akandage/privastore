@@ -1,8 +1,10 @@
 import logging
 import os
 import sqlite3
+import time
 
 from ....crypto.util import hash_user_password
+from ....directory import Directory
 from ....error import DatabaseError
 from ....key import Key
 
@@ -71,7 +73,7 @@ def create_directory_table(conn: sqlite3.Connection):
         CREATE TABLE ps_directory (
             id INTEGER PRIMARY KEY NOT NULL,
             name VARCHAR(256) NOT NULL,
-            uuid VARCHAR(38) UNIQUE NOT NULL,
+            uid VARCHAR(38) UNIQUE NOT NULL,
             created_timestamp INTEGER NOT NULL,
             modified_timestamp INTEGER NOT NULL,
             owner VARCHAR(50) NOT NULL,
@@ -79,6 +81,9 @@ def create_directory_table(conn: sqlite3.Connection):
         )
         '''
     )
+    # Create root directory (each user has its own).
+    now = round(time.time())
+    conn.execute('INSERT INTO ps_directory (name, uid, created_timestamp, modified_timestamp, owner) VALUES (?, ?, ?, ?, ?)', ('/', Directory.generate_uid(), now, now, 'psadmin'))
     conn.execute(
         '''
         CREATE TABLE ps_directory_link (

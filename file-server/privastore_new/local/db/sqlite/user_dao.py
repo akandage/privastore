@@ -8,7 +8,7 @@ from ..user_dao import UserDAO
 class SqliteUserDAO(UserDAO):
 
     def __init__(self, conn: SqliteConnection):
-        super(SqliteUserDAO, self).__init__(conn)
+        super().__init__(conn)
     
     def conn(self) -> SqliteConnection:
         return super().conn()

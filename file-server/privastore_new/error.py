@@ -41,6 +41,18 @@ class DatabaseError(FileServerError):
     def __init__(self, msg: str, error_code: str=FileServerError.INTERNAL_ERROR):
         super().__init__(msg, error_code)
 
+class DirectoryError(FileServerError):
+
+    '''
+        Directory error codes.
+    '''
+
+    INVALID_PATH = "INVALID_PATH"
+    INVALID_DIRECTORY_ID = "INVALID_DIRECTORY_ID"
+
+    def __init__(self, msg: str, error_code: str=FileServerError.INTERNAL_ERROR):
+        super().__init__(msg, error_code)
+
 class HttpError(FileServerError):
 
     '''
