@@ -37,7 +37,7 @@ class DirectoryEntry(object):
     def to_dict(self):
         return {
             'name': self.name(),
-            'uid:': self.uid(),
+            'uid': self.uid(),
             'created_timestamp': self.created_timestamp(),
             'created_time': format_datetime(self.created_time()),
             'modified_timestamp': self.created_timestamp(),

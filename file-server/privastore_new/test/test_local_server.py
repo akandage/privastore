@@ -6,6 +6,7 @@ import requests
 import unittest
 import uuid
 
+from ..directory import Directory
 from ..error import AuthenticationError
 from ..local.api.flask_http import SESSION_ID_HEADER
 from ..local.server import clear_local_server
@@ -23,6 +24,7 @@ SERVER_URL = 'http://{}:{}'.format(HOSTNAME, LOCALS_PORT)
 LOGIN_URL = '{}/{}/login'.format(SERVER_URL, API_VERSION)
 LOGOUT_URL = '{}/{}/logout'.format(SERVER_URL, API_VERSION)
 HEARTBEAT_URL = '{}/{}/heartbeat'.format(SERVER_URL, API_VERSION)
+CREATE_DIR_URL = '{}/{}/directory/{{}}'.format(SERVER_URL, API_VERSION)
 
 class TestLocalServer(unittest.TestCase):
 
@@ -111,3 +113,25 @@ class TestLocalServer(unittest.TestCase):
         self.assertEqual(r.status_code, HTTPStatus.OK)
         r = requests.put(HEARTBEAT_URL, headers=headers)
         self.assertEqual(r.status_code, HTTPStatus.UNAUTHORIZED)
+    
+    def test_create_directory(self):
+        session_id = self.do_login(ADMIN_USERNAME, ADMIN_PASSWORD)
+        headers = {SESSION_ID_HEADER: session_id}
+        r = requests.put(CREATE_DIR_URL.format('dir_1'), headers=headers)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        resp = dict(r.json())
+        self.assertEqual(resp.get('name'), 'dir_1')
+        dir_1_uid = resp.get('uid')
+        Directory.validate_uuid(dir_1_uid)
+        r = requests.put(CREATE_DIR_URL.format('dir_1'), headers=headers)
+        self.assertEqual(r.status_code, HTTPStatus.CONFLICT)
+        r = requests.put(CREATE_DIR_URL.format('dir_2'), headers=headers)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = requests.put(CREATE_DIR_URL.format(f'dir_1?parent={Directory.generate_uid()}'), headers=headers)
+        self.assertEqual(r.status_code, HTTPStatus.NOT_FOUND)
+        r = requests.put(CREATE_DIR_URL.format(f'dir_1?parent={dir_1_uid}'), headers=headers)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        r = requests.put(CREATE_DIR_URL.format(f'dir_1?parent={dir_1_uid}'), headers=headers)
+        self.assertEqual(r.status_code, HTTPStatus.CONFLICT)
+        r = requests.put(CREATE_DIR_URL.format(f'dir_1a?parent={dir_1_uid}'), headers=headers)
+        self.assertEqual(r.status_code, HTTPStatus.OK)

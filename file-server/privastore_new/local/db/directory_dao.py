@@ -16,7 +16,7 @@ class DirectoryDAO(DataAccessObject):
     def path_to_directory(self, dir_uid: str, owner: str) -> list[str]:
         raise NotImplementedError()
 
-    def create_directory(self, parent_uid: str, name: str, owner: str) -> None:
+    def create_directory(self, parent_uid: str, name: str, owner: str) -> Directory:
         raise NotImplementedError()
     
     def list_directory(self, dir_uid: str, owner: str, limit: Optional[int]=None, offset: Optional[int]=None, sort: Optional[str]=None) -> list[DirectoryEntry]:

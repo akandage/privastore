@@ -20,7 +20,8 @@ class SqliteDirectoryDAO(DirectoryDAO):
     def get_root_directory_id(self, owner: str) -> int:
         cur = self.conn().cursor()
         try:
-            res = cur.execute('SELECT id FROM ps_directory WHERE name = ? AND owner = ?', ('/', owner))
+            cur.execute('SELECT id FROM ps_directory WHERE name = ? AND owner = ?', ('/', owner))
+            res = cur.fetchone()
             if res is None:
                 raise DirectoryError('User [{}] root directory not found!'.format(owner))
             return res[0]
@@ -33,7 +34,8 @@ class SqliteDirectoryDAO(DirectoryDAO):
     def get_root_directory_uid(self, owner: str) -> str:
         cur = self.conn().cursor()
         try:
-            res = cur.execute('SELECT uid FROM ps_directory WHERE name = ? AND owner = ?', ('/', owner))
+            cur.execute('SELECT uid FROM ps_directory WHERE name = ? AND owner = ?', ('/', owner))
+            res = cur.fetchone()
             if res is None:
                 raise DirectoryError('User [{}] root directory not found!'.format(owner))
             return res[0]
@@ -46,11 +48,12 @@ class SqliteDirectoryDAO(DirectoryDAO):
     def get_directory_id_by_uid(self, uid: str, owner: str) -> int:
         cur = self.conn().cursor()
         try:
-            res = cur.execute('''
+            cur.execute('''
                 SELECT id
                 FROM ps_directory
                 WHERE uid = ? AND owner = ?
             ''', (uid, owner))
+            res = cur.fetchone()
             if res is None:
                 raise DirectoryError('Directory [{}] not found'.format(uid), DirectoryError.DIRECTORY_NOT_FOUND)
             return res[0]
@@ -63,11 +66,12 @@ class SqliteDirectoryDAO(DirectoryDAO):
         cur = self.conn().cursor()
         try:
             for name in path:
-                res = cur.execute('''
+                cur.execute('''
                     SELECT D.id 
                     FROM ps_directory AS D INNER JOIN ps_directory_link AS L ON D.id = L.child_id
                     WHERE L.parent_id = ? AND D.name = ? AND D.owner = ?
                 ''', (curr_id, name, owner))
+                res = cur.fetchone()
                 if res is None:
                     raise DirectoryError('Directory [{}] not found in path [{}]'.format(name, traversed), DirectoryError.INVALID_PATH)
                 traversed.append(name)
@@ -87,11 +91,12 @@ class SqliteDirectoryDAO(DirectoryDAO):
         cur = self.conn().cursor()
         try:
             while curr_id != root_id:
-                res = cur.execute('''
+                cur.execute('''
                     SELECT D.name, L.parent_id
                     FROM ps_directory AS D INNER JOIN ps_directory_link AS L ON D.id = L.child_id
                     WHERE D.id = ? AND D.owner = ?
                 ''', (curr_id, owner))
+                res = cur.fetchone()
                 if res is None:
                     raise DirectoryError('Could not get directory [{}] absolute path. No path to root directory!'.format(dir_uid))
                 name, parent_id = res
@@ -108,11 +113,12 @@ class SqliteDirectoryDAO(DirectoryDAO):
     def directory_exists(self, parent_id: int, name: str, owner: str) -> bool:
         cur = self.conn().cursor()
         try:
-            res = cur.execute('''
+            cur.execute('''
                 SELECT D.id
                 FROM ps_directory AS D INNER JOIN ps_directory_link AS L ON D.id = L.child_id
                 WHERE L.parent_id = ? AND D.name = ? AND D.owner = ?
             ''', (parent_id, name, owner))
+            res = cur.fetchone()
             return res is not None
         finally:
             try:
@@ -123,12 +129,48 @@ class SqliteDirectoryDAO(DirectoryDAO):
     def file_exists(self, parent_id: int, name: str, owner: str) -> bool:
         cur = self.conn().cursor()
         try:
-            res = cur.execute('''
+            cur.execute('''
                 SELECT id
                 FROM ps_file
                 WHERE parent_id = ? AND name = ? AND owner = ?
             ''', (parent_id, name, owner))
+            res = cur.fetchone()
             return res is not None
+        finally:
+            try:
+                cur.close()
+            except:
+                pass
+
+    def get_root_directory(self, owner: str) -> Directory:
+        self.begin_transaction()
+        cur = self.conn().cursor()
+        try:
+            cur.execute('''
+                SELECT name, uid, created_timestamp, modified_timestamp, owner
+                FROM ps_directory
+                WHERE name = ? AND owner = ?
+            ''', ('/', owner))
+            res = cur.fetchone()
+            if res is None:
+                raise DirectoryError('No root directory found for user [{}]!'.format(owner))
+            name, uid, created_timestamp, modified_timestamp, owner = res
+            self.commit()
+            return Directory(
+                name,
+                uid,
+                created_timestamp,
+                modified_timestamp,
+                owner
+            )
+        except DirectoryError as e:
+            logging.error('Directory error: {}'.format(str(e)))
+            self.rollback_nothrow()
+            raise e
+        except Exception as e:
+            logging.error('Query error: {}'.format(str(e)))
+            self.rollback_nothrow()
+            raise e
         finally:
             try:
                 cur.close()
@@ -152,7 +194,7 @@ class SqliteDirectoryDAO(DirectoryDAO):
             self.rollback_nothrow()
             raise e
 
-    def create_directory(self, parent_uid: str, name: str, owner: str) -> None:
+    def create_directory(self, parent_uid: str, name: str, owner: str) -> Directory:
         Directory.validate_uuid(parent_uid)
         if len(name) == 0:
             raise DirectoryError('Directory name cannot be empty', DirectoryError.INVALID_DIRECTORY_NAME)
@@ -175,6 +217,13 @@ class SqliteDirectoryDAO(DirectoryDAO):
                 (parent_id, child_id) VALUES (?, ?)''', (parent_id, cur.lastrowid))
             self.commit()
             logging.debug('Created directory [{}]'.format(name))
+            return Directory(
+                name,
+                uid,
+                now,
+                now,
+                owner
+            )
         except DirectoryError as e:
             logging.error('Directory error: {}'.format(str(e)))
             self.rollback_nothrow()

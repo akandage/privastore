@@ -22,7 +22,10 @@ class SessionManager(Daemon):
     
     def session_expiry_time(self) -> int:
         return self._session_expiry_time
-    
+
+    def get_session_user(self, session_id: str) -> str:
+        return self._sessions.get_session_user(session_id)
+
     def start_session(self, username: str) -> str:
         return self._sessions.start_session(username, self._session_expiry_time)
     
