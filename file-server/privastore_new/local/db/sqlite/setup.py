@@ -21,6 +21,7 @@ def setup_db(db_config):
         create_key_table(conn)
         create_directory_table(conn)
         create_file_table(conn)
+        create_log_table(conn)
     finally:
         try:
             conn.close()
@@ -123,7 +124,31 @@ def create_file_table(conn: sqlite3.Connection):
             uid VARCHAR(39) UNIQUE NOT NULL,
             file_id INTEGER NULL,
             version INTEGER NULL,
+            size INTEGER NOT NULL,
             FOREIGN KEY (file_id) REFERENCES ps_file (id) ON DELETE SET NULL
+        )
+        '''
+    )
+    conn.commit()
+
+def create_log_table(conn: sqlite3.Connection):
+    logging.debug('Setting up ps_log table')
+    conn.execute(
+        '''
+        CREATE TABLE ps_log (
+            id INTEGER PRIMARY KEY NOT NULL,
+            epoch_no INTEGER NOT NULL,
+            entry_type INTEGER NOT NULL
+        )
+        '''
+    )
+    conn.execute(
+        '''
+        CREATE TABLE ps_log_entry (
+            entry_id INTEGER NOT NULL,
+            chunk_id INTEGER NOT NULL,
+            PRIMARY KEY (entry_id, chunk_id),
+            FOREIGN KEY (entry_id) REFERENCES ps_log (id) ON DELETE CASCADE
         )
         '''
     )

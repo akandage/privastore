@@ -2,10 +2,11 @@ import logging
 
 from ....crypto.util import hash_user_password
 from ....db.conn import SqliteConnection
+from ....db.dao import DataAccessObject
 from ....error import AuthenticationError
 from ..user_dao import UserDAO
 
-class SqliteUserDAO(UserDAO):
+class SqliteUserDAO(DataAccessObject, UserDAO):
 
     def __init__(self, conn: SqliteConnection):
         super().__init__(conn)

@@ -1,15 +1,13 @@
 from typing import Optional
 
-from ...db.conn import DbConnection
-from ...db.dao import DataAccessObject
 from ...directory import Directory, DirectoryEntry
 from ...file import File
 from ...error import NotImplementedError
 
-class DirectoryDAO(DataAccessObject):
+class DirectoryDAO(object):
 
-    def __init__(self, conn: DbConnection):
-        super().__init__(conn)
+    def __init__(self):
+        super().__init__()
     
     def get_root_directory(self, owner: str) -> Directory:
         raise NotImplementedError()
@@ -26,5 +24,8 @@ class DirectoryDAO(DataAccessObject):
     def list_directory(self, dir_uid: str, owner: str, limit: Optional[int]=None, offset: Optional[int]=None, sort: Optional[str]=None) -> list[DirectoryEntry]:
         raise NotImplementedError()
     
+    def remove_file(self, file_uid: str, owner: str) -> None:
+        raise NotImplementedError()
+
     def remove_directory(self, dir_uid: str, owner: str) -> None:
         raise NotImplementedError()

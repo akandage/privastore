@@ -4,13 +4,14 @@ from typing import Optional
 
 from ....crypto.util import hash_user_password
 from ....db.conn import SqliteConnection
+from ....db.dao import DataAccessObject
 from ..directory_dao import DirectoryDAO
 from ....directory import Directory, DirectoryEntry
 from ....error import DirectoryError, FileError
 from ....file import File
 from ....util import str_path
 
-class SqliteDirectoryDAO(DirectoryDAO):
+class SqliteDirectoryDAO(DataAccessObject, DirectoryDAO):
 
     def __init__(self, conn: SqliteConnection):
         super().__init__(conn)
@@ -222,7 +223,7 @@ class SqliteDirectoryDAO(DirectoryDAO):
                 (parent_id, child_id) VALUES (?, ?)''', (parent_id, cur.lastrowid))
             abs_path = self.abs_path(uid, owner)
             self.commit()
-            logging.debug('Created directory [{}]'.format(name))
+            logging.debug('Created directory')
             return Directory(
                 name,
                 uid,
@@ -267,7 +268,7 @@ class SqliteDirectoryDAO(DirectoryDAO):
                 VALUES (?, ?, ?, ?, ?, ?)''', (name, uid, mime_type, now, now, owner, parent_id))
             abs_path = self.abs_path(uid, owner)
             self.commit()
-            logging.debug('Created file [{}]'.format(name))
+            logging.debug('Created file')
             return File(
                 name,
                 uid,
