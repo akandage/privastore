@@ -15,9 +15,10 @@ class DbConnectionPool(Pool):
     def acquire(self, timeout=None) -> DbConnection:
         if timeout is None:
             timeout = self._timeout
-        conn = super().acquire(timeout)
+        conn: DbConnection = super().acquire(timeout)
         if conn is None:
             raise DatabaseError('Timed out acquiring database connection from pool', DatabaseError.CONNECTION_POOL_TIMEOUT)
+        conn.set_autocommit(True)
         return conn
     
     def try_acquire(self) -> DbConnection:
