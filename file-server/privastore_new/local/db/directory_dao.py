@@ -3,6 +3,7 @@ from typing import Optional
 from ...db.conn import DbConnection
 from ...db.dao import DataAccessObject
 from ...directory import Directory, DirectoryEntry
+from ...file import File
 from ...error import NotImplementedError
 
 class DirectoryDAO(DataAccessObject):
@@ -19,6 +20,9 @@ class DirectoryDAO(DataAccessObject):
     def create_directory(self, parent_uid: str, name: str, owner: str) -> Directory:
         raise NotImplementedError()
     
+    def create_file(self, parent_uid: str, name: str, mime_type: str, owner: str) -> File:
+        raise NotImplementedError()
+
     def list_directory(self, dir_uid: str, owner: str, limit: Optional[int]=None, offset: Optional[int]=None, sort: Optional[str]=None) -> list[DirectoryEntry]:
         raise NotImplementedError()
     

@@ -7,6 +7,7 @@ from ....db.conn import SqliteConnection
 from ..directory_dao import DirectoryDAO
 from ....directory import Directory, DirectoryEntry
 from ....error import DirectoryError, FileError
+from ....file import File
 from ....util import str_path
 
 class SqliteDirectoryDAO(DirectoryDAO):
@@ -142,6 +143,12 @@ class SqliteDirectoryDAO(DirectoryDAO):
             except:
                 pass
 
+    def check_exists(self, parent_id: int, name: str, owner: str):
+        if self.directory_exists(parent_id, name, owner):
+            raise DirectoryError('Directory [{}] exists'.format(name), DirectoryError.DIRECTORY_EXISTS)
+        elif self.file_exists(parent_id, name, owner):
+            raise FileError('File [{}] exists'.format(name), FileError.FILE_EXISTS)
+
     def get_root_directory(self, owner: str) -> Directory:
         self.begin_transaction()
         cur = self.conn().cursor()
@@ -159,6 +166,7 @@ class SqliteDirectoryDAO(DirectoryDAO):
             return Directory(
                 name,
                 uid,
+                '/',
                 created_timestamp,
                 modified_timestamp,
                 owner
@@ -204,10 +212,7 @@ class SqliteDirectoryDAO(DirectoryDAO):
         cur = self.conn().cursor()
         try:
             parent_id = self.get_directory_id_by_uid(parent_uid, owner)
-            if self.directory_exists(parent_id, name, owner):
-                raise DirectoryError('Directory [{}] exists'.format(name), DirectoryError.DIRECTORY_EXISTS)
-            elif self.file_exists(parent_id, name, owner):
-                raise FileError('File [{}] exists'.format(name), FileError.FILE_EXISTS)
+            self.check_exists(parent_id, name, owner)
             uid = Directory.generate_uid()
             now = round(time.time())
             cur.execute('''INSERT INTO ps_directory 
@@ -215,11 +220,58 @@ class SqliteDirectoryDAO(DirectoryDAO):
                 VALUES (?, ?, ?, ?, ?)''', (name, uid, now, now, owner))
             cur.execute('''INSERT INTO ps_directory_link
                 (parent_id, child_id) VALUES (?, ?)''', (parent_id, cur.lastrowid))
+            abs_path = self.abs_path(uid, owner)
             self.commit()
             logging.debug('Created directory [{}]'.format(name))
             return Directory(
                 name,
                 uid,
+                abs_path,
+                now,
+                now,
+                owner
+            )
+        except DirectoryError as e:
+            logging.error('Directory error: {}'.format(str(e)))
+            self.rollback_nothrow()
+            raise e
+        except FileError as e:
+            logging.error('File error: {}'.format(str(e)))
+            self.rollback_nothrow()
+            raise e
+        except Exception as e:
+            logging.error('Query error: {}'.format(str(e)))
+            self.rollback_nothrow()
+            raise e
+        finally:
+            try:
+                cur.close()
+            except:
+                pass
+    
+    def create_file(self, parent_uid: str, name: str, mime_type: str, owner: str) -> File:
+        Directory.validate_uuid(parent_uid)
+        if len(name) == 0:
+            raise FileError('File name cannot be empty', FileError.INVALID_FILE_NAME)
+
+        logging.debug('Create file [{}], type [{}], parent-uid [{}]'.format(name, mime_type, parent_uid))
+        self.begin_transaction()
+        cur = self.conn().cursor()
+        try:
+            parent_id = self.get_directory_id_by_uid(parent_uid, owner)
+            self.check_exists(parent_id, name, owner)
+            uid = File.generate_uid()
+            now = round(time.time())
+            cur.execute('''INSERT INTO ps_file 
+                (name, uid, mime_type, created_timestamp, modified_timestamp, owner, parent_id)
+                VALUES (?, ?, ?, ?, ?, ?)''', (name, uid, mime_type, now, now, owner, parent_id))
+            abs_path = self.abs_path(uid, owner)
+            self.commit()
+            logging.debug('Created file [{}]'.format(name))
+            return File(
+                name,
+                uid,
+                abs_path,
                 now,
                 now,
                 owner

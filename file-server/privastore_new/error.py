@@ -62,6 +62,8 @@ class FileError(FileServerError):
         File error codes.
     '''
 
+    INVALID_FILE_ID = "INVALID_FILE_ID"
+    INVALID_FILE_NAME = "INVALID_FILE_NAME"
     FILE_NOT_FOUND = "FILE_NOT_FOUND"
     FILE_EXISTS = "FILE_EXISTS"
 

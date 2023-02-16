@@ -2,13 +2,14 @@ import time
 import uuid
 
 from .error import DirectoryError
-from .util import format_datetime
+from .util import format_datetime, str_path
 
 class DirectoryEntry(object):
 
-    def __init__(self, name: str, uid: str, created_timestamp: int, modified_timestamp: int, owner: str):
+    def __init__(self, name: str, uid: str, abs_path: list[str], created_timestamp: int, modified_timestamp: int, owner: str):
         self._name = name
         self._uid = uid
+        self._abs_path = abs_path
         self._created_timestamp = created_timestamp
         self._modified_timestamp = modified_timestamp
         self._owner = owner
@@ -18,6 +19,9 @@ class DirectoryEntry(object):
 
     def uid(self):
         return self._uid
+
+    def abs_path(self):
+        return self._abs_path
 
     def created_timestamp(self):
         return self._created_timestamp
@@ -38,10 +42,11 @@ class DirectoryEntry(object):
         return {
             'name': self.name(),
             'uid': self.uid(),
-            'created_timestamp': self.created_timestamp(),
-            'created_time': format_datetime(self.created_time()),
-            'modified_timestamp': self.created_timestamp(),
-            'modified_time': format_datetime(self.created_time()),
+            'abs-path': str_path(self.abs_path()),
+            'created-timestamp': self.created_timestamp(),
+            'created-time': format_datetime(self.created_time()),
+            'modified-timestamp': self.created_timestamp(),
+            'modified-time': format_datetime(self.created_time()),
             'owner': self.owner()
         }
 
