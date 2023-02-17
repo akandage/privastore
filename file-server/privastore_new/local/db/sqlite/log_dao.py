@@ -5,7 +5,7 @@ from ....db.conn import SqliteConnection
 from ....db.dao import DataAccessObject
 from ....error import LogError
 from ..log_dao import LogDAO
-from ...log.log_entry import LogEntry
+from ....log.log_entry import LogEntry
 
 class SqliteLogDAO(DataAccessObject, LogDAO):
 

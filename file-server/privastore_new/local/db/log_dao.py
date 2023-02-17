@@ -1,6 +1,6 @@
 from typing import Optional
 
-from ..log.log_entry import LogEntry
+from ...log.log_entry import LogEntry
 from ...error import NotImplementedError
 
 class LogDAO(object):
