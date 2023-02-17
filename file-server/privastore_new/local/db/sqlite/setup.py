@@ -136,8 +136,7 @@ def create_log_table(conn: sqlite3.Connection):
     conn.execute(
         '''
         CREATE TABLE ps_log (
-            id INTEGER PRIMARY KEY NOT NULL,
-            epoch_no INTEGER NOT NULL,
+            seq_no INTEGER PRIMARY KEY NOT NULL,
             entry_type INTEGER NOT NULL
         )
         '''
@@ -145,10 +144,11 @@ def create_log_table(conn: sqlite3.Connection):
     conn.execute(
         '''
         CREATE TABLE ps_log_entry (
-            entry_id INTEGER NOT NULL,
+            seq_no INTEGER NOT NULL,
             chunk_id INTEGER NOT NULL,
-            PRIMARY KEY (entry_id, chunk_id),
-            FOREIGN KEY (entry_id) REFERENCES ps_log (id) ON DELETE CASCADE
+            chunk_data BLOB(1024) NOT NULL,
+            PRIMARY KEY (seq_no, chunk_id),
+            FOREIGN KEY (seq_no) REFERENCES ps_log (seq_no) ON DELETE CASCADE
         )
         '''
     )

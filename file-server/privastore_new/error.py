@@ -92,6 +92,15 @@ class KeyError(FileServerError):
     def __init__(self, msg: str, error_code: str=FileServerError.INTERNAL_ERROR):
         super().__init__(msg, error_code)
 
+class LogError(FileServerError):
+
+    '''
+        Log error codes.
+    '''
+
+    def __init__(self, msg: str, error_code: str=FileServerError.INTERNAL_ERROR):
+        super().__init__(msg, error_code)
+
 class NotImplementedError(FileServerError):
 
     def __init__(self, msg: str='Method not implemented!', error_code: str=FileServerError.INTERNAL_ERROR):

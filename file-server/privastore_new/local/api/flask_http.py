@@ -3,7 +3,9 @@ from functools import wraps
 from http import HTTPStatus
 import logging
 
-from ...error import AuthenticationError, DirectoryError, HttpError, SessionError
+from ...error import AuthenticationError, DirectoryError, HttpError, LogError, SessionError
+from ..log.log_entry import LogEntry
+from ..log.log_entry_type import LogEntryType
 from ..server import get_local_server
 
 API_VERSION = 1
@@ -99,13 +101,27 @@ def create_directory(name):
     server.session_mgr().renew_session(session_id)
     user = server.session_mgr().get_session_user(session_id)
     conn = server.conn_pool().acquire()
+    conn.set_autocommit(False)
+    conn.begin_transaction()
     try:
         dir_dao = server.dao_factory().directory_dao(conn)
+        log_dao = server.dao_factory().log_dao(conn)
         parent_uid = request.args.get('parent')
         if parent_uid is None:
             parent_dir = dir_dao.get_root_directory(user)
             parent_uid = parent_dir.uid()
         created = dir_dao.create_directory(parent_uid, name, user)
+        log_dao.create_log_entry(LogEntry(LogEntryType.CREATE_DIRECTORY, created.to_dict()))
+        conn.commit()
+    except DirectoryError as e:
+        conn.rollback_nothrow()
+        raise e
+    except LogError as e:
+        conn.rollback_nothrow()
+        raise e
+    except Exception as e:
+        conn.rollback_nothrow()
+        raise e
     finally:
         server.conn_pool().release(conn)
     return jsonify(created.to_dict()), HTTPStatus.OK
