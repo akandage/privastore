@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request
 from functools import wraps
 from http import HTTPStatus
 import logging
+import urllib.parse
 
 from ...error import AuthenticationError, DirectoryError, HttpError, LogError, SessionError
 from ...log.log_entry import LogEntry
@@ -126,3 +127,22 @@ def create_directory(name):
     finally:
         server.conn_pool().release(conn)
     return jsonify(created.to_dict()), HTTPStatus.OK
+
+@app.route(f'/{API_VERSION}/file', methods=['POST'])
+# @session_id_required
+def create_file():
+    # session_id = request.headers.get(SESSION_ID_HEADER)
+    server = get_local_server()
+    file_store = server.file_store()
+    # server.session_mgr().renew_session(session_id)
+
+    content_type = request.headers.get('Content-Type')
+    if content_type.startswith('multipart/form-data'):
+        for key, file in request.files.items():
+            logging.debug('Uploading file {}'.format(file.filename))
+            fh = file_store.open_for_writing()
+            fh.append_all(file.stream)
+    else:
+        raise HttpError('Invalid Content-Type')
+    
+    return '', HTTPStatus.OK

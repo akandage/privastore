@@ -46,6 +46,9 @@ class TestLocalServer(unittest.TestCase):
                 'sqlite-db-path': os.path.join(TEST_DIR, 'local_server.db'),
                 'connection-pool-size': '1'
             },
+            'store': {
+                'store-type': 'db'
+            },
             'session': {
                 'session-expiry-time': '300',
                 'session-cleanup-interval': '60'

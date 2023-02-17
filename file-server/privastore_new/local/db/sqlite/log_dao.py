@@ -26,7 +26,7 @@ class SqliteLogDAO(DataAccessObject, LogDAO):
                 FROM ps_log
             ''')
             seq_no = 0
-            if res is not None:
+            if res is not None and res[0] is not None:
                 seq_no, = res
             self.commit()
             return seq_no
@@ -53,7 +53,7 @@ class SqliteLogDAO(DataAccessObject, LogDAO):
                 FROM ps_log
             ''')
             seq_no = 0
-            if res is not None:
+            if res is not None and res[0] is not None:
                 seq_no, = res
             self.commit()
             return seq_no

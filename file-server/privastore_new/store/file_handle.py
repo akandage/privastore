@@ -1,3 +1,5 @@
+from typing import BinaryIO, Optional
+
 from ..error import NotImplementedError
 
 class FileHandle(object):
@@ -8,7 +10,10 @@ class FileHandle(object):
     def uid(self) -> str:
         raise NotImplementedError()
 
-    def read_chunk(self) -> bytes:
+    def read_chunk(self, timeout: Optional[float]=None) -> bytes:
+        raise NotImplementedError()
+
+    def append_all(self, stream: BinaryIO) -> int:
         raise NotImplementedError()
 
     def append_chunk(self, data: bytes) -> int:

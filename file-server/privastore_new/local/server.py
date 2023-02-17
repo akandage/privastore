@@ -7,6 +7,7 @@ from ..daemon import Daemon
 from ..db.conn_pool import DbConnectionPool
 from .db.dao_factory import DAOFactory
 from ..error import DatabaseError, FileServerError
+from ..store.file_store import FileStore
 from ..session_mgr import SessionManager
 
 class LocalServer(Daemon):
@@ -37,6 +38,15 @@ class LocalServer(Daemon):
         session_config = config['session']
         self._session_mgr = SessionManager(session_config)
 
+        store_config = config['store']
+        store_type = store_config.get('store-type', 'db')
+        
+        if store_type == 'db':
+            from ..store.db_file_store import DbFileStore
+            self._file_store = file_store = DbFileStore(conn_pool, dao_factory)
+        else:
+            raise FileServerError('Invalid file store type [{}]'.format(store_type))
+
         from .api.flask_http import app
 
         http_config = config['api']
@@ -47,6 +57,9 @@ class LocalServer(Daemon):
 
     def dao_factory(self) -> DAOFactory:
         return self._dao_factory
+
+    def file_store(self) -> FileStore:
+        return self._file_store
 
     def session_mgr(self) -> SessionManager:
         return self._session_mgr

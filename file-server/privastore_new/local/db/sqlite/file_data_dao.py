@@ -21,9 +21,11 @@ class SqliteFileDataDAO(DataAccessObject, FileDataDAO):
         try:
             now = round(time.time())
             cur.execute('''
-                INSERT INTO ps_file_data (uid, created_timestamp, modified_timestamp) VALUES (?)
+                INSERT INTO ps_file_data (uid, created_timestamp, modified_timestamp) VALUES (?, ?, ?)
             ''', (uid, now, now))
+            fd_id = cur.lastrowid
             self.commit()
+            return fd_id
         except FileError as e:
             logging.error('File error: {}'.format(str(e)))
             self.rollback_nothrow()
@@ -83,18 +85,34 @@ class SqliteFileDataDAO(DataAccessObject, FileDataDAO):
         cur = self.conn().cursor()
         try:
             cur.execute('''
+                SELECT is_writable
+                FROM ps_file_data
+                WHERE id = ?
+            ''', (fd_id,))
+            res = cur.fetchone()
+            if res is None:
+                raise FileError('File data id [{}] not found', FileError.FILE_DATA_NOT_FOUND)
+            elif not res[0]:
+                raise FileError('File data id [{}] not writable', FileError.FILE_DATA_NOT_WRITABLE)
+            cur.execute('''
                 SELECT max(chunk_id)
                 FROM ps_file_chunk
                 WHERE fd_id = ?
             ''', (fd_id,))
             res = cur.fetchone()
-            if res is not None:
+            if res is not None and res[0] is not None:
                 chunk_id = res[0]+1
             else:
                 chunk_id = 1
             cur.execute('''
                 INSERT INTO ps_file_chunk (fd_id, chunk_id, chunk_data) VALUES (?, ?, ?)
             ''', (fd_id, chunk_id, chunk_data))
+            now = round(time.time())
+            cur.execute('''
+                UPDATE ps_file_data
+                SET modified_timestamp = ?
+                WHERE id = ?
+            ''', (now, fd_id))
             self.commit()
             return chunk_id
         except FileError as e:
@@ -147,10 +165,10 @@ class SqliteFileDataDAO(DataAccessObject, FileDataDAO):
             cur.execute('''
                 UPDATE ps_file_data
                 SET is_synced = ?
-                WHERE fd_id = ?
+                WHERE id = ?
             ''', (is_synced, fd_id))
             if cur.rowcount != 1:
-                raise FileError('File data id [{}] not found'.format(fd_id))
+                raise FileError('File data id [{}] not found'.format(fd_id), FileError.FILE_DATA_NOT_FOUND)
             self.commit()
         except FileError as e:
             logging.error('File error: {}'.format(str(e)))
@@ -173,10 +191,10 @@ class SqliteFileDataDAO(DataAccessObject, FileDataDAO):
             cur.execute('''
                 UPDATE ps_file_data
                 SET is_writable = ?
-                WHERE fd_id = ?
+                WHERE id = ?
             ''', (is_writable, fd_id))
             if cur.rowcount != 1:
-                raise FileError('File data id [{}] not found'.format(fd_id))
+                raise FileError('File data id [{}] not found'.format(fd_id), FileError.FILE_DATA_NOT_FOUND)
             self.commit()
         except FileError as e:
             logging.error('File error: {}'.format(str(e)))
