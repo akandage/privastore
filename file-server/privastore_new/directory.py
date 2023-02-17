@@ -6,9 +6,10 @@ from .util import format_datetime, str_path
 
 class DirectoryEntry(object):
 
-    def __init__(self, name: str, uid: str, abs_path: list[str], created_timestamp: int, modified_timestamp: int, owner: str):
+    def __init__(self, name: str, uid: str, parent_uid: str, abs_path: list[str], created_timestamp: int, modified_timestamp: int, owner: str):
         self._name = name
         self._uid = uid
+        self._parent_uid = parent_uid
         self._abs_path = abs_path
         self._created_timestamp = created_timestamp
         self._modified_timestamp = modified_timestamp
@@ -19,6 +20,9 @@ class DirectoryEntry(object):
 
     def uid(self):
         return self._uid
+
+    def parent_uid(self):
+        return self._parent_uid
 
     def abs_path(self):
         return self._abs_path
@@ -42,6 +46,7 @@ class DirectoryEntry(object):
         return {
             'name': self.name(),
             'uid': self.uid(),
+            'parent-uid': self.parent_uid(),
             'abs-path': str_path(self.abs_path()),
             'created-timestamp': self.created_timestamp(),
             'created-time': format_datetime(self.created_time()),

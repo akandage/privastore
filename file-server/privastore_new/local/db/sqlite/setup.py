@@ -122,10 +122,23 @@ def create_file_table(conn: sqlite3.Connection):
         CREATE TABLE ps_file_data (
             id INTEGER PRIMARY KEY NOT NULL,
             uid VARCHAR(39) UNIQUE NOT NULL,
-            file_id INTEGER NULL,
-            version INTEGER NULL,
-            size INTEGER NOT NULL,
-            FOREIGN KEY (file_id) REFERENCES ps_file (id) ON DELETE SET NULL
+            size INTEGER NOT NULL DEFAULT 0,
+            total_chunks INTEGER NOT NULL DEFAULT 0,
+            created_timestamp INTEGER NOT NULL,
+            modified_timestamp INTEGER NOT NULL,
+            is_writable BOOLEAN NOT NULL DEFAULT 1,
+            is_synced BOOLEAN NOT NULL DEFAULT 0
+        )
+        '''
+    )
+    conn.execute(
+        '''
+        CREATE TABLE ps_file_chunk (
+            fd_id INTEGER NOT NULL,
+            chunk_id INTEGER NOT NULL,
+            chunk_data BLOB(65536) NOT NULL,
+            PRIMARY KEY (fd_id, chunk_id),
+            FOREIGN KEY (fd_id) REFERENCES ps_file_data (id) ON DELETE CASCADE
         )
         '''
     )

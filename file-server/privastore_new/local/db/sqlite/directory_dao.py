@@ -167,6 +167,7 @@ class SqliteDirectoryDAO(DataAccessObject, DirectoryDAO):
             return Directory(
                 name,
                 uid,
+                None,
                 '/',
                 created_timestamp,
                 modified_timestamp,
@@ -227,6 +228,7 @@ class SqliteDirectoryDAO(DataAccessObject, DirectoryDAO):
             return Directory(
                 name,
                 uid,
+                parent_uid,
                 abs_path,
                 now,
                 now,

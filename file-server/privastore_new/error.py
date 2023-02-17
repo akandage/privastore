@@ -65,6 +65,7 @@ class FileError(FileServerError):
     INVALID_FILE_ID = "INVALID_FILE_ID"
     INVALID_FILE_NAME = "INVALID_FILE_NAME"
     FILE_NOT_FOUND = "FILE_NOT_FOUND"
+    FILE_DATA_NOT_FOUND = "FILE_DATA_NOT_FOUND"
     FILE_EXISTS = "FILE_EXISTS"
 
     def __init__(self, msg: str, error_code: str=FileServerError.INTERNAL_ERROR):
