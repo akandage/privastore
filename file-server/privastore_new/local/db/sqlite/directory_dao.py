@@ -1,15 +1,12 @@
 import logging
 import time
-from typing import Optional
 
-from ....crypto.util import hash_user_password
 from ....db.conn import SqliteConnection
 from ....db.dao import DataAccessObject
 from ..directory_dao import DirectoryDAO
-from ....directory import Directory, DirectoryEntry
+from ....directory import Directory
 from ....error import DirectoryError, FileError
-from ....file import File
-from ....util import str_path
+from ....file import File, FileData, FileVersion
 
 class SqliteDirectoryDAO(DataAccessObject, DirectoryDAO):
 
@@ -58,6 +55,36 @@ class SqliteDirectoryDAO(DataAccessObject, DirectoryDAO):
             res = cur.fetchone()
             if res is None:
                 raise DirectoryError('Directory [{}] not found'.format(uid), DirectoryError.DIRECTORY_NOT_FOUND)
+            return res[0]
+        finally:
+            cur.close()
+
+    def _get_file_id_by_uid(self, uid: str, owner: str) -> int:
+        cur = self.conn().cursor()
+        try:
+            cur.execute('''
+                SELECT id
+                FROM ps_file
+                WHERE uid = ? AND owner = ?
+            ''', (uid, owner))
+            res = cur.fetchone()
+            if res is None:
+                raise FileError('File [{}] not found'.format(uid), FileError.FILE_NOT_FOUND)
+            return res[0]
+        finally:
+            cur.close()
+
+    def _get_file_data_id_by_uid(self, uid: str) -> int:
+        cur = self.conn().cursor()
+        try:
+            cur.execute('''
+                SELECT id
+                FROM ps_file_data
+                WHERE uid = ?
+            ''', (uid,))
+            res = cur.fetchone()
+            if res is None:
+                raise FileError('File data [{}] not found'.format(uid), FileError.FILE_DATA_NOT_FOUND)
             return res[0]
         finally:
             cur.close()
@@ -209,7 +236,7 @@ class SqliteDirectoryDAO(DataAccessObject, DirectoryDAO):
         if len(name) == 0:
             raise DirectoryError('Directory name cannot be empty', DirectoryError.INVALID_DIRECTORY_NAME)
 
-        logging.debug('Create directory [{}], parent-uid [{}]'.format(name, parent_uid))
+        logging.debug('Create directory [{}], parent-uid [{}], owner [{}]'.format(name, parent_uid, owner))
         self.begin_transaction()
         cur = self.conn().cursor()
         try:
@@ -257,7 +284,7 @@ class SqliteDirectoryDAO(DataAccessObject, DirectoryDAO):
         if len(name) == 0:
             raise FileError('File name cannot be empty', FileError.INVALID_FILE_NAME)
 
-        logging.debug('Create file [{}], type [{}], parent-uid [{}]'.format(name, mime_type, parent_uid))
+        logging.debug('Create file [{}], type [{}], parent-uid [{}], owner [{}]'.format(name, mime_type, parent_uid, owner))
         self.begin_transaction()
         cur = self.conn().cursor()
         try:
@@ -275,11 +302,78 @@ class SqliteDirectoryDAO(DataAccessObject, DirectoryDAO):
             return File(
                 name,
                 uid,
+                mime_type,
                 parent_uid,
                 abs_path,
                 now,
                 now,
-                owner
+                owner,
+                []
+            )
+        except DirectoryError as e:
+            logging.error('Directory error: {}'.format(str(e)))
+            self.rollback_nothrow()
+            raise e
+        except FileError as e:
+            logging.error('File error: {}'.format(str(e)))
+            self.rollback_nothrow()
+            raise e
+        except Exception as e:
+            logging.error('Query error: {}'.format(str(e)))
+            self.rollback_nothrow()
+            raise e
+        finally:
+            try:
+                cur.close()
+            except:
+                pass
+    
+    def create_file_version(self, file_uid: str, file_data_uid: str, owner: str) -> FileVersion:
+        logging.debug('Create file [{}] version, file-data-uid [{}], owner [{}]'.format(file_uid, file_data_uid, owner))
+        self.begin_transaction()
+        cur = self.conn().cursor()
+        try:
+            file_id = self._get_file_id_by_uid(file_uid, owner)
+            file_data_id = self._get_file_data_id_by_uid(file_data_uid)
+
+            cur.execute('''
+                SELECT count(*)
+                FROM ps_file_version AS V
+                WHERE V.file_id = ?
+            ''', (file_id,))
+            version = 1
+            res = cur.fetchone()
+            if res is not None:
+                version = res[0]+1
+            cur.execute('''
+                INSERT INTO ps_file_version (file_id, version, fd_id) VALUES (?, ?, ?)
+            ''', (file_id, version, file_data_id))
+            cur.execute('''
+                UPDATE ps_file_data
+                SET is_writable = 1
+                WHERE id = ?
+            ''', (file_data_id,))
+            cur.execute('''
+                SELECT size, total_chunks, created_timestamp, modified_timestamp, is_writable, is_synced
+                FROM ps_file_data
+                WHERE id = ?
+            ''', (file_data_id,))
+            size, total_chunks, created_timestamp, modified_timestamp, is_writable, is_synced = cur.fetchone()
+            self.commit()
+            logging.debug('Created file version')
+            return FileVersion(
+                file_uid,
+                version,
+                FileData(
+                    file_data_id,
+                    file_data_uid,
+                    size,
+                    total_chunks,
+                    created_timestamp,
+                    modified_timestamp,
+                    is_writable,
+                    is_synced
+                )
             )
         except DirectoryError as e:
             logging.error('Directory error: {}'.format(str(e)))
@@ -309,6 +403,56 @@ class SqliteDirectoryDAO(DataAccessObject, DirectoryDAO):
         try:
             parent_id = self._get_directory_id_by_uid(parent_uid, owner)
             return self._file_exists(parent_id, name, owner)
+        except DirectoryError as e:
+            logging.error('Directory error: {}'.format(str(e)))
+            self.rollback_nothrow()
+            raise e
+        except FileError as e:
+            logging.error('File error: {}'.format(str(e)))
+            self.rollback_nothrow()
+            raise e
+        except Exception as e:
+            logging.error('Query error: {}'.format(str(e)))
+            self.rollback_nothrow()
+            raise e
+        finally:
+            try:
+                cur.close()
+            except:
+                pass
+    
+    def get_file(self, parent_uid: str, name: str, owner: str) -> File:
+        Directory.validate_uuid(parent_uid)
+        if len(name) == 0:
+            raise FileError('File name cannot be empty', FileError.INVALID_FILE_NAME)
+
+        self.begin_transaction()
+        cur = self.conn().cursor()
+        try:
+            parent_id = self._get_directory_id_by_uid(parent_uid, owner)
+            cur.execute('''
+                SELECT uid, mime_type, created_timestamp, modified_timestamp, owner
+                FROM ps_file
+                WHERE parent_id = ? AND name = ? AND owner = ?
+            ''', (parent_id, name, owner))
+            res = cur.fetchone()
+            if res is None:
+                raise FileError('File [{}] not found'.format(name), FileError.FILE_NOT_FOUND)
+            uid, mime_type, created_timestamp, modified_timestamp, owner = res
+            abs_path = self._abs_path(parent_uid, owner)
+            abs_path.append(name)
+            self.commit()
+            return File(
+                name,
+                uid,
+                mime_type,
+                parent_uid,
+                abs_path,
+                created_timestamp,
+                modified_timestamp,
+                owner,
+                []
+            )
         except DirectoryError as e:
             logging.error('Directory error: {}'.format(str(e)))
             self.rollback_nothrow()

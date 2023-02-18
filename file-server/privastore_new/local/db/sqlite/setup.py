@@ -133,6 +133,18 @@ def create_file_table(conn: sqlite3.Connection):
     )
     conn.execute(
         '''
+        CREATE TABLE ps_file_version (
+            file_id INTEGER NOT NULL,
+            version INTEGER NOT NULL,
+            fd_id INTEGER NOT NULL,
+            PRIMARY KEY (file_id, version),
+            FOREIGN KEY (file_id) REFERENCES ps_file (id) ON DELETE CASCADE,
+            FOREIGN KEY (fd_id) REFERENCES ps_file_data (id) ON DELETE CASCADE
+        )
+        '''
+    )
+    conn.execute(
+        '''
         CREATE TABLE ps_file_chunk (
             fd_id INTEGER NOT NULL,
             chunk_id INTEGER NOT NULL,

@@ -9,6 +9,7 @@ import uuid
 
 from ..directory import Directory
 from ..error import AuthenticationError
+from ..file import File
 from ..local.api.flask_http import SESSION_ID_HEADER
 from ..local.server import clear_local_server
 from ..server import config_logging, get_local_server, setup_local_db
@@ -177,11 +178,57 @@ class TestLocalServer(unittest.TestCase):
     def test_upload_file(self):
         session_id = self.do_login(ADMIN_USERNAME, ADMIN_PASSWORD)
         headers = {SESSION_ID_HEADER: session_id}
-        single_file = {
-            'file': ('foo.bin', random.randbytes(100*1024), 'application/octet-stream')
+        single_file_1 = {
+            'file': ('foo.bin', random.randbytes(50*1024), 'application/octet-stream')
+        }
+        single_file_2 = {
+            'file': ('foo.bin', random.randbytes(51*1024), 'application/octet-stream')
+        }
+        single_file_3 = {
+            'file': ('bar.bin', random.randbytes(100*1024), 'application/octet-stream')
         }
         r = requests.put(CREATE_DIR_URL.format('dir_1'), headers=headers)
         self.assertEqual(r.status_code, HTTPStatus.OK)
         dir_1_uid = dict(r.json()).get('uid')
-        r = requests.post(CREATE_FILE_URL, headers=headers, files=single_file)
+        r = requests.post(CREATE_FILE_URL, headers=headers, files=single_file_1)
         self.assertEqual(r.status_code, HTTPStatus.OK)
+        resp = r.json()
+        file_1_uid = resp[0].get('file-uid')
+        file_1_version = resp[0].get('version')
+        file_1_size = resp[0].get('size')
+        r = requests.post(CREATE_FILE_URL, headers=headers, files=single_file_2)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        resp = r.json()
+        file_2_uid = resp[0].get('file-uid')
+        file_2_version = resp[0].get('version')
+        file_2_size = resp[0].get('size')
+        r = requests.post(CREATE_FILE_URL, headers=headers, files=single_file_3)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        resp = r.json()
+        file_3_uid = resp[0].get('file-uid')
+        file_3_version = resp[0].get('version')
+        file_3_size = resp[0].get('size')
+        r = requests.post(CREATE_FILE_URL + '?parent={}'.format(dir_1_uid), headers=headers, files=single_file_1)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        resp = r.json()
+        file_4_uid = resp[0].get('file-uid')
+        file_4_version = resp[0].get('version')
+        file_4_size = resp[0].get('size')
+        File.validate_uuid(file_1_uid)
+        File.validate_uuid(file_2_uid)
+        File.validate_uuid(file_3_uid)
+        File.validate_uuid(file_4_uid)
+        self.assertEqual(file_1_uid, file_2_uid)
+        self.assertNotEqual(file_3_uid, file_1_uid)
+        self.assertNotEqual(file_3_uid, file_2_uid)
+        self.assertNotEqual(file_4_uid, file_1_uid)
+        self.assertNotEqual(file_4_uid, file_2_uid)
+        self.assertNotEqual(file_4_uid, file_3_uid)
+        self.assertEqual(file_1_version, 1)
+        self.assertEqual(file_2_version, 2)
+        self.assertEqual(file_3_version, 1)
+        self.assertEqual(file_4_version, 1)
+        self.assertEqual(file_1_size, 50*1024)
+        self.assertEqual(file_2_size, 51*1024)
+        self.assertEqual(file_3_size, 100*1024)
+        self.assertEqual(file_4_size, 50*1024)

@@ -110,9 +110,9 @@ class SqliteFileDataDAO(DataAccessObject, FileDataDAO):
             now = round(time.time())
             cur.execute('''
                 UPDATE ps_file_data
-                SET modified_timestamp = ?
+                SET size = size + ?, total_chunks = total_chunks + 1, created_timestamp = ?, modified_timestamp = ?
                 WHERE id = ?
-            ''', (now, fd_id))
+            ''', (len(chunk_data), now, now, fd_id))
             self.commit()
             return chunk_id
         except FileError as e:

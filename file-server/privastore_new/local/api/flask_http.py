@@ -150,6 +150,7 @@ def create_file():
     file_store = server.file_store()
     server.session_mgr().renew_session(session_id)
     user = server.session_mgr().get_session_user(session_id)
+    created_file_versions = list()
 
     content_type = request.headers.get('Content-Type')
     if content_type.startswith('multipart/form-data'):
@@ -175,8 +176,13 @@ def create_file():
                         parent_dir = dir_dao.get_root_directory(user)
                         parent_uid = parent_dir.uid()
                     if not dir_dao.file_exists(parent_uid, file.filename, user):
-                        created = dir_dao.create_file(parent_uid, file.name, file.mimetype, user)
-                        log_dao.create_log_entry(LogEntry(LogEntryType.CREATE_FILE, created.to_dict()))
+                        file = dir_dao.create_file(parent_uid, file.filename, file.mimetype, user)
+                        log_dao.create_log_entry(LogEntry(LogEntryType.CREATE_FILE, file.to_dict()))
+                    else:
+                        file = dir_dao.get_file(parent_uid, file.filename, user)
+                    created_version = dir_dao.create_file_version(file.uid(), fh.uid(), user)
+                    log_dao.create_log_entry(LogEntry(LogEntryType.CREATE_FILE_VERSION, created_version.to_dict()))
+                    created_file_versions.append(created_version.to_dict())
                     conn.commit()
                 except DirectoryError as e:
                     conn.rollback_nothrow()
@@ -195,4 +201,4 @@ def create_file():
     else:
         raise HttpError('Invalid Content-Type')
     
-    return '', HTTPStatus.OK
+    return jsonify(created_file_versions), HTTPStatus.OK

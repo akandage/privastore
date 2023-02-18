@@ -1,7 +1,7 @@
 from typing import Optional
 
 from ...directory import Directory, DirectoryEntry
-from ...file import File
+from ...file import File, FileVersion
 from ...error import NotImplementedError
 
 class DirectoryDAO(object):
@@ -21,7 +21,13 @@ class DirectoryDAO(object):
     def create_file(self, parent_uid: str, name: str, mime_type: str, owner: str) -> File:
         raise NotImplementedError()
 
+    def create_file_version(self, file_uid: str, file_data_uid: str, owner: str) -> FileVersion:
+        raise NotImplementedError()
+
     def file_exists(self, parent_uid: str, name: str, owner: str) -> bool:
+        raise NotImplementedError()
+
+    def get_file(self, parent_uid: str, name: str, owner: str) -> File:
         raise NotImplementedError()
 
     def list_directory(self, dir_uid: str, owner: str, limit: Optional[int]=None, offset: Optional[int]=None, sort: Optional[str]=None) -> list[DirectoryEntry]:
