@@ -209,3 +209,28 @@ class SqliteFileDataDAO(DataAccessObject, FileDataDAO):
                 cur.close()
             except:
                 pass
+    
+    def remove_file_data(self, uid: str) -> None:
+        self.begin_transaction()
+        cur = self.conn().cursor()
+        try:
+            cur.execute('''
+                DELETE FROM ps_file_data
+                WHERE uid = ?
+            ''', (uid,))
+            if cur.rowcount != 1:
+                raise FileError('Could not delete file data [{}]. File data not found'.format(uid))
+            self.commit()
+        except FileError as e:
+            logging.error('File error: {}'.format(str(e)))
+            self.rollback_nothrow()
+            raise e
+        except Exception as e:
+            logging.error('Query error: {}'.format(str(e)))
+            self.rollback_nothrow()
+            raise e
+        finally:
+            try:
+                cur.close()
+            except:
+                pass

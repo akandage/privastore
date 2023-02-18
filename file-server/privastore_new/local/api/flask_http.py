@@ -4,7 +4,7 @@ from http import HTTPStatus
 import logging
 import urllib.parse
 
-from ...error import AuthenticationError, DirectoryError, HttpError, LogError, SessionError
+from ...error import AuthenticationError, DirectoryError, FileError, HttpError, LogError, SessionError
 from ...log.log_entry import LogEntry
 from ...log.log_entry_type import LogEntryType
 from ..server import get_local_server
@@ -28,6 +28,20 @@ def http_error_handler(e: HttpError):
     elif ec == DirectoryError.DIRECTORY_EXISTS:
         code = HTTPStatus.CONFLICT
     elif ec == DirectoryError.INVALID_DIRECTORY_ID or ec == DirectoryError.INVALID_DIRECTORY_NAME:
+        code = HTTPStatus.BAD_REQUEST
+
+    return jsonify(e.to_dict()), code
+
+@app.errorhandler(FileError)
+def http_error_handler(e: HttpError):
+    ec = e.error_code()
+    code = HTTPStatus.INTERNAL_SERVER_ERROR
+
+    if ec == FileError.FILE_NOT_FOUND:
+        code = HTTPStatus.NOT_FOUND
+    elif ec == FileError.FILE_EXISTS:
+        code = HTTPStatus.CONFLICT
+    elif ec == FileError.INVALID_FILE_ID or ec == FileError.INVALID_FILE_NAME:
         code = HTTPStatus.BAD_REQUEST
 
     return jsonify(e.to_dict()), code
@@ -129,19 +143,55 @@ def create_directory(name):
     return jsonify(created.to_dict()), HTTPStatus.OK
 
 @app.route(f'/{API_VERSION}/file', methods=['POST'])
-# @session_id_required
+@session_id_required
 def create_file():
-    # session_id = request.headers.get(SESSION_ID_HEADER)
+    session_id = request.headers.get(SESSION_ID_HEADER)
     server = get_local_server()
     file_store = server.file_store()
-    # server.session_mgr().renew_session(session_id)
+    server.session_mgr().renew_session(session_id)
+    user = server.session_mgr().get_session_user(session_id)
 
     content_type = request.headers.get('Content-Type')
     if content_type.startswith('multipart/form-data'):
-        for key, file in request.files.items():
+        for file in request.files.values():
             logging.debug('Uploading file {}'.format(file.filename))
             fh = file_store.open_for_writing()
-            fh.append_all(file.stream)
+            try:
+                fh.append_all(file.stream)
+            except Exception as e:
+                logging.error('Error uploading file [{}] data: {}'.format(file.filename, str(e)))
+                fh.remove_nothrow()
+                raise e
+
+            conn = server.conn_pool().acquire()
+            try:
+                conn.set_autocommit(False)
+                conn.begin_transaction()
+                try:
+                    dir_dao = server.dao_factory().directory_dao(conn)
+                    log_dao = server.dao_factory().log_dao(conn)
+                    parent_uid = request.args.get('parent')
+                    if parent_uid is None:
+                        parent_dir = dir_dao.get_root_directory(user)
+                        parent_uid = parent_dir.uid()
+                    if not dir_dao.file_exists(parent_uid, file.filename, user):
+                        created = dir_dao.create_file(parent_uid, file.name, file.mimetype, user)
+                        log_dao.create_log_entry(LogEntry(LogEntryType.CREATE_FILE, created.to_dict()))
+                    conn.commit()
+                except DirectoryError as e:
+                    conn.rollback_nothrow()
+                    fh.remove_nothrow()
+                    raise e
+                except FileError as e:
+                    conn.rollback_nothrow()
+                    fh.remove_nothrow()
+                    raise e
+                except Exception as e:
+                    conn.rollback_nothrow()
+                    fh.remove_nothrow()
+                    raise e
+            finally:
+                server.conn_pool().release(conn)
     else:
         raise HttpError('Invalid Content-Type')
     

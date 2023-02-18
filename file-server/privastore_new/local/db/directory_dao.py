@@ -21,6 +21,9 @@ class DirectoryDAO(object):
     def create_file(self, parent_uid: str, name: str, mime_type: str, owner: str) -> File:
         raise NotImplementedError()
 
+    def file_exists(self, parent_uid: str, name: str, owner: str) -> bool:
+        raise NotImplementedError()
+
     def list_directory(self, dir_uid: str, owner: str, limit: Optional[int]=None, offset: Optional[int]=None, sort: Optional[str]=None) -> list[DirectoryEntry]:
         raise NotImplementedError()
     

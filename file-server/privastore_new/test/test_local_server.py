@@ -2,6 +2,7 @@ from http import HTTPStatus
 import logging
 import shutil
 import os
+import random
 import requests
 import unittest
 import uuid
@@ -25,6 +26,7 @@ LOGIN_URL = '{}/{}/login'.format(SERVER_URL, API_VERSION)
 LOGOUT_URL = '{}/{}/logout'.format(SERVER_URL, API_VERSION)
 HEARTBEAT_URL = '{}/{}/heartbeat'.format(SERVER_URL, API_VERSION)
 CREATE_DIR_URL = '{}/{}/directory/{{}}'.format(SERVER_URL, API_VERSION)
+CREATE_FILE_URL = '{}/{}/file'.format(SERVER_URL, API_VERSION)
 
 class TestLocalServer(unittest.TestCase):
 
@@ -171,3 +173,15 @@ class TestLocalServer(unittest.TestCase):
         Directory.validate_uuid(dir_5_uid)
         self.assertEqual(dir_5_parent, dir_2_uid)
         self.assertEqual(dir_5_path, '/dir_2/dir_2a')
+    
+    def test_upload_file(self):
+        session_id = self.do_login(ADMIN_USERNAME, ADMIN_PASSWORD)
+        headers = {SESSION_ID_HEADER: session_id}
+        single_file = {
+            'file': ('foo.bin', random.randbytes(100*1024), 'application/octet-stream')
+        }
+        r = requests.put(CREATE_DIR_URL.format('dir_1'), headers=headers)
+        self.assertEqual(r.status_code, HTTPStatus.OK)
+        dir_1_uid = dict(r.json()).get('uid')
+        r = requests.post(CREATE_FILE_URL, headers=headers, files=single_file)
+        self.assertEqual(r.status_code, HTTPStatus.OK)

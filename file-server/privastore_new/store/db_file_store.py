@@ -149,3 +149,18 @@ class DbFileWriteHandle(FileHandle):
     def close(self):
         # No-op.
         pass
+
+    def remove(self):
+        conn = self.store().conn_pool().acquire()
+        conn.set_autocommit(True)
+        try:
+            dao = self.store().dao_factory().file_data_dao(conn)
+            dao.remove_file_data(self.uid())
+        finally:
+            self.store().conn_pool().release(conn)
+    
+    def remove_nothrow(self):
+        try:
+            self.remove()
+        except Exception as e:
+            logging.error('Error removing file data [{}]: {}'.format(self.uid(), str(e)))

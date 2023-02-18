@@ -19,7 +19,7 @@ class SqliteDirectoryDAO(DataAccessObject, DirectoryDAO):
     def conn(self) -> SqliteConnection:
         return super().conn()
     
-    def get_root_directory_id(self, owner: str) -> int:
+    def _get_root_directory_id(self, owner: str) -> int:
         cur = self.conn().cursor()
         try:
             cur.execute('SELECT id FROM ps_directory WHERE name = ? AND owner = ?', ('/', owner))
@@ -33,7 +33,7 @@ class SqliteDirectoryDAO(DataAccessObject, DirectoryDAO):
             except:
                 pass
 
-    def get_root_directory_uid(self, owner: str) -> str:
+    def _get_root_directory_uid(self, owner: str) -> str:
         cur = self.conn().cursor()
         try:
             cur.execute('SELECT uid FROM ps_directory WHERE name = ? AND owner = ?', ('/', owner))
@@ -47,7 +47,7 @@ class SqliteDirectoryDAO(DataAccessObject, DirectoryDAO):
             except:
                 pass
 
-    def get_directory_id_by_uid(self, uid: str, owner: str) -> int:
+    def _get_directory_id_by_uid(self, uid: str, owner: str) -> int:
         cur = self.conn().cursor()
         try:
             cur.execute('''
@@ -62,7 +62,7 @@ class SqliteDirectoryDAO(DataAccessObject, DirectoryDAO):
         finally:
             cur.close()
 
-    def get_directory_id(self, path: list[str], owner: str) -> int:
+    def _get_directory_id(self, path: list[str], owner: str) -> int:
         curr_id = self.get_root_directory_id(owner)
         traversed = []
         cur = self.conn().cursor()
@@ -85,9 +85,9 @@ class SqliteDirectoryDAO(DataAccessObject, DirectoryDAO):
                 pass
         return curr_id
 
-    def abs_path(self, dir_uid: str, owner: str) -> list[str]:
-        root_id = self.get_root_directory_id(owner)
-        curr_id = self.get_directory_id_by_uid(dir_uid, owner)
+    def _abs_path(self, dir_uid: str, owner: str) -> list[str]:
+        root_id = self._get_root_directory_id(owner)
+        curr_id = self._get_directory_id_by_uid(dir_uid, owner)
         path = []
 
         cur = self.conn().cursor()
@@ -112,7 +112,7 @@ class SqliteDirectoryDAO(DataAccessObject, DirectoryDAO):
             except:
                 pass
     
-    def directory_exists(self, parent_id: int, name: str, owner: str) -> bool:
+    def _directory_exists(self, parent_id: int, name: str, owner: str) -> bool:
         cur = self.conn().cursor()
         try:
             cur.execute('''
@@ -128,7 +128,7 @@ class SqliteDirectoryDAO(DataAccessObject, DirectoryDAO):
             except:
                 pass
 
-    def file_exists(self, parent_id: int, name: str, owner: str) -> bool:
+    def _file_exists(self, parent_id: int, name: str, owner: str) -> bool:
         cur = self.conn().cursor()
         try:
             cur.execute('''
@@ -144,10 +144,10 @@ class SqliteDirectoryDAO(DataAccessObject, DirectoryDAO):
             except:
                 pass
 
-    def check_exists(self, parent_id: int, name: str, owner: str):
-        if self.directory_exists(parent_id, name, owner):
+    def _check_exists(self, parent_id: int, name: str, owner: str):
+        if self._directory_exists(parent_id, name, owner):
             raise DirectoryError('Directory [{}] exists'.format(name), DirectoryError.DIRECTORY_EXISTS)
-        elif self.file_exists(parent_id, name, owner):
+        elif self._file_exists(parent_id, name, owner):
             raise FileError('File [{}] exists'.format(name), FileError.FILE_EXISTS)
 
     def get_root_directory(self, owner: str) -> Directory:
@@ -192,7 +192,7 @@ class SqliteDirectoryDAO(DataAccessObject, DirectoryDAO):
 
         self.begin_transaction()
         try:
-            abs_path = self.abs_path(dir_uid, owner)
+            abs_path = self._abs_path(dir_uid, owner)
             self.commit()
             return abs_path
         except DirectoryError as e:
@@ -213,8 +213,8 @@ class SqliteDirectoryDAO(DataAccessObject, DirectoryDAO):
         self.begin_transaction()
         cur = self.conn().cursor()
         try:
-            parent_id = self.get_directory_id_by_uid(parent_uid, owner)
-            self.check_exists(parent_id, name, owner)
+            parent_id = self._get_directory_id_by_uid(parent_uid, owner)
+            self._check_exists(parent_id, name, owner)
             uid = Directory.generate_uid()
             now = round(time.time())
             cur.execute('''INSERT INTO ps_directory 
@@ -222,7 +222,7 @@ class SqliteDirectoryDAO(DataAccessObject, DirectoryDAO):
                 VALUES (?, ?, ?, ?, ?)''', (name, uid, now, now, owner))
             cur.execute('''INSERT INTO ps_directory_link
                 (parent_id, child_id) VALUES (?, ?)''', (parent_id, cur.lastrowid))
-            abs_path = self.abs_path(uid, owner)
+            abs_path = self._abs_path(uid, owner)
             self.commit()
             logging.debug('Created directory')
             return Directory(
@@ -261,24 +261,54 @@ class SqliteDirectoryDAO(DataAccessObject, DirectoryDAO):
         self.begin_transaction()
         cur = self.conn().cursor()
         try:
-            parent_id = self.get_directory_id_by_uid(parent_uid, owner)
-            self.check_exists(parent_id, name, owner)
+            parent_id = self._get_directory_id_by_uid(parent_uid, owner)
+            self._check_exists(parent_id, name, owner)
             uid = File.generate_uid()
             now = round(time.time())
             cur.execute('''INSERT INTO ps_file 
                 (name, uid, mime_type, created_timestamp, modified_timestamp, owner, parent_id)
-                VALUES (?, ?, ?, ?, ?, ?)''', (name, uid, mime_type, now, now, owner, parent_id))
-            abs_path = self.abs_path(uid, owner)
+                VALUES (?, ?, ?, ?, ?, ?, ?)''', (name, uid, mime_type, now, now, owner, parent_id))
+            abs_path = self._abs_path(parent_uid, owner)
+            abs_path.append(name)
             self.commit()
             logging.debug('Created file')
             return File(
                 name,
                 uid,
+                parent_uid,
                 abs_path,
                 now,
                 now,
                 owner
             )
+        except DirectoryError as e:
+            logging.error('Directory error: {}'.format(str(e)))
+            self.rollback_nothrow()
+            raise e
+        except FileError as e:
+            logging.error('File error: {}'.format(str(e)))
+            self.rollback_nothrow()
+            raise e
+        except Exception as e:
+            logging.error('Query error: {}'.format(str(e)))
+            self.rollback_nothrow()
+            raise e
+        finally:
+            try:
+                cur.close()
+            except:
+                pass
+    
+    def file_exists(self, parent_uid: str, name: str, owner: str) -> File:
+        Directory.validate_uuid(parent_uid)
+        if len(name) == 0:
+            raise FileError('File name cannot be empty', FileError.INVALID_FILE_NAME)
+
+        self.begin_transaction()
+        cur = self.conn().cursor()
+        try:
+            parent_id = self._get_directory_id_by_uid(parent_uid, owner)
+            return self._file_exists(parent_id, name, owner)
         except DirectoryError as e:
             logging.error('Directory error: {}'.format(str(e)))
             self.rollback_nothrow()

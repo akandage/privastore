@@ -5,8 +5,8 @@ from .error import FileError
 
 class File(DirectoryEntry):
 
-    def __init__(self, *args):
-        super().__init__(*args)
+    def __init__(self, name: str, uid: str, parent_uid: str, abs_path: list[str], created_timestamp: int, modified_timestamp: int, owner: str):
+        super().__init__(name, uid, parent_uid, abs_path, created_timestamp, modified_timestamp, owner)
     
     @staticmethod
     def generate_uid():

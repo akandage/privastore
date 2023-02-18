@@ -21,3 +21,9 @@ class FileHandle(object):
 
     def close() -> None:
         raise NotImplementedError()
+    
+    def remove() -> None:
+        raise NotImplementedError()
+    
+    def remove_nothrow() -> None:
+        raise NotImplementedError()

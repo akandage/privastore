@@ -24,6 +24,9 @@ class FileDataDAO(object):
     
     def set_file_data_writable(self, fd_id: int, is_writable: bool) -> None:
         raise NotImplementedError()
+    
+    def remove_file_data(self, uid: str) -> None:
+        raise NotImplementedError()
 
 class FileDataDAOFactory(object):
 
