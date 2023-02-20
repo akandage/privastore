@@ -7,6 +7,7 @@ from ..daemon import Daemon
 from ..db.conn_pool import DbConnectionPool
 from .db.dao_factory import DAOFactory
 from ..error import DatabaseError, FileServerError
+from ..log.log_daemon import LogDaemon
 from ..store.file_store import FileStore
 from ..session_mgr import SessionManager
 
@@ -40,6 +41,7 @@ class LocalServer(Daemon):
 
         store_config = config['store']
         store_type = store_config.get('store-type', 'db')
+        self._log_daemon = LogDaemon(store_config, conn_pool, dao_factory)
         
         if store_type == 'db':
             from ..store.db_file_store import DbFileStore
@@ -66,6 +68,8 @@ class LocalServer(Daemon):
 
     def do_start(self):
         logging.debug('Starting local server')
+        self._log_daemon.start()
+        self._log_daemon.wait_started()
         self._session_mgr.start()
         self._session_mgr.wait_started()
         self._httpd.start()
@@ -74,6 +78,10 @@ class LocalServer(Daemon):
 
     def do_stop(self):
         logging.debug('Stopping local server')
+        self._log_daemon.stop()
+        self._log_daemon.join()
+        self._session_mgr.stop()
+        self._session_mgr.join()
         self._httpd.stop()
         self._httpd.join()
         logging.debug('Stopping local server')

@@ -1,7 +1,8 @@
 from typing import Optional
 
-from ...log.log_entry import LogEntry
-from ...error import NotImplementedError
+from .conn import DbConnection
+from ..log.log_entry import LogEntry
+from ..error import NotImplementedError
 
 class LogDAO(object):
 
@@ -24,4 +25,12 @@ class LogDAO(object):
         raise NotImplementedError()
 
     def truncate_log(self, seq_no: int) -> None:
+        raise NotImplementedError()
+
+class LogDAOFactory(object):
+
+    def __init__(self):
+        super().__init__()
+    
+    def log_dao(self, conn: DbConnection) -> LogDAO:
         raise NotImplementedError()

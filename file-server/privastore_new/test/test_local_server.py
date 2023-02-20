@@ -50,7 +50,8 @@ class TestLocalServer(unittest.TestCase):
                 'connection-pool-size': '1'
             },
             'store': {
-                'store-type': 'db'
+                'store-type': 'db',
+                'log-poll-interval': '0.1'
             },
             'session': {
                 'session-expiry-time': '300',
@@ -232,3 +233,6 @@ class TestLocalServer(unittest.TestCase):
         self.assertEqual(file_2_size, 51*1024)
         self.assertEqual(file_3_size, 100*1024)
         self.assertEqual(file_4_size, 50*1024)
+
+        import time
+        time.sleep(5)

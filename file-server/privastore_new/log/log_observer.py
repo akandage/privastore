@@ -6,5 +6,5 @@ class LogObserver(object):
     def __init__(self):
         super().__init__()
     
-    def on_log_entry(entry: LogEntry) -> None:
+    def on_log_entry(self, entry: LogEntry) -> None:
         raise NotImplementedError()

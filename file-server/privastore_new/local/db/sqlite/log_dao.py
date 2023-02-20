@@ -4,7 +4,7 @@ import logging
 from ....db.conn import SqliteConnection
 from ....db.dao import DataAccessObject
 from ....error import LogError
-from ..log_dao import LogDAO
+from ....db.log_dao import LogDAO
 from ....log.log_entry import LogEntry
 from ....log.log_entry_type import LogEntryType
 
@@ -109,30 +109,32 @@ class SqliteLogDAO(DataAccessObject, LogDAO):
         try:
             log_entries = list()
             cur.execute('''
-                SELECT L.seq_no, LC.chunk_id, L.entry_type, LC.chunk_data
-                FROM ps_log AS L INNER JOIN ps_log_chunk AS LC ON L.seq_no = LC.seq_no
+                SELECT L.seq_no, LE.chunk_id, L.entry_type, LE.chunk_data
+                FROM ps_log AS L INNER JOIN ps_log_entry AS LE ON L.seq_no = LE.seq_no
                 WHERE L.seq_no >= ?
-                ORDER BY L.seq_no ASC, LC.chunk_id ASC
+                ORDER BY L.seq_no ASC, LE.chunk_id ASC
             ''', (min_seq_no,))
-            curr_seq_no = 0
-            entry_type = None
+
+            curr_seq_no = -1
+            curr_entry_type = None
             chunk = None
 
             while True:
                 res = cur.fetchone()
-                if res is not None:
-                    seq_no = res[0]
-                    if curr_seq_no == 0 or seq_no != curr_seq_no:
-                        if curr_seq_no > 0:
-                            log_entries.append(LogEntry(entry_type, json.loads(str(chunk, 'utf-8')), seq_no))
-                        curr_seq_no = seq_no
-                        entry_type = LogEntryType(res[2])
-                        chunk = bytearray()
-                    chunk += res[3]
-                else:
-                    if curr_seq_no > 0:
-                        log_entries.append(LogEntry(entry_type, json.loads(str(chunk, 'utf-8')), seq_no))
+
+                if res is None:
+                    if curr_seq_no != -1:
+                        log_entries.append(LogEntry(curr_entry_type, json.loads(str(chunk, 'utf-8')), curr_seq_no))
                     break
+
+                seq_no, _, entry_type, chunk_data = res
+                if curr_seq_no == -1 or seq_no != curr_seq_no:
+                    if curr_seq_no != -1:
+                        log_entries.append(LogEntry(curr_entry_type, json.loads(str(chunk, 'utf-8')), curr_seq_no))
+                    curr_seq_no = seq_no
+                    curr_entry_type = LogEntryType(entry_type)
+                    chunk = bytearray()
+                chunk += chunk_data
 
             self.commit()
             return log_entries
