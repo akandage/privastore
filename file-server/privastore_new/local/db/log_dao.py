@@ -20,5 +20,8 @@ class LogDAO(object):
     def get_log_entry(self, seq_no: int) -> LogEntry:
         raise NotImplementedError()
 
+    def get_log_entries(self, min_seq_no: int) -> list[LogEntry]:
+        raise NotImplementedError()
+
     def truncate_log(self, seq_no: int) -> None:
         raise NotImplementedError()

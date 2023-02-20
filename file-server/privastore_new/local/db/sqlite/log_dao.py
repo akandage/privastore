@@ -6,6 +6,7 @@ from ....db.dao import DataAccessObject
 from ....error import LogError
 from ..log_dao import LogDAO
 from ....log.log_entry import LogEntry
+from ....log.log_entry_type import LogEntryType
 
 class SqliteLogDAO(DataAccessObject, LogDAO):
 
@@ -88,6 +89,53 @@ class SqliteLogDAO(DataAccessObject, LogDAO):
                 chunk_id += 1
             self.commit()
             return seq_no
+        except LogError as e:
+            logging.error('Log error: {}'.format(str(e)))
+            self.rollback_nothrow()
+            raise e
+        except Exception as e:
+            logging.error('Query error: {}'.format(str(e)))
+            self.rollback_nothrow()
+            raise e
+        finally:
+            try:
+                cur.close()
+            except:
+                pass
+
+    def get_log_entries(self, min_seq_no: int) -> list[LogEntry]:
+        self.begin_transaction()
+        cur = self.conn().cursor()
+        try:
+            log_entries = list()
+            cur.execute('''
+                SELECT L.seq_no, LC.chunk_id, L.entry_type, LC.chunk_data
+                FROM ps_log AS L INNER JOIN ps_log_chunk AS LC ON L.seq_no = LC.seq_no
+                WHERE L.seq_no >= ?
+                ORDER BY L.seq_no ASC, LC.chunk_id ASC
+            ''', (min_seq_no,))
+            curr_seq_no = 0
+            entry_type = None
+            chunk = None
+
+            while True:
+                res = cur.fetchone()
+                if res is not None:
+                    seq_no = res[0]
+                    if curr_seq_no == 0 or seq_no != curr_seq_no:
+                        if curr_seq_no > 0:
+                            log_entries.append(LogEntry(entry_type, json.loads(str(chunk, 'utf-8')), seq_no))
+                        curr_seq_no = seq_no
+                        entry_type = LogEntryType(res[2])
+                        chunk = bytearray()
+                    chunk += res[3]
+                else:
+                    if curr_seq_no > 0:
+                        log_entries.append(LogEntry(entry_type, json.loads(str(chunk, 'utf-8')), seq_no))
+                    break
+
+            self.commit()
+            return log_entries
         except LogError as e:
             logging.error('Log error: {}'.format(str(e)))
             self.rollback_nothrow()
